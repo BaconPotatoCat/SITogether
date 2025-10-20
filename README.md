@@ -1,6 +1,6 @@
 # SITogether
 
-A modern frontend web application built with Next.js and TypeScript, containerized with Docker Compose.
+A modern frontend web application built with Next.js and TypeScript, containerized with Docker Compose, built for helping SIT students find study buddies.
 
 ## 🚀 Features
 
