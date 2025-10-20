@@ -5,19 +5,19 @@ interface Profile {
   id: number
   name: string
   age: number
-  location: string
+  course: string
   interests: string[]
   bio: string
   avatarUrl: string
 }
 
 const DUMMY_PROFILES: Profile[] = [
-  { id: 1, name: 'Kira Belle', age: 23, location: 'Neon District', interests: ['JRPGs', 'Cosplay', 'Karaoke'], bio: "JRPG marathons and karaoke nights. Press start to continue.", avatarUrl: 'https://images.unsplash.com/photo-1721440171951-26505bbe23cb?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
-  { id: 2, name: 'Aqua Nova', age: 21, location: 'Virtual Haven', interests: ['Singing', 'Gaming', 'ASMR'], bio: "Bubbly sea idol streaming cozy nights and rhythm games. Let's duet!", avatarUrl: 'https://images.unsplash.com/photo-1663035309414-07fe9174d7d6?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1936' },
-  { id: 3, name: 'Star Lumi', age: 22, location: 'Starlight City', interests: ['Art', 'Zatsudan', 'Indie Music'], bio: "Comfy constellation painter. I draw, I chat, I vibe.", avatarUrl: 'https://images.unsplash.com/photo-1758207575528-6b80f80f4408?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
-  { id: 4, name: 'Miko-chan', age: 20, location: 'Cherry Lane', interests: ['Cooking', 'Slice of Life', 'Books'], bio: "Bento streams and book recs. Let's share snacks and stories.", avatarUrl: 'https://images.unsplash.com/flagged/photo-1572491259205-506c425b45c3?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170' },
-  { id: 5, name: 'Airi Sky', age: 24, location: 'Cloud Harbor', interests: ['FPS', 'Tech', 'Speedruns'], bio: "Cloud runner with crisp aim and comfy vibes.", avatarUrl: 'https://images.unsplash.com/photo-1727409048076-182d2907a59e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=987' },
-  { id: 6, name: 'Neko Mika', age: 19, location: 'Catnip Alley', interests: ['Cats', 'Crafts', 'Rhythm'], bio: "Crafting cute things to upbeat tracks. Nyah~", avatarUrl: 'https://images.unsplash.com/photo-1693240531477-bc6525187514?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
+  { id: 1, name: 'Kira Belle', age: 23, course: 'CSC', interests: ['Programming', 'Gaming', 'Tech'], bio: "Computer Science student who loves coding and gaming. Let's study algorithms together!", avatarUrl: 'https://images.unsplash.com/photo-1721440171951-26505bbe23cb?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
+  { id: 2, name: 'Aqua Nova', age: 21, course: 'EEE', interests: ['Electronics', 'Robotics', 'Innovation'], bio: "Electrical Engineering student passionate about robotics and innovation. Let's build something amazing!", avatarUrl: 'https://images.unsplash.com/photo-1663035309414-07fe9174d7d6?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1936' },
+  { id: 3, name: 'Star Lumi', age: 22, course: 'CDM', interests: ['Design', 'Media', 'Creativity'], bio: "Communication and Digital Media student. Love creating content and exploring new media trends.", avatarUrl: 'https://images.unsplash.com/photo-1758207575528-6b80f80f4408?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
+  { id: 4, name: 'Miko-chan', age: 20, course: 'NUR', interests: ['Healthcare', 'Wellness', 'Community'], bio: "Nursing student dedicated to helping others. Let's study healthcare together and make a difference!", avatarUrl: 'https://images.unsplash.com/flagged/photo-1572491259205-506c425b45c3?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170' },
+  { id: 5, name: 'Airi Sky', age: 24, course: 'MEC', interests: ['Engineering', 'Innovation', 'Problem Solving'], bio: "Mechanical Engineering student who loves solving complex problems. Let's tackle challenging projects together!", avatarUrl: 'https://images.unsplash.com/photo-1727409048076-182d2907a59e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=987' },
+  { id: 6, name: 'Neko Mika', age: 19, course: 'PHT', interests: ['Health', 'Fitness', 'Wellness'], bio: "Physiotherapy student passionate about movement and wellness. Let's study anatomy and help people recover!", avatarUrl: 'https://images.unsplash.com/photo-1693240531477-bc6525187514?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
 ]
 
 export default function Home() {
@@ -179,7 +179,7 @@ export default function Home() {
                   <div className="card-info">
                     <div className="card-head">
                       <h3>{p.name}, {p.age}</h3>
-                      <span className="location">{p.location}</span>
+                      <span className="course">{p.course}</span>
                     </div>
                     <p className="bio">{p.bio}</p>
                     <div className="chips">
@@ -228,7 +228,7 @@ export default function Home() {
                 <div className="card-info">
                   <div className="card-head">
                     <h3>{topCard.name}, {topCard.age}</h3>
-                    <span className="location">{topCard.location}</span>
+                    <span className="course">{topCard.course}</span>
                   </div>
                   <p className="bio">{topCard.bio}</p>
                   <div className="chips">
