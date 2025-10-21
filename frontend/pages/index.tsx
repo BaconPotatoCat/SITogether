@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
 
 interface Profile {
-  id: number
+  id: string
   name: string
   age: number
   course: string
@@ -11,21 +11,18 @@ interface Profile {
   avatarUrl: string
 }
 
-const DUMMY_PROFILES: Profile[] = [
-  { id: 1, name: 'Kira Belle', age: 23, course: 'CSC', interests: ['Programming', 'Gaming', 'Tech'], bio: "Computer Science student who loves coding and gaming. Let's study algorithms together!", avatarUrl: 'https://images.unsplash.com/photo-1721440171951-26505bbe23cb?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
-  { id: 2, name: 'Aqua Nova', age: 21, course: 'EEE', interests: ['Electronics', 'Robotics', 'Innovation'], bio: "Electrical Engineering student passionate about robotics and innovation. Let's build something amazing!", avatarUrl: 'https://images.unsplash.com/photo-1663035309414-07fe9174d7d6?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1936' },
-  { id: 3, name: 'Star Lumi', age: 22, course: 'CDM', interests: ['Design', 'Media', 'Creativity'], bio: "Communication and Digital Media student. Love creating content and exploring new media trends.", avatarUrl: 'https://images.unsplash.com/photo-1758207575528-6b80f80f4408?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
-  { id: 4, name: 'Miko-chan', age: 20, course: 'NUR', interests: ['Healthcare', 'Wellness', 'Community'], bio: "Nursing student dedicated to helping others. Let's study healthcare together and make a difference!", avatarUrl: 'https://images.unsplash.com/flagged/photo-1572491259205-506c425b45c3?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170' },
-  { id: 5, name: 'Airi Sky', age: 24, course: 'MEC', interests: ['Engineering', 'Innovation', 'Problem Solving'], bio: "Mechanical Engineering student who loves solving complex problems. Let's tackle challenging projects together!", avatarUrl: 'https://images.unsplash.com/photo-1727409048076-182d2907a59e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=987' },
-  { id: 6, name: 'Neko Mika', age: 19, course: 'PHT', interests: ['Health', 'Fitness', 'Wellness'], bio: "Physiotherapy student passionate about movement and wellness. Let's study anatomy and help people recover!", avatarUrl: 'https://images.unsplash.com/photo-1693240531477-bc6525187514?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687' },
-]
-
 export default function Home() {
-  const [deck, setDeck] = useState<Profile[]>(DUMMY_PROFILES)
+  const [deck, setDeck] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Gesture state
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false })
   const startRef = useRef<{ x: number; y: number } | null>(null)
+
+  // Health check state
+  const [healthCheckResult, setHealthCheckResult] = useState<string | null>(null)
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false)
 
   // Refs for dynamic geometry
   const deckRef = useRef<HTMLDivElement | null>(null)
@@ -33,6 +30,30 @@ export default function Home() {
 
   // Fade-out control when removing
   const [removing, setRemoving] = useState<null | 'like' | 'pass'>(null)
+
+  // Fetch users from database on component mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/users')
+        const result = await response.json()
+        
+        if (result.success) {
+          setDeck(result.data)
+          setError(null)
+        } else {
+          setError(result.error || 'Failed to fetch users')
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch users')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUsers()
+  }, [])
 
   const topCard = deck[0]
   const restCards = deck.slice(1)
@@ -145,6 +166,29 @@ export default function Home() {
     return deckCenterX + drag.x < nextRect.left
   }
 
+  // Health check function - now calls frontend API route which proxies to backend
+  const checkBackendHealth = async () => {
+    setIsCheckingHealth(true)
+    setHealthCheckResult(null)
+    
+    try {
+      // Call the frontend API route which will proxy the request to the backend container
+      const response = await fetch('/api/health')
+      const result = await response.json()
+      
+      if (result.success) {
+        const data = result.data
+        setHealthCheckResult(`✅ Backend is healthy!\nStatus: ${data.status}\nUptime: ${Math.round(data.uptime)}s\nTimestamp: ${data.timestamp}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+      } else {
+        setHealthCheckResult(`❌ ${result.error}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+      }
+    } catch (error) {
+      setHealthCheckResult(`❌ Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+    } finally {
+      setIsCheckingHealth(false)
+    }
+  }
+
   return (
     <>
       <Head>
@@ -155,112 +199,188 @@ export default function Home() {
       </Head>
 
       <main className="container">
+        {/* Temporary Health Check Section */}
+        <section style={{ 
+          padding: '20px', 
+          marginBottom: '20px', 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '8px',
+          border: '1px solid #e9ecef'
+        }}>
+          <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#333' }}>
+            🔧 Backend Health Check (Temporary)
+          </h2>
+          <button 
+            onClick={checkBackendHealth}
+            disabled={isCheckingHealth}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: isCheckingHealth ? '#6c757d' : '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              marginBottom: '15px'
+            }}
+          >
+            {isCheckingHealth ? '🔄 Checking...' : '🏥 Check Backend Health'}
+          </button>
+          
+          {healthCheckResult && (
+            <div style={{
+              padding: '15px',
+              backgroundColor: healthCheckResult.includes('✅') ? '#d4edda' : '#f8d7da',
+              border: `1px solid ${healthCheckResult.includes('✅') ? '#c3e6cb' : '#f5c6cb'}`,
+              borderRadius: '4px',
+              color: healthCheckResult.includes('✅') ? '#155724' : '#721c24',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              whiteSpace: 'pre-line'
+            }}>
+              {healthCheckResult}
+            </div>
+          )}
+        </section>
+
         <section className="swipe-section">
-          <div className="deck" ref={deckRef}>
-            {restCards.slice(0, 3).map((p, idx) => {
-              const baseOffset = (idx + 1) * 8
-              const baseScale = 1 - (idx + 1) * 0.02 // next: 0.98, then 0.96
-              const z = 20 - idx
+          {loading ? (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '400px',
+              fontSize: '18px',
+              color: '#666'
+            }}>
+              🔄 Loading profiles from database...
+            </div>
+          ) : error ? (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '400px',
+              fontSize: '18px',
+              color: '#dc3545',
+              backgroundColor: '#f8d7da',
+              border: '1px solid #f5c6cb',
+              borderRadius: '8px',
+              padding: '20px',
+              margin: '20px'
+            }}>
+              ❌ Error loading profiles: {error}
+            </div>
+          ) : (
+            <div className="deck" ref={deckRef}>
+              <div>
+                {restCards.slice(0, 3).map((p, idx) => {
+                  const baseOffset = (idx + 1) * 8
+                  const baseScale = 1 - (idx + 1) * 0.02 // next: 0.98, then 0.96
+                  const z = 20 - idx
 
-              const t = idx === 0 ? easedProgress() : 0
-              const lift = -t * 8 // smaller rise
-              const scaleUp = t * 0.02 // cap at +0.02 so next never exceeds 1.0
-              const translateY = baseOffset + lift
-              const scale = Math.min(1, baseScale + scaleUp)
+                  const t = idx === 0 ? easedProgress() : 0
+                  const lift = -t * 8 // smaller rise
+                  const scaleUp = t * 0.02 // cap at +0.02 so next never exceeds 1.0
+                  const translateY = baseOffset + lift
+                  const scale = Math.min(1, baseScale + scaleUp)
 
-              return (
-                <article
-                  key={p.id}
-                  className="card stack"
-                  ref={idx === 0 ? nextRef : undefined}
-                  style={{ transform: `translateY(${translateY}px) scale(${scale})`, zIndex: z, transition: 'transform 180ms ease-out' }}
-                >
-                  <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
-                  <div className="card-info">
-                    <div className="card-head">
-                      <h3>{p.name}, {p.age}</h3>
-                      <span className="course">{p.course}</span>
+                  return (
+                    <article
+                      key={p.id}
+                      className="card stack"
+                      ref={idx === 0 ? nextRef : undefined}
+                      style={{ transform: `translateY(${translateY}px) scale(${scale})`, zIndex: z, transition: 'transform 180ms ease-out' }}
+                    >
+                      <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
+                      <div className="card-info">
+                        <div className="card-head">
+                          <h3>{p.name}, {p.age}</h3>
+                          <span className="course">{p.course}</span>
+                        </div>
+                        <p className="bio">{p.bio}</p>
+                        <div className="chips">
+                          {p.interests.slice(0, 3).map((i) => (
+                            <span key={i} className="chip">{i}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+                  )
+                })}
+
+                {topCard && (
+                  <article
+                    key={topCard.id}
+                    className="card top"
+                    style={{ transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`, zIndex: 30, opacity: removing ? 0 : 1, transition: 'transform 220ms ease-out, opacity 220ms ease-out' }}
+                    onMouseDown={(e) => pointerDown(e.clientX, e.clientY)}
+                    onMouseMove={(e) => pointerMove(e.clientX, e.clientY)}
+                    onMouseUp={pointerUp}
+                    onMouseLeave={pointerUp}
+                    onTouchStart={(e) => pointerDown(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchMove={(e) => pointerMove(e.touches[0].clientX, e.touches[0].clientY)}
+                    onTouchEnd={pointerUp}
+                  >
+                    <div
+                      className="decision-overlay"
+                      style={{
+                        backgroundColor:
+                          drag.x >= 0
+                            ? 'rgba(16, 185, 129, ' + (overlayProgress() * 0.3).toFixed(3) + ')'
+                            : 'rgba(239, 68, 68, ' + (overlayProgress() * 0.3).toFixed(3) + ')',
+                      }}
+                    >
+                      <span
+                        className="decision-text"
+                        style={{
+                          color: drag.x >= 0 ? '#10b981' : '#ef4444',
+                          opacity: overlayProgress(),
+                        }}
+                      >
+                        {drag.x >= 0 ? 'LIKE' : 'PASS'}
+                      </span>
                     </div>
-                    <p className="bio">{p.bio}</p>
-                    <div className="chips">
-                      {p.interests.slice(0, 3).map((i) => (
-                        <span key={i} className="chip">{i}</span>
-                      ))}
+                    <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
+                    <div className="card-info">
+                      <div className="card-head">
+                        <h3>{topCard.name}, {topCard.age}</h3>
+                        <span className="course">{topCard.course}</span>
+                      </div>
+                      <p className="bio">{topCard.bio}</p>
+                      <div className="chips">
+                        {topCard.interests.map((i) => (
+                          <span key={i} className="chip">{i}</span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              )
-            })}
+                  </article>
+                )}
 
-            {topCard && (
-              <article
-                key={topCard.id}
-                className="card top"
-                style={{ transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`, zIndex: 30, opacity: removing ? 0 : 1, transition: 'transform 220ms ease-out, opacity 220ms ease-out' }}
-                onMouseDown={(e) => pointerDown(e.clientX, e.clientY)}
-                onMouseMove={(e) => pointerMove(e.clientX, e.clientY)}
-                onMouseUp={pointerUp}
-                onMouseLeave={pointerUp}
-                onTouchStart={(e) => pointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-                onTouchMove={(e) => pointerMove(e.touches[0].clientX, e.touches[0].clientY)}
-                onTouchEnd={pointerUp}
-              >
                 <div
-                  className="decision-overlay"
+                  aria-hidden={deck.length > 0}
                   style={{
-                    backgroundColor:
-                      drag.x >= 0
-                        ? 'rgba(16, 185, 129, ' + (overlayProgress() * 0.3).toFixed(3) + ')'
-                        : 'rgba(239, 68, 68, ' + (overlayProgress() * 0.3).toFixed(3) + ')',
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 0,
+                    opacity: deck.length === 0 ? 1 : 0,
+                    transition: 'opacity 200ms ease-out',
+                    pointerEvents: 'none',
                   }}
                 >
-                  <span
-                    className="decision-text"
-                    style={{
-                      color: drag.x >= 0 ? '#10b981' : '#ef4444',
-                      opacity: overlayProgress(),
-                    }}
-                  >
-                    {drag.x >= 0 ? 'LIKE' : 'PASS'}
-                  </span>
+                  <p className="muted">You're all caught up. Check back later for more profiles.</p>
                 </div>
-                <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
-                <div className="card-info">
-                  <div className="card-head">
-                    <h3>{topCard.name}, {topCard.age}</h3>
-                    <span className="course">{topCard.course}</span>
-                  </div>
-                  <p className="bio">{topCard.bio}</p>
-                  <div className="chips">
-                    {topCard.interests.map((i) => (
-                      <span key={i} className="chip">{i}</span>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            )}
-            <div
-              aria-hidden={deck.length > 0}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 0,
-                opacity: deck.length === 0 ? 1 : 0,
-                transition: 'opacity 200ms ease-out',
-                pointerEvents: 'none',
-              }}
-            >
-              <p className="muted">You're all caught up. Check back later for more profiles.</p>
-            </div>
-          </div>
+              </div>
 
-          <div className="swipe-actions">
-            <button className="btn ghost" onClick={onPass}>Pass</button>
-            <button className="btn primary" onClick={onLike}>Like</button>
-          </div>
+              <div className="swipe-actions">
+                <button className="btn ghost" onClick={onPass}>Pass</button>
+                <button className="btn primary" onClick={onLike}>Like</button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </>
