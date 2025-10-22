@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import { CURRENT_USER } from '../lib/profiles'
 import '../styles/globals.css'
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -17,6 +18,13 @@ export default function App({ Component, pageProps }: AppProps) {
           <div className="nav-links">
             <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">Discover</Link>
             <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">Chat</Link>
+            <Link href={`/profile/${CURRENT_USER.id}`} className="nav-profile">
+              <img 
+                src={CURRENT_USER.avatarUrl} 
+                alt={`${CURRENT_USER.name} profile`} 
+                className="nav-avatar"
+              />
+            </Link>
           </div>
         </div>
       </nav>
