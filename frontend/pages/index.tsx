@@ -272,106 +272,108 @@ export default function Home() {
               ❌ Error loading profiles: {error}
             </div>
           ) : (
-            <div className="deck" ref={deckRef}>
-              <div>
-                {restCards.slice(0, 3).map((p, idx) => {
-                  const baseOffset = (idx + 1) * 8
-                  const baseScale = 1 - (idx + 1) * 0.02 // next: 0.98, then 0.96
-                  const z = 20 - idx
+            <>
+              <div className="deck" ref={deckRef}>
+                <div>
+                  {restCards.slice(0, 3).map((p, idx) => {
+                    const baseOffset = (idx + 1) * 8
+                    const baseScale = 1 - (idx + 1) * 0.02 // next: 0.98, then 0.96
+                    const z = 20 - idx
 
-                  const t = idx === 0 ? easedProgress() : 0
-                  const lift = -t * 8 // smaller rise
-                  const scaleUp = t * 0.02 // cap at +0.02 so next never exceeds 1.0
-                  const translateY = baseOffset + lift
-                  const scale = Math.min(1, baseScale + scaleUp)
+                    const t = idx === 0 ? easedProgress() : 0
+                    const lift = -t * 8 // smaller rise
+                    const scaleUp = t * 0.02 // cap at +0.02 so next never exceeds 1.0
+                    const translateY = baseOffset + lift
+                    const scale = Math.min(1, baseScale + scaleUp)
 
-                  return (
+                    return (
+                      <article
+                        key={p.id}
+                        className="card stack"
+                        ref={idx === 0 ? nextRef : undefined}
+                        style={{ transform: `translateY(${translateY}px) scale(${scale})`, zIndex: z, transition: 'transform 180ms ease-out' }}
+                      >
+                        <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
+                        <div className="card-info">
+                          <div className="card-head">
+                            <h3>{p.name}, {p.age}</h3>
+                            <span className="course">{p.course}</span>
+                          </div>
+                          <p className="bio">{p.bio}</p>
+                          <div className="chips">
+                            {p.interests.slice(0, 3).map((i) => (
+                              <span key={i} className="chip">{i}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </article>
+                    )
+                  })}
+
+                  {topCard && (
                     <article
-                      key={p.id}
-                      className="card stack"
-                      ref={idx === 0 ? nextRef : undefined}
-                      style={{ transform: `translateY(${translateY}px) scale(${scale})`, zIndex: z, transition: 'transform 180ms ease-out' }}
+                      key={topCard.id}
+                      className="card top"
+                      style={{ transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`, zIndex: 30, opacity: removing ? 0 : 1, transition: 'transform 220ms ease-out, opacity 220ms ease-out' }}
+                      onMouseDown={(e) => pointerDown(e.clientX, e.clientY)}
+                      onMouseMove={(e) => pointerMove(e.clientX, e.clientY)}
+                      onMouseUp={pointerUp}
+                      onMouseLeave={pointerUp}
+                      onTouchStart={(e) => pointerDown(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchMove={(e) => pointerMove(e.touches[0].clientX, e.touches[0].clientY)}
+                      onTouchEnd={pointerUp}
                     >
-                      <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
+                      <div
+                        className="decision-overlay"
+                        style={{
+                          backgroundColor:
+                            drag.x >= 0
+                              ? 'rgba(16, 185, 129, ' + (overlayProgress() * 0.3).toFixed(3) + ')'
+                              : 'rgba(239, 68, 68, ' + (overlayProgress() * 0.3).toFixed(3) + ')',
+                        }}
+                      >
+                        <span
+                          className="decision-text"
+                          style={{
+                            color: drag.x >= 0 ? '#10b981' : '#ef4444',
+                            opacity: overlayProgress(),
+                          }}
+                        >
+                          {drag.x >= 0 ? 'LIKE' : 'PASS'}
+                        </span>
+                      </div>
+                      <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
                       <div className="card-info">
                         <div className="card-head">
-                          <h3>{p.name}, {p.age}</h3>
-                          <span className="course">{p.course}</span>
+                          <h3>{topCard.name}, {topCard.age}</h3>
+                          <span className="course">{topCard.course}</span>
                         </div>
-                        <p className="bio">{p.bio}</p>
+                        <p className="bio">{topCard.bio}</p>
                         <div className="chips">
-                          {p.interests.slice(0, 3).map((i) => (
+                          {topCard.interests.map((i) => (
                             <span key={i} className="chip">{i}</span>
                           ))}
                         </div>
                       </div>
                     </article>
-                  )
-                })}
+                  )}
 
-                {topCard && (
-                  <article
-                    key={topCard.id}
-                    className="card top"
-                    style={{ transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`, zIndex: 30, opacity: removing ? 0 : 1, transition: 'transform 220ms ease-out, opacity 220ms ease-out' }}
-                    onMouseDown={(e) => pointerDown(e.clientX, e.clientY)}
-                    onMouseMove={(e) => pointerMove(e.clientX, e.clientY)}
-                    onMouseUp={pointerUp}
-                    onMouseLeave={pointerUp}
-                    onTouchStart={(e) => pointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-                    onTouchMove={(e) => pointerMove(e.touches[0].clientX, e.touches[0].clientY)}
-                    onTouchEnd={pointerUp}
+                  <div
+                    aria-hidden={deck.length > 0}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 0,
+                      opacity: deck.length === 0 ? 1 : 0,
+                      transition: 'opacity 200ms ease-out',
+                      pointerEvents: 'none',
+                    }}
                   >
-                    <div
-                      className="decision-overlay"
-                      style={{
-                        backgroundColor:
-                          drag.x >= 0
-                            ? 'rgba(16, 185, 129, ' + (overlayProgress() * 0.3).toFixed(3) + ')'
-                            : 'rgba(239, 68, 68, ' + (overlayProgress() * 0.3).toFixed(3) + ')',
-                      }}
-                    >
-                      <span
-                        className="decision-text"
-                        style={{
-                          color: drag.x >= 0 ? '#10b981' : '#ef4444',
-                          opacity: overlayProgress(),
-                        }}
-                      >
-                        {drag.x >= 0 ? 'LIKE' : 'PASS'}
-                      </span>
-                    </div>
-                    <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
-                    <div className="card-info">
-                      <div className="card-head">
-                        <h3>{topCard.name}, {topCard.age}</h3>
-                        <span className="course">{topCard.course}</span>
-                      </div>
-                      <p className="bio">{topCard.bio}</p>
-                      <div className="chips">
-                        {topCard.interests.map((i) => (
-                          <span key={i} className="chip">{i}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </article>
-                )}
-
-                <div
-                  aria-hidden={deck.length > 0}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 0,
-                    opacity: deck.length === 0 ? 1 : 0,
-                    transition: 'opacity 200ms ease-out',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <p className="muted">You're all caught up. Check back later for more profiles.</p>
+                    <p className="muted">You're all caught up. Check back later for more profiles.</p>
+                  </div>
                 </div>
               </div>
 
@@ -379,7 +381,7 @@ export default function Home() {
                 <button className="btn ghost" onClick={onPass}>Pass</button>
                 <button className="btn primary" onClick={onLike}>Like</button>
               </div>
-            </div>
+            </>
           )}
         </section>
       </main>
