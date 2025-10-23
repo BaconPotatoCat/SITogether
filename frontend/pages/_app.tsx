@@ -25,6 +25,7 @@ export default function App({ Component, pageProps }: AppProps) {
                 className="nav-avatar"
               />
             </Link>
+            <Link className={isActive('/auth') ? 'nav-link active' : 'nav-link'} href="/auth">Login</Link>
           </div>
         </div>
       </nav>
@@ -36,6 +37,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <nav className="nav-mobile">
         <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">Discover</Link>
         <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">Chat</Link>
+        <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">Login</Link>
       </nav>
     </div>
   )
