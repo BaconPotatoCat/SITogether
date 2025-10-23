@@ -41,7 +41,7 @@ services:
       - ./backend:/app
       - /app/node_modules
     command: >
-      sh -c "npx prisma db push && npm run db:seed && npm run dev"
+      sh -c "npx prisma db push && npm run dev"
     networks:
       - sitogether-frontend-network
       - sitogether-backend-network
@@ -63,6 +63,30 @@ services:
     # No ports exposed - only accessible by other containers in the same networks
     networks:
       - sitogether-backend-network
+    restart: unless-stopped
+
+  # Prisma Studio service
+  prisma-studio:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sitogether-prisma-studio
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: >
+      sh -c "npx prisma studio --hostname 0.0.0.0 --port 5555"
+    networks:
+      - sitogether-backend-network
+    depends_on:
+      - sitogether-db
     restart: unless-stopped
 
 networks:
