@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
+import { fetchWithAuth } from '../utils/api'
 
 interface Profile {
   id: string
@@ -37,7 +38,7 @@ export default function Home() {
     const fetchUsers = async () => {
       try {
         setLoading(true)
-        const response = await fetch('/api/users')
+        const response = await fetchWithAuth('/api/users')
         const result = await response.json()
         
         if (result.success) {

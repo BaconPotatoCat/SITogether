@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 
 export default function Auth() {
+  const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -73,21 +75,29 @@ export default function Auth() {
       const result = await response.json()
 
       if (result.success) {
-        showToast(`${isLogin ? 'Login' : 'Registration'} successful! Please check your email for the confirmation link.`, 'success')
-        // Reset form
-        setFormData({
-          email: '',
-          password: '',
-          confirmPassword: '',
-          name: '',
-          age: '',
-          gender: '',
-          course: ''
-        })
-        setPasswordError('')
-        
-        // Switch to login form after successful registration
-        if (!isLogin) {
+        if (isLogin) {
+          showToast('Login successful!', 'success')
+          
+          // Redirect to home page after a brief delay
+          setTimeout(() => {
+            router.push('/')
+          }, 500)
+        } else {
+          showToast('Registration successful! Please check your email for the confirmation link.', 'success')
+          
+          // Reset form
+          setFormData({
+            email: '',
+            password: '',
+            confirmPassword: '',
+            name: '',
+            age: '',
+            gender: '',
+            course: ''
+          })
+          setPasswordError('')
+          
+          // Switch to login form after successful registration
           setIsLogin(true)
         }
       } else {
@@ -115,6 +125,7 @@ export default function Auth() {
       confirmPassword: '',
       name: '',
       age: '',
+      gender: '',
       course: ''
     })
   }

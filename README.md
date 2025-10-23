@@ -73,6 +73,50 @@ cp env.example .env
 cp frontend/env.example frontend/.env
 ```
 
+**Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
+
+### Authentication
+
+The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js-style session management system:
+
+- **Login**: Users must log in to access protected pages and APIs
+- **Session Duration**: Tokens are valid for 1 hour
+- **Auto-refresh**: Session validity is checked every 5 minutes
+- **Logout**: Clears the authentication token and redirects to login
+- **Protected Routes**: All pages except `/auth` require authentication
+- **Protected APIs**: `/api/users` and other endpoints require valid tokens
+
+#### Using Sessions in Components
+
+The app provides a `useSession` hook similar to NextAuth.js:
+
+```tsx
+import { useSession } from '../contexts/AuthContext'
+
+function MyComponent() {
+  const { session, status, signOut } = useSession()
+
+  if (status === 'loading') return <div>Loading...</div>
+  if (status === 'unauthenticated') return <div>Please log in</div>
+
+  return (
+    <div>
+      <h1>Welcome {session?.user.name}!</h1>
+      <button onClick={() => signOut()}>Logout</button>
+    </div>
+  )
+}
+```
+
+**Available status values:**
+- `loading` - Initial state, fetching session
+- `authenticated` - User is logged in
+- `unauthenticated` - No valid session
+
+**Session object includes:**
+- `session.user` - User data (id, email, name, age, gender, role, etc.)
+- `session.expires` - Token expiration timestamp
+
 ### Database Seeding
 
 The application includes a seed script that populates the database with sample user data for development and testing purposes.
