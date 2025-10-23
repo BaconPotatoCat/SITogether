@@ -5,6 +5,7 @@ interface Profile {
   id: string
   name: string
   age: number
+  gender: string
   course: string
   interests: string[]
   bio: string
@@ -296,7 +297,7 @@ export default function Home() {
                         <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
                         <div className="card-info">
                           <div className="card-head">
-                            <h3>{p.name}, {p.age}</h3>
+                            <h3>{p.name}, {p.age}, {p.gender}</h3>
                             <span className="course">{p.course}</span>
                           </div>
                           <p className="bio">{p.bio}</p>
@@ -345,7 +346,7 @@ export default function Home() {
                       <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
                       <div className="card-info">
                         <div className="card-head">
-                          <h3>{topCard.name}, {topCard.age}</h3>
+                          <h3>{topCard.name}, {topCard.age}, {topCard.gender}</h3>
                           <span className="course">{topCard.course}</span>
                         </div>
                         <p className="bio">{topCard.bio}</p>
