@@ -168,16 +168,42 @@ export default function Auth() {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="gender">Gender</label>
-                    <input
-                      type="text"
-                      id="gender"
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleInputChange}
-                      required={!isLogin}
-                      placeholder="e.g., Male, Female, Non-binary"
-                    />
+                    <label>Gender</label>
+                    <div className="radio-group">
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value="Male"
+                          checked={formData.gender === 'Male'}
+                          onChange={handleInputChange}
+                          required={!isLogin}
+                        />
+                        <span>Male</span>
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value="Female"
+                          checked={formData.gender === 'Female'}
+                          onChange={handleInputChange}
+                          required={!isLogin}
+                        />
+                        <span>Female</span>
+                      </label>
+                      <label className="radio-label">
+                        <input
+                          type="radio"
+                          name="gender"
+                          value="Other"
+                          checked={formData.gender === 'Other'}
+                          onChange={handleInputChange}
+                          required={!isLogin}
+                        />
+                        <span>Other</span>
+                      </label>
+                    </div>
                   </div>
 
                   <div className="form-group">

@@ -105,6 +105,15 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Validate gender value
+    const validGenders = ['Male', 'Female', 'Other'];
+    if (!validGenders.includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Gender must be one of: Male, Female, or Other'
+      });
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email }
