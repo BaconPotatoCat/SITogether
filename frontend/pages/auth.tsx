@@ -83,7 +83,7 @@ export default function Auth() {
             router.push('/')
           }, 500)
         } else {
-          showToast('Registration successful! Please check your email for the confirmation link.', 'success')
+          showToast('Registration successful! Please check your email for the verification link.', 'success')
           
           // Reset form
           setFormData({
