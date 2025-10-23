@@ -13,15 +13,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(req.body)
     })
 
     const data = await response.json()
 
     if (response.ok) {
+      // Forward the Set-Cookie header from backend to client
+      const setCookieHeader = response.headers.get('set-cookie')
+      if (setCookieHeader) {
+        res.setHeader('Set-Cookie', setCookieHeader)
+      }
+
       res.status(200).json({
         success: true,
-        data: data.data,
         message: data.message || 'Login successful'
       })
     } else {

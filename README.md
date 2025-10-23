@@ -8,7 +8,7 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
-- **Account Confirmation**: Email verification system for user accounts
+- **Account Verification**: Email verification system for user accounts
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development
@@ -73,6 +73,50 @@ cp env.example .env
 cp frontend/env.example frontend/.env
 ```
 
+**Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
+
+### Authentication
+
+The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js-style session management system:
+
+- **Login**: Users must log in to access protected pages and APIs
+- **Session Duration**: Tokens are valid for 1 hour
+- **Auto-refresh**: Session validity is checked every 5 minutes
+- **Logout**: Clears the authentication token and redirects to login
+- **Protected Routes**: All pages except `/auth` require authentication
+- **Protected APIs**: `/api/users` and other endpoints require valid tokens
+
+#### Using Sessions in Components
+
+The app provides a `useSession` hook similar to NextAuth.js:
+
+```tsx
+import { useSession } from '../contexts/AuthContext'
+
+function MyComponent() {
+  const { session, status, signOut } = useSession()
+
+  if (status === 'loading') return <div>Loading...</div>
+  if (status === 'unauthenticated') return <div>Please log in</div>
+
+  return (
+    <div>
+      <h1>Welcome {session?.user.name}!</h1>
+      <button onClick={() => signOut()}>Logout</button>
+    </div>
+  )
+}
+```
+
+**Available status values:**
+- `loading` - Initial state, fetching session
+- `authenticated` - User is logged in
+- `unauthenticated` - No valid session
+
+**Session object includes:**
+- `session.user` - User data (id, email, name, age, gender, role, etc.)
+- `session.expires` - Token expiration timestamp
+
 ### Database Seeding
 
 The application includes a seed script that populates the database with sample user data for development and testing purposes.
@@ -81,7 +125,7 @@ The application includes a seed script that populates the database with sample u
 - Creates 6 sample user profiles with realistic data
 - Generates profiles with names, ages, genders, courses, bios, and interests
 - Sets default password `wasd12` for all seeded users (hashed with bcrypt)
-- Creates a mix of confirmed and unconfirmed accounts for testing
+- Creates a mix of verified and unverified accounts for testing
 - Provides sample data including profile images from Unsplash
 
 **To manually run the seed script:**
@@ -94,8 +138,8 @@ docker-compose exec backend npm run db:seed
 **Note:** 
 - The seed script will skip if users already exist in the database
 - To re-seed, you'll need to clear existing data first
-- Only confirmed users will appear in the swipe interface
-- Unconfirmed users can register but won't appear until they confirm their accounts
+- Only verified users will appear in the swipe interface
+- Unverified users can register but won't appear until they verify their accounts
 
 ## 🐳 Docker Services
 

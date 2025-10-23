@@ -24,7 +24,7 @@ async function main() {
         bio: "Computer Science student who loves coding and gaming. Let's study algorithms together!",
         interests: ['Programming', 'Gaming', 'Tech'],
         avatarUrl: 'https://images.unsplash.com/photo-1721440171951-26505bbe23cb?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687',
-        confirmed: false
+        verified: false
       },
       {
         email: 'aqua.nova@example.com',
@@ -36,7 +36,7 @@ async function main() {
         bio: "Electrical Engineering student passionate about robotics and innovation. Let's build something amazing!",
         interests: ['Electronics', 'Robotics', 'Innovation'],
         avatarUrl: 'https://images.unsplash.com/photo-1663035309414-07fe9174d7d6?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1936',
-        confirmed: true
+        verified: true
       },
       {
         email: 'star.lumi@example.com',
@@ -48,7 +48,7 @@ async function main() {
         bio: "Communication and Digital Media student. Love creating content and exploring new media trends.",
         interests: ['Design', 'Media', 'Creativity'],
         avatarUrl: 'https://images.unsplash.com/photo-1758207575528-6b80f80f4408?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687',
-        confirmed: true
+        verified: true
       },
       {
         email: 'miko.chan@example.com',
@@ -60,7 +60,7 @@ async function main() {
         bio: "Nursing student dedicated to helping others. Let's study healthcare together and make a difference!",
         interests: ['Healthcare', 'Wellness', 'Community'],
         avatarUrl: 'https://images.unsplash.com/flagged/photo-1572491259205-506c425b45c3?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170',
-        confirmed: true
+        verified: true
       },
       {
         email: 'airi.sky@example.com',
@@ -72,7 +72,7 @@ async function main() {
         bio: "Mechanical Engineering student who loves solving complex problems. Let's tackle challenging projects together!",
         interests: ['Engineering', 'Innovation', 'Problem Solving'],
         avatarUrl: 'https://images.unsplash.com/photo-1727409048076-182d2907a59e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=987',
-        confirmed: true
+        verified: true
       },
       {
         email: 'neko.mika@example.com',
@@ -84,14 +84,14 @@ async function main() {
         bio: "Physiotherapy student passionate about movement and wellness. Let's study anatomy and help people recover!",
         interests: ['Health', 'Fitness', 'Wellness'],
         avatarUrl: 'https://images.unsplash.com/photo-1693240531477-bc6525187514?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687',
-        confirmed: true
+        verified: true
       }
     ]
   })
 
   console.log(`✅ Created ${users.count} users`)
-  console.log('🔑 All seeded users have password: "password123"')
-  console.log('✅ All seeded users are confirmed')
+  console.log('🔑 All seeded users have password: "wasd12"')
+  console.log('✅ All seeded users are verified')
   console.log('🎉 Database seeding completed!')
 }
 

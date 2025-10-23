@@ -3,7 +3,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
+const { authenticateToken } = require('./middleware/auth');
 require('dotenv').config();
 
 const app = express();
@@ -11,7 +14,11 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+  credentials: true
+}));
+app.use(cookieParser());
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -42,21 +49,23 @@ app.get('/api', (req, res) => {
     endpoints: {
       health: '/health',
       api: '/api',
-      users: '/api/users',
+      users: 'GET /api/users (protected)',
       auth: {
         register: 'POST /api/auth/register',
-        login: 'POST /api/auth/login'
+        login: 'POST /api/auth/login',
+        logout: 'POST /api/auth/logout',
+        session: 'GET /api/auth/session (protected)'
       }
     }
   });
 });
 
-// Users API route
-app.get('/api/users', async (req, res) => {
+// Users API route (protected)
+app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       where: {
-        confirmed: true
+        verified: true
       },
       select: {
         id: true,
@@ -68,7 +77,7 @@ app.get('/api/users', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true
       },
       orderBy: {
@@ -142,7 +151,7 @@ app.post('/api/auth/register', async (req, res) => {
         course,
         bio: null,
         interests: [],
-        confirmed: false
+        verified: false
       },
       select: {
         id: true,
@@ -155,7 +164,7 @@ app.post('/api/auth/register', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true
       }
     });
@@ -203,7 +212,7 @@ app.post('/api/auth/login', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true,
         updatedAt: true
       }
@@ -211,8 +220,8 @@ app.post('/api/auth/login', async (req, res) => {
 
     console.log('User found in database:', {
       email: user?.email,
-      confirmed: user?.confirmed,
-      confirmedType: typeof user?.confirmed
+      verified: user?.verified,
+      verifiedType: typeof user?.verified
     });
 
     if (!user) {
@@ -232,28 +241,90 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Check if account is confirmed
-    if (!user.confirmed) {
+    // Check if account is verified
+    if (!user.verified) {
       return res.status(403).json({
         success: false,
-        error: 'Account not confirmed. Please check your email and confirm your account before logging in.',
-        requiresConfirmation: true
+        error: 'Account not verified. Please check your email and verify your account before logging in.',
+        requiresVerification: true
       });
     }
 
-    // Return user data (excluding password)
-    const { password: _, ...userWithoutPassword } = user;
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' } // Token expires in 1 hour
+    );
+
+    // Set cookie with token
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 1000 // 1 hour in milliseconds
+    });
 
     res.json({
       success: true,
-      message: 'Login successful',
-      data: userWithoutPassword
+      message: 'Login successful'
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to login',
+      message: error.message
+    });
+  }
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
+});
+
+// Session endpoint (protected)
+app.get('/api/auth/session', authenticateToken, async (req, res) => {
+  try {
+    // Get user data from token
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        bio: true,
+        interests: true,
+        avatarUrl: true,
+        verified: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: user
+    });
+  } catch (error) {
+    console.error('Session error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve session',
       message: error.message
     });
   }
