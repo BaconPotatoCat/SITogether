@@ -115,6 +115,7 @@ export default function Auth() {
       confirmPassword: '',
       name: '',
       age: '',
+      gender: '',
       course: ''
     })
   }
