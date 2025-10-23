@@ -8,7 +8,7 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
-- **Account Confirmation**: Email verification system for user accounts
+- **Account Verification**: Email verification system for user accounts
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development
@@ -125,7 +125,7 @@ The application includes a seed script that populates the database with sample u
 - Creates 6 sample user profiles with realistic data
 - Generates profiles with names, ages, genders, courses, bios, and interests
 - Sets default password `wasd12` for all seeded users (hashed with bcrypt)
-- Creates a mix of confirmed and unconfirmed accounts for testing
+- Creates a mix of verified and unverified accounts for testing
 - Provides sample data including profile images from Unsplash
 
 **To manually run the seed script:**
@@ -138,8 +138,8 @@ docker-compose exec backend npm run db:seed
 **Note:** 
 - The seed script will skip if users already exist in the database
 - To re-seed, you'll need to clear existing data first
-- Only confirmed users will appear in the swipe interface
-- Unconfirmed users can register but won't appear until they confirm their accounts
+- Only verified users will appear in the swipe interface
+- Unverified users can register but won't appear until they verify their accounts
 
 ## 🐳 Docker Services
 

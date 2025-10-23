@@ -65,7 +65,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       where: {
-        confirmed: true
+        verified: true
       },
       select: {
         id: true,
@@ -77,7 +77,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true
       },
       orderBy: {
@@ -151,7 +151,7 @@ app.post('/api/auth/register', async (req, res) => {
         course,
         bio: null,
         interests: [],
-        confirmed: false
+        verified: false
       },
       select: {
         id: true,
@@ -164,7 +164,7 @@ app.post('/api/auth/register', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true
       }
     });
@@ -212,7 +212,7 @@ app.post('/api/auth/login', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true,
         updatedAt: true
       }
@@ -220,8 +220,8 @@ app.post('/api/auth/login', async (req, res) => {
 
     console.log('User found in database:', {
       email: user?.email,
-      confirmed: user?.confirmed,
-      confirmedType: typeof user?.confirmed
+      verified: user?.verified,
+      verifiedType: typeof user?.verified
     });
 
     if (!user) {
@@ -241,12 +241,12 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Check if account is confirmed
-    if (!user.confirmed) {
+    // Check if account is verified
+    if (!user.verified) {
       return res.status(403).json({
         success: false,
-        error: 'Account not confirmed. Please check your email and confirm your account before logging in.',
-        requiresConfirmation: true
+        error: 'Account not verified. Please check your email and verify your account before logging in.',
+        requiresVerification: true
       });
     }
 
@@ -305,7 +305,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true
+        verified: true
       }
     });
 

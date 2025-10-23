@@ -101,8 +101,8 @@ export default function Auth() {
           setIsLogin(true)
         }
       } else {
-        // Handle confirmation error with special message
-        if (result.requiresConfirmation) {
+        // Handle verification error with special message
+        if (result.requiresVerification) {
           showToast(`${result.error}`, 'warning')
         } else {
           showToast(result.error || 'An error occurred', 'error')
