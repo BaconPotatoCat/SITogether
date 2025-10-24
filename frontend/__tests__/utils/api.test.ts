@@ -1,8 +1,10 @@
 import { fetchWithAuth } from '../../utils/api'
 
 // Mock window.location
-delete (window as unknown as { location: unknown }).location
-window.location = { href: '' } as unknown as Location
+Object.defineProperty(window, 'location', {
+  writable: true,
+  value: { href: '' },
+})
 
 describe('fetchWithAuth', () => {
   beforeEach(() => {

@@ -21,6 +21,9 @@ coverage/
 out/
 build/
 
+# TypeScript
+*.tsbuildinfo
+
 # Runtime data
 pids
 *.pid
