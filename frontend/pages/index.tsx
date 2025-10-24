@@ -62,42 +62,31 @@ export default function Home() {
 
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
-  const onLike = async () => {
+  const handleSwipeAction = async (endpoint: string, body: object, direction: number, actionType: 'like' | 'pass') => {
     if (!topCard) return
 
     try {
-      // Call the like API
-      const response = await fetchWithAuth('/api/likes', {
+      const response = await fetchWithAuth(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ likedId: topCard.id }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       })
 
       const result = await response.json()
 
       if (result.success) {
-        // Update points if earned from daily task
-        if (result.pointsEarned > 0) {
-          // Emit an event or callback to update points in parent components
-          // For now, we'll just log it
-          console.log(`Earned ${result.pointsEarned} points for liking!`)
-        }
-
-        // Remove card from deck
-        setRemoving('like')
-        setDrag((d) => ({ ...d, x: 500 }))
+        setRemoving(actionType)
+        setDrag((d) => ({ ...d, x: direction }))
         setTimeout(() => {
           setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
           setRemoving(null)
           resetDrag()
         }, 220)
       } else {
-        console.error('Failed to like user:', result.error)
+        console.error(`Failed to ${actionType} user:`, result.error)
         // Still remove card to prevent getting stuck
-        setRemoving('like')
-        setDrag((d) => ({ ...d, x: 500 }))
+        setRemoving(actionType)
+        setDrag((d) => ({ ...d, x: direction }))
         setTimeout(() => {
           setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
           setRemoving(null)
@@ -105,10 +94,10 @@ export default function Home() {
         }, 220)
       }
     } catch (error) {
-      console.error('Error liking user:', error)
+      console.error(`Error ${actionType}ing user:`, error)
       // Still remove card to prevent getting stuck
-      setRemoving('like')
-      setDrag((d) => ({ ...d, x: 500 }))
+      setRemoving(actionType)
+      setDrag((d) => ({ ...d, x: direction }))
       setTimeout(() => {
         setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
         setRemoving(null)
@@ -117,16 +106,8 @@ export default function Home() {
     }
   }
 
-  const onPass = () => {
-    if (!topCard) return
-    setRemoving('pass')
-    setDrag((d) => ({ ...d, x: -500 }))
-    setTimeout(() => {
-      setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
-      setRemoving(null)
-      resetDrag()
-    }, 220)
-  }
+  const onLike = () => handleSwipeAction('/api/likes', { likedId: topCard.id }, 500, 'like')
+  const onPass = () => handleSwipeAction('/api/passes', { passedId: topCard.id }, -500, 'pass')
 
   const pointerDown = (clientX: number, clientY: number) => {
     startRef.current = { x: clientX, y: clientY }

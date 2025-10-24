@@ -30,6 +30,8 @@ model User {
   points     UserPoints?
   givenLikes UserLikes[] @relation("UserLikes")
   receivedLikes UserLikes[] @relation("UserReceivedLikes")
+  givenPasses UserPasses[] @relation("UserPasses")
+  receivedPasses UserPasses[] @relation("UserReceivedPasses")
 
   @@map("users")
 }
@@ -62,4 +64,19 @@ model UserLikes {
   // Prevent duplicate likes
   @@unique([likerId, likedId])
   @@map("user_likes")
+}
+
+model UserPasses {
+  id        String   @id @default(uuid()) @db.Uuid
+  passerId  String   @db.Uuid
+  passedId  String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  passer  User @relation("UserPasses", fields: [passerId], references: [id], onDelete: Cascade)
+  passed  User @relation("UserReceivedPasses", fields: [passedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate passes
+  @@unique([passerId, passedId])
+  @@map("user_passes")
 }

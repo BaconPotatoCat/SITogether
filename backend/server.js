@@ -65,6 +65,10 @@ app.get('/api', (req, res) => {
         likeUser: 'POST /api/likes (protected)',
         checkLike: 'GET /api/likes/check/:userId (protected)',
         unlikeUser: 'DELETE /api/likes/:userId (protected)'
+      },
+      passes: {
+        passUser: 'POST /api/passes (protected)',
+        unpassUser: 'DELETE /api/passes/:userId (protected)'
       }
     }
   });
@@ -85,9 +89,39 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       }
     });
 
+    // Get IDs of users that the current user has already passed
+    const passedUserIds = await prisma.userPasses.findMany({
+      where: {
+        passerId: currentUserId
+      },
+      select: {
+        passedId: true
+      }
+    });
+
+    // Get all users for debugging
+    const allUsers = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        verified: true
+      }
+    });
+
+    console.log(`Total users in database: ${allUsers.length}`);
+    console.log(`Verified users: ${allUsers.filter(u => u.verified).length}`);
+    console.log(`Unverified users: ${allUsers.filter(u => !u.verified).length}`);
+
+    console.log(`User ${currentUserId} has liked ${likedUserIds.length} users and passed ${passedUserIds.length} users`);
+
     const excludedIds = likedUserIds.map(like => like.likedId);
+    // Also exclude passed users
+    excludedIds.push(...passedUserIds.map(pass => pass.passedId));
     // Also exclude the current user from their own discovery
     excludedIds.push(currentUserId);
+
+    console.log(`Excluded user IDs:`, excludedIds);
+    console.log(`Excluding ${excludedIds.length} total users from discovery`);
 
     const users = await prisma.user.findMany({
       where: {
@@ -611,6 +645,8 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
     const likerId = req.user.userId;
     const { likedId } = req.body;
 
+    console.log(`Like attempt: likerId=${likerId}, likedId=${likedId}`);
+
     if (!likedId) {
       return res.status(400).json({
         success: false,
@@ -650,6 +686,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
     });
 
     if (existingLike) {
+      console.log(`User ${likerId} has already liked user ${likedId} - existing like found`);
       return res.status(409).json({
         success: false,
         error: 'User already liked'
@@ -759,6 +796,130 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to unlike user',
+      message: error.message
+    });
+  }
+});
+
+// Unpass a user
+app.delete('/api/passes/:userId', authenticateToken, async (req, res) => {
+  try {
+    const passerId = req.user.userId;
+    const { userId: passedId } = req.params;
+
+    const pass = await prisma.userPasses.findUnique({
+      where: {
+        passerId_passedId: {
+          passerId: passerId,
+          passedId: passedId
+        }
+      }
+    });
+
+    if (!pass) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pass not found'
+      });
+    }
+
+    await prisma.userPasses.delete({
+      where: {
+        passerId_passedId: {
+          passerId: passerId,
+          passedId: passedId
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'User unpassed successfully'
+    });
+  } catch (error) {
+    console.error('Unpass user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to unpass user',
+      message: error.message
+    });
+  }
+});
+
+// Pass a user
+app.post('/api/passes', authenticateToken, async (req, res) => {
+  try {
+    const passerId = req.user.userId;
+    const { passedId } = req.body;
+
+    console.log(`Pass attempt: passerId=${passerId}, passedId=${passedId}`);
+
+    if (!passedId) {
+      return res.status(400).json({
+        success: false,
+        error: 'passedId is required'
+      });
+    }
+
+    // Prevent passing yourself
+    if (passerId === passedId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot pass on yourself'
+      });
+    }
+
+    // Check if the passed user exists and is verified
+    const passedUser = await prisma.user.findUnique({
+      where: { id: passedId },
+      select: { id: true, verified: true }
+    });
+
+    if (!passedUser || !passedUser.verified) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found or not verified'
+      });
+    }
+
+    // Check if pass already exists
+    const existingPass = await prisma.userPasses.findUnique({
+      where: {
+        passerId_passedId: {
+          passerId: passerId,
+          passedId: passedId
+        }
+      }
+    });
+
+    if (existingPass) {
+      console.log(`User ${passerId} has already passed on user ${passedId} - existing pass found`);
+      return res.status(409).json({
+        success: false,
+        error: 'User already passed'
+      });
+    }
+
+    // Create the pass
+    const pass = await prisma.userPasses.create({
+      data: {
+        passerId: passerId,
+        passedId: passedId
+      }
+    });
+
+    console.log(`User ${passerId} passed on user ${passedId}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'User passed successfully',
+      pass: pass
+    });
+  } catch (error) {
+    console.error('Pass user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to pass user',
       message: error.message
     });
   }
