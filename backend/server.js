@@ -55,6 +55,10 @@ app.get('/api', (req, res) => {
         login: 'POST /api/auth/login',
         logout: 'POST /api/auth/logout',
         session: 'GET /api/auth/session (protected)'
+      },
+      points: {
+        getPoints: 'GET /api/points (protected)',
+        claimDaily: 'POST /api/points/claim-daily (protected)'
       }
     }
   });
@@ -325,6 +329,107 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve session',
+      message: error.message
+    });
+  }
+});
+
+// Points API routes (protected)
+
+// Get user points
+app.get('/api/points', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId },
+      select: {
+        totalPoints: true,
+        dailyCheckinCompleted: true,
+        dailyCheckinDate: true
+      }
+    });
+
+    if (!userPoints) {
+      return res.status(404).json({
+        success: false,
+        error: 'User points not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      points: userPoints
+    });
+  } catch (error) {
+    console.error('Get points error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve user points',
+      message: error.message
+    });
+  }
+});
+
+// Claim daily check-in points
+app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Check if user already claimed today
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId }
+    });
+
+    if (!userPoints) {
+      return res.status(404).json({
+        success: false,
+        error: 'User points not found'
+      });
+    }
+
+    // Check if already claimed today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (userPoints.dailyCheckinCompleted && userPoints.dailyCheckinDate) {
+      const lastClaimDate = new Date(userPoints.dailyCheckinDate);
+      lastClaimDate.setHours(0, 0, 0, 0);
+
+      if (lastClaimDate.getTime() === today.getTime()) {
+        return res.status(400).json({
+          success: false,
+          error: 'Daily check-in already claimed today'
+        });
+      }
+    }
+
+    // Update points and mark as claimed
+    const updatedPoints = await prisma.userPoints.update({
+      where: { userId },
+      data: {
+        totalPoints: userPoints.totalPoints + 50,
+        dailyCheckinCompleted: true,
+        dailyCheckinDate: new Date()
+      },
+      select: {
+        totalPoints: true,
+        dailyCheckinCompleted: true,
+        dailyCheckinDate: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Daily check-in claimed successfully',
+      points: updatedPoints,
+      pointsEarned: 50
+    });
+  } catch (error) {
+    console.error('Claim daily points error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to claim daily points',
       message: error.message
     });
   }
