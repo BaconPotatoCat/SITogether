@@ -234,9 +234,34 @@ Every pull request automatically runs:
    - npm audit for dependency vulnerabilities
    - Trivy security scanner for container images
 
+### 🚨 Before Committing Code
+
+**IMPORTANT:** Always run the test script before creating a pull request to ensure all checks pass:
+
+**Windows:**
+```bash
+.\run-tests.bat
+```
+
+**Linux/Mac:**
+```bash
+./run-tests.sh
+```
+
+This comprehensive script will automatically run:
+- ✅ Dependency installation
+- ✅ Linting and formatting checks
+- ✅ TypeScript type checking
+- ✅ All unit tests with coverage
+- ✅ Security audits
+- ✅ Production build verification
+
+If all checks pass, you'll see: `✓ All checks passed! Ready to create PR`
+
 ### Pre-Push Checklist
 
 Before creating a pull request, ensure:
+- [ ] **`run-tests.bat` or `run-tests.sh` passes with no errors**
 - [ ] All tests pass locally (`npm test`)
 - [ ] No linting errors (`npm run lint`)
 - [ ] Code is properly formatted (`npm run format:check`)
