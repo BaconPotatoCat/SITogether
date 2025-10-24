@@ -7,9 +7,9 @@ export function middleware(request: NextRequest) {
 
   // Public paths that don't require authentication
   const publicPaths = ['/auth']
-  
+
   // Check if the current path is public
-  const isPublicPath = publicPaths.some(path => pathname.startsWith(path))
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
 
   // If trying to access a protected path without a token, redirect to auth
   if (!isPublicPath && !token) {
@@ -41,4 +41,3 @@ export const config = {
     '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
   ],
 }
-

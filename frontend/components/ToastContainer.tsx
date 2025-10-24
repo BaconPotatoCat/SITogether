@@ -1,3 +1,4 @@
+import React from 'react'
 import { Toast } from '../hooks/useToast'
 
 interface ToastContainerProps {
@@ -5,10 +6,10 @@ interface ToastContainerProps {
   removeToast: (id: number) => void
 }
 
-export default function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
+const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeToast }) => {
   return (
     <div className="toast-container">
-      {toasts.map(toast => (
+      {toasts.map((toast) => (
         <div key={toast.id} className={`toast toast-${toast.type}`}>
           <div className="toast-content">
             <span className="toast-icon">
@@ -18,11 +19,7 @@ export default function ToastContainer({ toasts, removeToast }: ToastContainerPr
             </span>
             <span className="toast-message">{toast.message}</span>
           </div>
-          <button 
-            className="toast-close" 
-            onClick={() => removeToast(toast.id)}
-            aria-label="Close"
-          >
+          <button className="toast-close" onClick={() => removeToast(toast.id)} aria-label="Close">
             ✕
           </button>
         </div>
@@ -31,3 +28,4 @@ export default function ToastContainer({ toasts, removeToast }: ToastContainerPr
   )
 }
 
+export default ToastContainer

@@ -14,10 +14,12 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 app.use(morgan('combined'));
 app.use(express.json());
@@ -28,7 +30,7 @@ app.get('/', (req, res) => {
   res.json({
     message: 'SITogether Backend API is running!',
     status: 'success',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -37,7 +39,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -54,9 +56,9 @@ app.get('/api', (req, res) => {
         register: 'POST /api/auth/register',
         login: 'POST /api/auth/login',
         logout: 'POST /api/auth/logout',
-        session: 'GET /api/auth/session (protected)'
-      }
-    }
+        session: 'GET /api/auth/session (protected)',
+      },
+    },
   });
 });
 
@@ -65,7 +67,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       where: {
-        verified: true
+        verified: true,
       },
       select: {
         id: true,
@@ -78,24 +80,24 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         interests: true,
         avatarUrl: true,
         verified: true,
-        createdAt: true
+        createdAt: true,
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: 'desc',
+      },
     });
-    
+
     res.json({
       success: true,
       data: users,
-      count: users.length
+      count: users.length,
     });
   } catch (error) {
     console.error('Prisma query error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch users from database',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -110,7 +112,7 @@ app.post('/api/auth/register', async (req, res) => {
     if (!email || !password || !name || !age || !gender) {
       return res.status(400).json({
         success: false,
-        error: 'Email, password, name, age, and gender are required'
+        error: 'Email, password, name, age, and gender are required',
       });
     }
 
@@ -119,19 +121,19 @@ app.post('/api/auth/register', async (req, res) => {
     if (!validGenders.includes(gender)) {
       return res.status(400).json({
         success: false,
-        error: 'Gender must be one of: Male, Female, or Other'
+        error: 'Gender must be one of: Male, Female, or Other',
       });
     }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        error: 'User with this email already exists'
+        error: 'User with this email already exists',
       });
     }
 
@@ -151,7 +153,7 @@ app.post('/api/auth/register', async (req, res) => {
         course,
         bio: null,
         interests: [],
-        verified: false
+        verified: false,
       },
       select: {
         id: true,
@@ -165,21 +167,21 @@ app.post('/api/auth/register', async (req, res) => {
         interests: true,
         avatarUrl: true,
         verified: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     });
 
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to register user',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -193,7 +195,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: 'Email and password are required',
       });
     }
 
@@ -214,20 +216,20 @@ app.post('/api/auth/login', async (req, res) => {
         avatarUrl: true,
         verified: true,
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
     console.log('User found in database:', {
       email: user?.email,
       verified: user?.verified,
-      verifiedType: typeof user?.verified
+      verifiedType: typeof user?.verified,
     });
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid email or password',
       });
     }
 
@@ -237,7 +239,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid email or password'
+        error: 'Invalid email or password',
       });
     }
 
@@ -245,8 +247,9 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user.verified) {
       return res.status(403).json({
         success: false,
-        error: 'Account not verified. Please check your email and verify your account before logging in.',
-        requiresVerification: true
+        error:
+          'Account not verified. Please check your email and verify your account before logging in.',
+        requiresVerification: true,
       });
     }
 
@@ -262,19 +265,19 @@ app.post('/api/auth/login', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 1000 // 1 hour in milliseconds
+      maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
 
     res.json({
       success: true,
-      message: 'Login successful'
+      message: 'Login successful',
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to login',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -284,7 +287,7 @@ app.post('/api/auth/logout', (req, res) => {
   res.clearCookie('token');
   res.json({
     success: true,
-    message: 'Logged out successfully'
+    message: 'Logged out successfully',
   });
 });
 
@@ -305,37 +308,37 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        verified: true
-      }
+        verified: true,
+      },
     });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: 'User not found',
       });
     }
 
     res.json({
       success: true,
-      user: user
+      user: user,
     });
   } catch (error) {
     console.error('Session error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve session',
-      message: error.message
+      message: error.message,
     });
   }
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, res) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
   });
 });
 
@@ -343,7 +346,7 @@ app.use((err, req, res, next) => {
 app.use('*', (req, res) => {
   res.status(404).json({
     message: 'Route not found',
-    path: req.originalUrl
+    path: req.originalUrl,
   });
 });
 

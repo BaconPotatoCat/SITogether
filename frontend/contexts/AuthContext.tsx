@@ -97,19 +97,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Refetch session periodically (every 5 minutes)
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (status === 'authenticated') {
-        fetchSession()
-      }
-    }, 5 * 60 * 1000)
+    const interval = setInterval(
+      () => {
+        if (status === 'authenticated') {
+          fetchSession()
+        }
+      },
+      5 * 60 * 1000
+    )
 
     return () => clearInterval(interval)
   }, [status])
 
   return (
-    <AuthContext.Provider value={{ session, status, signOut }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ session, status, signOut }}>{children}</AuthContext.Provider>
   )
 }
-

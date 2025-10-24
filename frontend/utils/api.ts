@@ -11,7 +11,7 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
   try {
     const response = await fetch(url, defaultOptions)
-    
+
     // If unauthorized, redirect to login
     if (response.status === 401) {
       window.location.href = '/auth'

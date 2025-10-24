@@ -15,14 +15,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Verify token with backend
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/session`
-    
+
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      credentials: 'include'
+      credentials: 'include',
     })
 
     const data = await response.json()
@@ -30,13 +30,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (response.ok && data.success) {
       // Calculate token expiration (1 hour from now)
       const expires = new Date()
-      expires.setTime(expires.getTime() + (60 * 60 * 1000))
+      expires.setTime(expires.getTime() + 60 * 60 * 1000)
 
       res.status(200).json({
         session: {
           user: data.user,
-          expires: expires.toISOString()
-        }
+          expires: expires.toISOString(),
+        },
       })
     } else {
       res.status(200).json({ session: null })
@@ -46,4 +46,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({ session: null })
   }
 }
-
