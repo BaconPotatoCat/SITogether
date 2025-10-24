@@ -7,23 +7,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/users`
-    
+
     // Get token from cookie
     const token = req.cookies.token
-    
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     }
-    
+
     // Add authorization header if token exists
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
-    
+
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers,
-      credentials: 'include'
+      credentials: 'include',
     })
 
     const data = await response.json()
@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       success: false,
       error: `Failed to fetch users: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      message: 'Backend container may not be running or accessible',
     })
   }
 }

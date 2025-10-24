@@ -40,7 +40,7 @@ export default function Home() {
         setLoading(true)
         const response = await fetchWithAuth('/api/users')
         const result = await response.json()
-        
+
         if (result.success) {
           setDeck(result.data)
           setError(null)
@@ -162,7 +162,7 @@ export default function Home() {
       const t = Math.min(1, Math.abs(drag.x) / 200)
       return t * t * (3 - 2 * t)
     }
-    const needed = drag.x >= 0 ? (nextRect.right - deckCenterX) : (deckCenterX - nextRect.left)
+    const needed = drag.x >= 0 ? nextRect.right - deckCenterX : deckCenterX - nextRect.left
     const t = Math.min(1, Math.abs(drag.x) / Math.max(1, needed))
     return t * t * (3 - 2 * t)
   }
@@ -173,44 +173,34 @@ export default function Home() {
     const nextRect = nextRef.current?.getBoundingClientRect()
     const deckCenterX = deckRect ? deckRect.left + deckRect.width / 2 : 0
     if (!deckRect || !nextRect) return Math.min(1, Math.abs(drag.x) / 200)
-    const needed = drag.x >= 0 ? (nextRect.right - deckCenterX) : (deckCenterX - nextRect.left)
+    const needed = drag.x >= 0 ? nextRect.right - deckCenterX : deckCenterX - nextRect.left
     return Math.min(1, Math.abs(drag.x) / Math.max(1, needed))
-  }
-
-  const likeActive = () => {
-    const deckRect = deckRef.current?.getBoundingClientRect()
-    const nextRect = nextRef.current?.getBoundingClientRect()
-    if (!deckRect || !nextRect) return drag.x > 200
-    const deckCenterX = deckRect.left + deckRect.width / 2
-    return deckCenterX + drag.x > nextRect.right
-  }
-
-  const passActive = () => {
-    const deckRect = deckRef.current?.getBoundingClientRect()
-    const nextRect = nextRef.current?.getBoundingClientRect()
-    if (!deckRect || !nextRect) return drag.x < -200
-    const deckCenterX = deckRect.left + deckRect.width / 2
-    return deckCenterX + drag.x < nextRect.left
   }
 
   // Health check function - now calls frontend API route which proxies to backend
   const checkBackendHealth = async () => {
     setIsCheckingHealth(true)
     setHealthCheckResult(null)
-    
+
     try {
       // Call the frontend API route which will proxy the request to the backend container
       const response = await fetch('/api/health')
       const result = await response.json()
-      
+
       if (result.success) {
         const data = result.data
-        setHealthCheckResult(`✅ Backend is healthy!\nStatus: ${data.status}\nUptime: ${Math.round(data.uptime)}s\nTimestamp: ${data.timestamp}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+        setHealthCheckResult(
+          `✅ Backend is healthy!\nStatus: ${data.status}\nUptime: ${Math.round(data.uptime)}s\nTimestamp: ${data.timestamp}\n\n🔗 Request made by: Frontend Container → Backend Container`
+        )
       } else {
-        setHealthCheckResult(`❌ ${result.error}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+        setHealthCheckResult(
+          `❌ ${result.error}\n\n🔗 Request made by: Frontend Container → Backend Container`
+        )
       }
     } catch (error) {
-      setHealthCheckResult(`❌ Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔗 Request made by: Frontend Container → Backend Container`)
+      setHealthCheckResult(
+        `❌ Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔗 Request made by: Frontend Container → Backend Container`
+      )
     } finally {
       setIsCheckingHealth(false)
     }
@@ -227,17 +217,19 @@ export default function Home() {
 
       <main className="container">
         {/* Temporary Health Check Section */}
-        <section style={{ 
-          padding: '20px', 
-          marginBottom: '20px', 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: '8px',
-          border: '1px solid #e9ecef'
-        }}>
+        <section
+          style={{
+            padding: '20px',
+            marginBottom: '20px',
+            backgroundColor: '#f8f9fa',
+            borderRadius: '8px',
+            border: '1px solid #e9ecef',
+          }}
+        >
           <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#333' }}>
             🔧 Backend Health Check (Temporary)
           </h2>
-          <button 
+          <button
             onClick={checkBackendHealth}
             disabled={isCheckingHealth}
             style={{
@@ -248,23 +240,25 @@ export default function Home() {
               borderRadius: '4px',
               cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
               fontSize: '14px',
-              marginBottom: '15px'
+              marginBottom: '15px',
             }}
           >
             {isCheckingHealth ? '🔄 Checking...' : '🏥 Check Backend Health'}
           </button>
-          
+
           {healthCheckResult && (
-            <div style={{
-              padding: '15px',
-              backgroundColor: healthCheckResult.includes('✅') ? '#d4edda' : '#f8d7da',
-              border: `1px solid ${healthCheckResult.includes('✅') ? '#c3e6cb' : '#f5c6cb'}`,
-              borderRadius: '4px',
-              color: healthCheckResult.includes('✅') ? '#155724' : '#721c24',
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              whiteSpace: 'pre-line'
-            }}>
+            <div
+              style={{
+                padding: '15px',
+                backgroundColor: healthCheckResult.includes('✅') ? '#d4edda' : '#f8d7da',
+                border: `1px solid ${healthCheckResult.includes('✅') ? '#c3e6cb' : '#f5c6cb'}`,
+                borderRadius: '4px',
+                color: healthCheckResult.includes('✅') ? '#155724' : '#721c24',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                whiteSpace: 'pre-line',
+              }}
+            >
               {healthCheckResult}
             </div>
           )}
@@ -272,30 +266,34 @@ export default function Home() {
 
         <section className="swipe-section">
           {loading ? (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '400px',
-              fontSize: '18px',
-              color: '#666'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: '400px',
+                fontSize: '18px',
+                color: '#666',
+              }}
+            >
               🔄 Loading profiles from database...
             </div>
           ) : error ? (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '400px',
-              fontSize: '18px',
-              color: '#dc3545',
-              backgroundColor: '#f8d7da',
-              border: '1px solid #f5c6cb',
-              borderRadius: '8px',
-              padding: '20px',
-              margin: '20px'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: '400px',
+                fontSize: '18px',
+                color: '#dc3545',
+                backgroundColor: '#f8d7da',
+                border: '1px solid #f5c6cb',
+                borderRadius: '8px',
+                padding: '20px',
+                margin: '20px',
+              }}
+            >
               ❌ Error loading profiles: {error}
             </div>
           ) : (
@@ -318,18 +316,31 @@ export default function Home() {
                         key={p.id}
                         className="card stack"
                         ref={idx === 0 ? nextRef : undefined}
-                        style={{ transform: `translateY(${translateY}px) scale(${scale})`, zIndex: z, transition: 'transform 180ms ease-out' }}
+                        style={{
+                          transform: `translateY(${translateY}px) scale(${scale})`,
+                          zIndex: z,
+                          transition: 'transform 180ms ease-out',
+                        }}
                       >
-                        <img className="card-img" src={p.avatarUrl} alt={`${p.name} avatar`} draggable={false} />
+                        <img
+                          className="card-img"
+                          src={p.avatarUrl}
+                          alt={`${p.name} avatar`}
+                          draggable={false}
+                        />
                         <div className="card-info">
                           <div className="card-head">
-                            <h3>{p.name}, {p.age}, {p.gender}</h3>
+                            <h3>
+                              {p.name}, {p.age}, {p.gender}
+                            </h3>
                             <span className="course">{p.course}</span>
                           </div>
                           <p className="bio">{p.bio}</p>
                           <div className="chips">
                             {p.interests.slice(0, 3).map((i) => (
-                              <span key={i} className="chip">{i}</span>
+                              <span key={i} className="chip">
+                                {i}
+                              </span>
                             ))}
                           </div>
                         </div>
@@ -341,7 +352,12 @@ export default function Home() {
                     <article
                       key={topCard.id}
                       className="card top"
-                      style={{ transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`, zIndex: 30, opacity: removing ? 0 : 1, transition: 'transform 220ms ease-out, opacity 220ms ease-out' }}
+                      style={{
+                        transform: `translate(${drag.x}px, ${drag.y}px) rotate(${drag.x * 0.04}deg)`,
+                        zIndex: 30,
+                        opacity: removing ? 0 : 1,
+                        transition: 'transform 220ms ease-out, opacity 220ms ease-out',
+                      }}
                       onMouseDown={(e) => pointerDown(e.clientX, e.clientY)}
                       onMouseMove={(e) => pointerMove(e.clientX, e.clientY)}
                       onMouseUp={pointerUp}
@@ -369,16 +385,25 @@ export default function Home() {
                           {drag.x >= 0 ? 'LIKE' : 'PASS'}
                         </span>
                       </div>
-                      <img className="card-img" src={topCard.avatarUrl} alt={`${topCard.name} avatar`} draggable={false} />
+                      <img
+                        className="card-img"
+                        src={topCard.avatarUrl}
+                        alt={`${topCard.name} avatar`}
+                        draggable={false}
+                      />
                       <div className="card-info">
                         <div className="card-head">
-                          <h3>{topCard.name}, {topCard.age}, {topCard.gender}</h3>
+                          <h3>
+                            {topCard.name}, {topCard.age}, {topCard.gender}
+                          </h3>
                           <span className="course">{topCard.course}</span>
                         </div>
                         <p className="bio">{topCard.bio}</p>
                         <div className="chips">
                           {topCard.interests.map((i) => (
-                            <span key={i} className="chip">{i}</span>
+                            <span key={i} className="chip">
+                              {i}
+                            </span>
                           ))}
                         </div>
                       </div>
@@ -399,14 +424,20 @@ export default function Home() {
                       pointerEvents: 'none',
                     }}
                   >
-                    <p className="muted">You're all caught up. Check back later for more profiles.</p>
+                    <p className="muted">
+                      You&apos;re all caught up. Check back later for more profiles.
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="swipe-actions">
-                <button className="btn ghost" onClick={onPass}>Pass</button>
-                <button className="btn primary" onClick={onLike}>Like</button>
+                <button className="btn ghost" onClick={onPass}>
+                  Pass
+                </button>
+                <button className="btn primary" onClick={onLike}>
+                  Like
+                </button>
               </div>
             </>
           )}
