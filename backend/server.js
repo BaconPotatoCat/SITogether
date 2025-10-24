@@ -232,6 +232,14 @@ app.post('/api/auth/register', async (req, res) => {
       }
     });
 
+    // Create UserPoints record for the new user
+    await prisma.userPoints.create({
+      data: {
+        userId: user.id,
+        totalPoints: 0
+      }
+    });
+
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -400,7 +408,8 @@ app.get('/api/points', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    let userPoints = await prisma.userPoints.findUnique({
+    // Get user points (should always exist since created during registration)
+    const userPoints = await prisma.userPoints.findUnique({
       where: { userId },
       select: {
         totalPoints: true,
@@ -409,18 +418,11 @@ app.get('/api/points', authenticateToken, async (req, res) => {
       }
     });
 
-    // Create UserPoints record if it doesn't exist
     if (!userPoints) {
-      userPoints = await prisma.userPoints.create({
-        data: {
-          userId: userId,
-          totalPoints: 0
-        },
-        select: {
-          totalPoints: true,
-          dailyCheckinDate: true,
-          dailyLikeClaimedDate: true
-        }
+      console.error(`UserPoints record not found for user ${userId} - user registration may be incomplete`);
+      return res.status(500).json({
+        success: false,
+        error: 'User points record not found. Please contact support.'
       });
     }
 
