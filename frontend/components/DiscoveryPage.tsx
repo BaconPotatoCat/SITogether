@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchWithAuth } from '../utils/api'
+import FilterModal from './FilterModal'
 
 interface User {
   id: string
@@ -23,7 +24,11 @@ interface FilterOptions {
   interests: string[]
 }
 
-export default function DiscoveryPage() {
+interface DiscoveryPageProps {
+  isPremium?: boolean
+}
+
+export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps) {
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,17 +40,33 @@ export default function DiscoveryPage() {
     course: '',
     interests: []
   })
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilterModal, setShowFilterModal] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [likingUserId, setLikingUserId] = useState<string | null>(null)
   const [passingUserId, setPassingUserId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchUsers()
+
+    // Detect if mobile
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
   useEffect(() => {
-    applyFilters()
-  }, [users, filters])
+    if (isPremium) {
+      applyFilters()
+    } else {
+      // Non-premium users see all users without filtering
+      setFilteredUsers(users)
+    }
+  }, [users, filters, isPremium])
 
   const fetchUsers = async () => {
     try {
@@ -164,8 +185,8 @@ export default function DiscoveryPage() {
   }
 
   // Get all unique courses and interests for filter options
-  const availableCourses = [...new Set(users.map(user => user.course).filter(Boolean))]
-  const availableInterests = [...new Set(users.flatMap(user => user.interests))]
+  const availableCourses = Array.from(new Set(users.map(user => user.course).filter((course): course is string => course !== null)))
+  const availableInterests = Array.from(new Set(users.flatMap(user => user.interests)))
 
   if (loading) {
     return (
@@ -189,97 +210,19 @@ export default function DiscoveryPage() {
     <div className="discovery-page">
       <div className="discovery-header">
         <h2>Discover Profiles</h2>
-        <button
-          className="filter-toggle"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
-      </div>
-
-      {showFilters && (
-        <div className="filters-section">
-          <div className="filter-row">
-            <div className="filter-group">
-              <label>Gender:</label>
-              <select
-                value={filters.gender}
-                onChange={(e) => updateFilter('gender', e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div className="filter-group">
-              <label>Age Range:</label>
-              <div className="age-range">
-                <input
-                  type="number"
-                  min="18"
-                  max="100"
-                  value={filters.ageMin}
-                  onChange={(e) => updateFilter('ageMin', parseInt(e.target.value) || 18)}
-                />
-                <span>to</span>
-                <input
-                  type="number"
-                  min="18"
-                  max="100"
-                  value={filters.ageMax}
-                  onChange={(e) => updateFilter('ageMax', parseInt(e.target.value) || 100)}
-                />
-              </div>
-            </div>
-
-            <div className="filter-group">
-              <label>Course:</label>
-              <select
-                value={filters.course}
-                onChange={(e) => updateFilter('course', e.target.value)}
-              >
-                <option value="">All Courses</option>
-                {availableCourses.map(course => (
-                  <option key={course} value={course}>{course}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="filter-row">
-            <div className="filter-group interests-filter">
-              <label>Interests (select multiple):</label>
-              <div className="interests-grid">
-                {availableInterests.map(interest => (
-                  <label key={interest} className="interest-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={filters.interests.includes(interest)}
-                      onChange={() => toggleInterestFilter(interest)}
-                    />
-                    {interest}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
+        {isPremium ? (
           <button
-            className="clear-filters"
-            onClick={() => setFilters({
-              gender: '',
-              ageMin: 18,
-              ageMax: 100,
-              course: '',
-              interests: []
-            })}
+            className="filter-toggle"
+            onClick={() => setShowFilterModal(true)}
           >
-            Clear All Filters
+            Filters
           </button>
-        </div>
-      )}
+        ) : (
+          <div className="premium-required">
+            <span className="premium-badge">PREMIUM</span>
+          </div>
+        )}
+      </div>
 
       <div className="profiles-section">
         {filteredUsers.length === 0 ? (
@@ -350,6 +293,23 @@ export default function DiscoveryPage() {
           </div>
         )}
       </div>
+
+      <FilterModal
+        isOpen={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        onFilterChange={updateFilter}
+        onClearFilters={() => setFilters({
+          gender: '',
+          ageMin: 18,
+          ageMax: 100,
+          course: '',
+          interests: []
+        })}
+        availableCourses={availableCourses}
+        availableInterests={availableInterests}
+        isMobile={isMobile}
+      />
     </div>
   )
 }

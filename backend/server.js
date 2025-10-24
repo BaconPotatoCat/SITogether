@@ -685,7 +685,7 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
     }
 
     // Check if already premium
-    if (userPoints.isPremium && userPoints.premiumExpiryDate && new Date(userPoints.premiumExpiryDate) > new Date()) {
+    if (userPoints.premiumExpiryDate && new Date(userPoints.premiumExpiryDate) > new Date()) {
       return res.status(400).json({
         success: false,
         error: 'Premium is already active',
@@ -753,7 +753,6 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId },
       select: {
-        isPremium: true,
         premiumExpiryDate: true,
         totalPoints: true
       }

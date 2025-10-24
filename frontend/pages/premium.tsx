@@ -157,7 +157,7 @@ export default function Premium() {
                   </p>
                 )}
               </div>
-              <DiscoveryPage />
+              <DiscoveryPage isPremium={premiumStatus?.isPremiumActive} />
             </div>
           ) : (
             <div className="premium-locked">
