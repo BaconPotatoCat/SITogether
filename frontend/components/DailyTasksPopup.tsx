@@ -23,7 +23,7 @@ interface DailyTasksPopupProps {
 export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   const [userPoints, setUserPoints] = useState<UserPoints | null>(null)
   const [loading, setLoading] = useState(true)
-  const [claiming, setClaiming] = useState(false)
+  const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Fixed tasks (for now - future tasks will be dynamic)
@@ -102,10 +102,10 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   const progressPercentage = (currentPoints / totalPoints) * 100
 
   const handleClaimTask = async (taskId: string) => {
-    if (claiming) return
+    if (claimingTaskId === taskId) return
 
     try {
-      setClaiming(true)
+      setClaimingTaskId(taskId)
       setError(null)
 
       let endpoint = ''
@@ -141,7 +141,7 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
       console.error(`Error claiming ${taskId} points:`, err)
       setError(err instanceof Error ? err.message : `Failed to claim ${taskId} points`)
     } finally {
-      setClaiming(false)
+      setClaimingTaskId(null)
     }
   }
 
@@ -211,9 +211,9 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
                   <button
                     className="claim-button"
                     onClick={() => handleClaimTask(task.id)}
-                    disabled={claiming}
+                    disabled={claimingTaskId !== null}
                   >
-                    {claiming ? 'Claiming...' : 'Claim'}
+                    {claimingTaskId === task.id ? 'Claiming...' : 'Claim'}
                   </button>
                 ) : (
                   <span className="task-uncompleted">Not completed</span>
