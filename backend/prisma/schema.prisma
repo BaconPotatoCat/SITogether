@@ -28,6 +28,8 @@ model User {
 
   // Relations
   points     UserPoints?
+  givenLikes UserLikes[] @relation("UserLikes")
+  receivedLikes UserLikes[] @relation("UserReceivedLikes")
 
   @@map("users")
 }
@@ -36,8 +38,8 @@ model UserPoints {
   id                   String   @id @default(uuid()) @db.Uuid
   userId               String   @unique @db.Uuid
   totalPoints          Int      @default(0)
-  dailyCheckinCompleted Boolean @default(false)
   dailyCheckinDate     DateTime?
+  dailyLikeClaimedDate DateTime?
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
@@ -45,4 +47,19 @@ model UserPoints {
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_points")
+}
+
+model UserLikes {
+  id        String   @id @default(uuid()) @db.Uuid
+  likerId   String   @db.Uuid
+  likedId   String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  liker   User @relation("UserLikes", fields: [likerId], references: [id], onDelete: Cascade)
+  liked   User @relation("UserReceivedLikes", fields: [likedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate likes
+  @@unique([likerId, likedId])
+  @@map("user_likes")
 }

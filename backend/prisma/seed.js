@@ -104,8 +104,7 @@ async function main() {
       prisma.userPoints.create({
         data: {
           userId: user.id,
-          totalPoints: 0,
-          dailyCheckinCompleted: false
+          totalPoints: 0
         }
       })
     )

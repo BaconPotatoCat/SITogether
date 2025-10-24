@@ -11,8 +11,9 @@ interface Task {
 
 interface UserPoints {
   totalPoints: number
-  dailyCheckinCompleted: boolean
   dailyCheckinDate: string | null
+  hasLikedToday: boolean
+  dailyLikeClaimedDate: string | null
 }
 
 interface DailyTasksPopupProps {
@@ -67,10 +68,26 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   // Build tasks array based on user points data
   const tasks: Task[] = baseTasks.map(task => {
     if (task.id === 'daily-checkin') {
+      const claimedToday = userPoints?.dailyCheckinDate ?
+        new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString() :
+        false
+
       return {
         ...task,
-        completed: userPoints?.dailyCheckinCompleted || false,
-        canClaim: !userPoints?.dailyCheckinCompleted
+        completed: claimedToday, // Show as completed if claimed today
+        canClaim: !claimedToday  // Allow claiming if not claimed today
+      }
+    }
+    if (task.id === 'like-person') {
+      const hasLikedToday = userPoints?.hasLikedToday || false
+      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate ?
+        new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString() :
+        false
+
+      return {
+        ...task,
+        completed: alreadyClaimedToday, // Show as completed when claimed today
+        canClaim: hasLikedToday && !alreadyClaimedToday // Allow claiming if user liked today and not claimed
       }
     }
     // For now, other tasks are not completed (future implementation)
@@ -84,20 +101,32 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   const currentPoints = userPoints?.totalPoints || 0
   const progressPercentage = (currentPoints / totalPoints) * 100
 
-  const handleClaimDaily = async () => {
+  const handleClaimTask = async (taskId: string) => {
     if (claiming) return
 
     try {
       setClaiming(true)
       setError(null)
 
-      const response = await fetchWithAuth('/api/points/claim-daily', {
-        method: 'POST'
-      })
+      let endpoint = ''
+      let method = 'POST'
+
+      switch (taskId) {
+        case 'daily-checkin':
+          endpoint = '/api/points/claim-daily'
+          break
+        case 'like-person':
+          endpoint = '/api/points/claim-daily-like'
+          break
+        default:
+          throw new Error(`Unknown task: ${taskId}`)
+      }
+
+      const response = await fetchWithAuth(endpoint, { method })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to claim daily points')
+        throw new Error(errorData.error || `Failed to claim ${taskId} points`)
       }
 
       const result = await response.json()
@@ -106,11 +135,11 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
         // Update local state
         setUserPoints(result.points)
       } else {
-        throw new Error(result.error || 'Failed to claim daily points')
+        throw new Error(result.error || `Failed to claim ${taskId} points`)
       }
     } catch (err) {
-      console.error('Error claiming daily points:', err)
-      setError(err instanceof Error ? err.message : 'Failed to claim points')
+      console.error(`Error claiming ${taskId} points:`, err)
+      setError(err instanceof Error ? err.message : `Failed to claim ${taskId} points`)
     } finally {
       setClaiming(false)
     }
@@ -181,7 +210,7 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
                 ) : task.canClaim ? (
                   <button
                     className="claim-button"
-                    onClick={handleClaimDaily}
+                    onClick={() => handleClaimTask(task.id)}
                     disabled={claiming}
                   >
                     {claiming ? 'Claiming...' : 'Claim'}

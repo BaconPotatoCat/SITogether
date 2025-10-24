@@ -62,15 +62,59 @@ export default function Home() {
 
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
-  const onLike = () => {
+  const onLike = async () => {
     if (!topCard) return
-    setRemoving('like')
-    setDrag((d) => ({ ...d, x: 500 }))
-    setTimeout(() => {
-      setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
-      setRemoving(null)
-      resetDrag()
-    }, 220)
+
+    try {
+      // Call the like API
+      const response = await fetchWithAuth('/api/likes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ likedId: topCard.id }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Update points if earned from daily task
+        if (result.pointsEarned > 0) {
+          // Emit an event or callback to update points in parent components
+          // For now, we'll just log it
+          console.log(`Earned ${result.pointsEarned} points for liking!`)
+        }
+
+        // Remove card from deck
+        setRemoving('like')
+        setDrag((d) => ({ ...d, x: 500 }))
+        setTimeout(() => {
+          setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+          setRemoving(null)
+          resetDrag()
+        }, 220)
+      } else {
+        console.error('Failed to like user:', result.error)
+        // Still remove card to prevent getting stuck
+        setRemoving('like')
+        setDrag((d) => ({ ...d, x: 500 }))
+        setTimeout(() => {
+          setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+          setRemoving(null)
+          resetDrag()
+        }, 220)
+      }
+    } catch (error) {
+      console.error('Error liking user:', error)
+      // Still remove card to prevent getting stuck
+      setRemoving('like')
+      setDrag((d) => ({ ...d, x: 500 }))
+      setTimeout(() => {
+        setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+        setRemoving(null)
+        resetDrag()
+      }, 220)
+    }
   }
 
   const onPass = () => {
