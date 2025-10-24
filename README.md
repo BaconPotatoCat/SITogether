@@ -32,6 +32,9 @@ SITogether/
 │   ├── server.js      # Express server
 │   ├── package.json   # Backend dependencies
 │   └── Dockerfile     # Backend container config
+├── scripts/           # Helper scripts for development
+│   ├── run-tests.bat  # Windows test runner
+│   └── run-tests.sh   # Linux/Mac test runner
 ├── docker-compose.yml # Docker Compose configuration
 └── README.md          # This file
 ```
@@ -240,12 +243,12 @@ Every pull request automatically runs:
 
 **Windows:**
 ```bash
-.\run-tests.bat
+.\scripts\run-tests.bat
 ```
 
 **Linux/Mac:**
 ```bash
-./run-tests.sh
+./scripts/run-tests.sh
 ```
 
 This comprehensive script will automatically run:
@@ -261,7 +264,7 @@ If all checks pass, you'll see: `✓ All checks passed! Ready to create PR`
 ### Pre-Push Checklist
 
 Before creating a pull request, ensure:
-- [ ] **`run-tests.bat` or `run-tests.sh` passes with no errors**
+- [ ] **`scripts/run-tests.bat` or `scripts/run-tests.sh` passes with no errors**
 - [ ] All tests pass locally (`npm test`)
 - [ ] No linting errors (`npm run lint`)
 - [ ] Code is properly formatted (`npm run format:check`)
