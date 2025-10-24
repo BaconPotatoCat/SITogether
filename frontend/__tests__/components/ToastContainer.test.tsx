@@ -33,7 +33,7 @@ describe('ToastContainer', () => {
       { id: 3, message: 'Warning', type: 'warning' as const },
     ]
 
-    const { container } = render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />)
+    render(<ToastContainer toasts={toasts} removeToast={mockRemoveToast} />)
 
     const successToast = screen.getByText('Success').closest('.toast')
     const errorToast = screen.getByText('Error').closest('.toast')

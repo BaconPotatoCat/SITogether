@@ -1,8 +1,8 @@
 import { fetchWithAuth } from '../../utils/api'
 
 // Mock window.location
-delete (window as any).location
-window.location = { href: '' } as any
+delete (window as unknown as { location: unknown }).location
+window.location = { href: '' } as unknown as Location
 
 describe('fetchWithAuth', () => {
   beforeEach(() => {
