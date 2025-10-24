@@ -18,7 +18,7 @@ describe('fetchWithAuth', () => {
   it('should make a fetch request with credentials included', async () => {
     const mockResponse = {
       status: 200,
-      json: async () => ({ data: 'test' })
+      json: async () => ({ data: 'test' }),
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
@@ -27,36 +27,36 @@ describe('fetchWithAuth', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/test', {
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     })
   })
 
   it('should merge custom headers with default headers', async () => {
     const mockResponse = {
       status: 200,
-      json: async () => ({ data: 'test' })
+      json: async () => ({ data: 'test' }),
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
     await fetchWithAuth('/api/test', {
       headers: {
-        'Custom-Header': 'value'
-      }
+        'Custom-Header': 'value',
+      },
     })
 
     expect(global.fetch).toHaveBeenCalledWith('/api/test', {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'Custom-Header': 'value'
-      }
+        'Custom-Header': 'value',
+      },
     })
   })
 
   it('should redirect to /auth on 401 status', async () => {
     const mockResponse = {
-      status: 401
+      status: 401,
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
@@ -67,7 +67,7 @@ describe('fetchWithAuth', () => {
   it('should return response for successful requests', async () => {
     const mockResponse = {
       status: 200,
-      json: async () => ({ data: 'test' })
+      json: async () => ({ data: 'test' }),
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
@@ -80,13 +80,13 @@ describe('fetchWithAuth', () => {
 
   it('should pass through custom request options', async () => {
     const mockResponse = {
-      status: 200
+      status: 200,
     }
     ;(global.fetch as jest.Mock).mockResolvedValue(mockResponse)
 
     await fetchWithAuth('/api/test', {
       method: 'POST',
-      body: JSON.stringify({ test: 'data' })
+      body: JSON.stringify({ test: 'data' }),
     })
 
     expect(global.fetch).toHaveBeenCalledWith('/api/test', {
@@ -94,8 +94,8 @@ describe('fetchWithAuth', () => {
       body: JSON.stringify({ test: 'data' }),
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     })
   })
 
@@ -105,4 +105,3 @@ describe('fetchWithAuth', () => {
     await expect(fetchWithAuth('/api/test')).rejects.toThrow('Network error')
   })
 })
-

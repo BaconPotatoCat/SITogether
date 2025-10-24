@@ -23,14 +23,12 @@ describe('useToast', () => {
   it('should remove a toast with removeToast', () => {
     const { result } = renderHook(() => useToast())
 
-    let toastId: string
-
     act(() => {
       result.current.showToast('Test message', 'success')
-      toastId = result.current.toasts[0].id
     })
 
     expect(result.current.toasts).toHaveLength(1)
+    const toastId = result.current.toasts[0].id
 
     act(() => {
       result.current.removeToast(toastId)
@@ -72,5 +70,24 @@ describe('useToast', () => {
     })
     expect(result.current.toasts[2].type).toBe('warning')
   })
-})
 
+  it('should auto-remove toast after 5 seconds', async () => {
+    jest.useFakeTimers()
+    const { result } = renderHook(() => useToast())
+
+    act(() => {
+      result.current.showToast('Auto-remove test', 'success')
+    })
+
+    expect(result.current.toasts).toHaveLength(1)
+
+    // Fast-forward time by 5 seconds
+    act(() => {
+      jest.advanceTimersByTime(5000)
+    })
+
+    expect(result.current.toasts).toHaveLength(0)
+
+    jest.useRealTimers()
+  })
+})

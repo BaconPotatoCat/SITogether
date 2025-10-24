@@ -13,23 +13,19 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   collectCoverageFrom: [
-    'pages/**/*.{ts,tsx}',
     'components/**/*.{ts,tsx}',
     'hooks/**/*.{ts,tsx}',
-    'contexts/**/*.{ts,tsx}',
     'utils/**/*.{ts,tsx}',
-    '!pages/_app.tsx',
-    '!pages/_document.tsx',
-    '!pages/api/**',
     '!**/*.d.ts',
     '!**/node_modules/**',
+    '!**/__tests__/**',
   ],
   coverageThreshold: {
     global: {
-      branches: 60,
-      functions: 60,
-      lines: 60,
-      statements: 60
+      branches: 80,
+      functions: 78,
+      lines: 80,
+      statements: 80
     }
   },
   testMatch: [

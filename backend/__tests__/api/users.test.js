@@ -6,12 +6,12 @@ const { authenticateToken } = require('../../middleware/auth');
 // Mock Prisma client
 const mockPrismaClient = {
   user: {
-    findMany: jest.fn()
-  }
+    findMany: jest.fn(),
+  },
 };
 
 jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => mockPrismaClient)
+  PrismaClient: jest.fn(() => mockPrismaClient),
 }));
 
 describe('Users API Endpoints', () => {
@@ -28,7 +28,7 @@ describe('Users API Endpoints', () => {
       try {
         const users = await mockPrismaClient.user.findMany({
           where: {
-            verified: true
+            verified: true,
           },
           select: {
             id: true,
@@ -40,22 +40,22 @@ describe('Users API Endpoints', () => {
             interests: true,
             avatarUrl: true,
             verified: true,
-            createdAt: true
+            createdAt: true,
           },
           orderBy: {
-            createdAt: 'desc'
-          }
+            createdAt: 'desc',
+          },
         });
 
         res.json({
           success: true,
           count: users.length,
-          users
+          users,
         });
       } catch (error) {
         res.status(500).json({
           success: false,
-          error: 'Failed to fetch users'
+          error: 'Failed to fetch users',
         });
       }
     });
@@ -73,15 +73,15 @@ describe('Users API Endpoints', () => {
           name: 'Test User 1',
           age: 25,
           gender: 'Male',
-          verified: true
+          verified: true,
         },
         {
           id: 'user-2',
           name: 'Test User 2',
           age: 23,
           gender: 'Female',
-          verified: true
-        }
+          verified: true,
+        },
       ];
 
       mockPrismaClient.user.findMany.mockResolvedValue(mockUsers);
@@ -99,26 +99,21 @@ describe('Users API Endpoints', () => {
     });
 
     it('should return 401 when not authenticated', async () => {
-      const response = await request(app)
-        .get('/api/users');
+      const response = await request(app).get('/api/users');
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toContain('No token provided');
+      expect(response.body.error).toContain('Authentication required. Please log in.');
     });
 
     it('should return 403 with invalid token', async () => {
-      const response = await request(app)
-        .get('/api/users')
-        .set('Cookie', ['token=invalid-token']);
+      const response = await request(app).get('/api/users').set('Cookie', ['token=invalid-token']);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toContain('Invalid or expired token');
+      expect(response.body.error).toContain('Invalid authentication token.');
     });
 
     it('should only return verified users', async () => {
-      const mockUsers = [
-        { id: 'user-1', verified: true, name: 'Verified User' }
-      ];
+      const mockUsers = [{ id: 'user-1', verified: true, name: 'Verified User' }];
 
       mockPrismaClient.user.findMany.mockResolvedValue(mockUsers);
 
@@ -131,7 +126,7 @@ describe('Users API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(mockPrismaClient.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { verified: true }
+          where: { verified: true },
         })
       );
     });
@@ -151,4 +146,3 @@ describe('Users API Endpoints', () => {
     });
   });
 });
-
