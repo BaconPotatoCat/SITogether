@@ -141,6 +141,118 @@ docker-compose exec backend npm run db:seed
 - Only verified users will appear in the swipe interface
 - Unverified users can register but won't appear until they verify their accounts
 
+## 🧪 Testing & Quality Assurance
+
+The project includes comprehensive testing and code quality checks that run automatically on every pull request.
+
+### Running Tests Locally
+
+**Backend Tests:**
+```bash
+# Run all tests with coverage
+cd backend
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run linter
+npm run lint
+
+# Check code formatting
+npm run format:check
+
+# Fix formatting issues
+npm run format
+
+# Security audit
+npm run security:audit
+```
+
+**Frontend Tests:**
+```bash
+# Run all tests with coverage
+cd frontend
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Type checking
+npm run type-check
+
+# Run linter
+npm run lint
+
+# Check code formatting
+npm run format:check
+
+# Fix formatting issues
+npm run format
+
+# Security audit
+npm run security:audit
+```
+
+### Test Coverage
+
+### What Gets Tested
+
+**Backend:**
+- ✅ Authentication middleware (JWT validation, token expiry)
+- ✅ Registration API (validation, duplicate users, password hashing)
+- ✅ Login API (credentials validation, account verification)
+- ✅ Users API (authorization, filtering verified users)
+- ✅ Security checks (SQL injection, XSS prevention)
+
+**Frontend:**
+- ✅ Custom hooks (useToast, useSession)
+- ✅ Components (LoadingSpinner, ToastContainer)
+- ✅ API utilities (fetchWithAuth, error handling)
+- ✅ TypeScript type checking
+- ✅ Next.js build validation
+
+### CI/CD Pipeline
+
+Every pull request automatically runs:
+
+1. **Code Quality Checks**
+   - ESLint for code style
+   - Prettier for formatting
+   - TypeScript type checking (frontend)
+   - Security vulnerability scanning
+
+2. **Unit Tests**
+   - Jest test suites for backend and frontend
+   - Coverage reports uploaded to Codecov
+
+3. **Build Tests**
+   - Docker image builds for both services
+   - Next.js production build
+
+4. **Security Scans**
+   - npm audit for dependency vulnerabilities
+   - Trivy security scanner for container images
+
+### Pre-Push Checklist
+
+Before creating a pull request, ensure:
+- [ ] All tests pass locally (`npm test`)
+- [ ] No linting errors (`npm run lint`)
+- [ ] Code is properly formatted (`npm run format:check`)
+- [ ] TypeScript compiles without errors (frontend: `npm run type-check`)
+- [ ] Docker containers build successfully
+- [ ] New features include unit tests
+- [ ] Security audit shows no critical issues
+
+### Branch Protection
+
+Pull requests to `main` require:
+- ✅ All CI checks passing
+- ✅ Code review approval
+- ✅ No merge conflicts
+- ✅ Branch is up to date with main
+
 ## 🐳 Docker Services
 
 - **frontend**: Next.js application (port 3000)
@@ -167,7 +279,11 @@ docker-compose down --rmi local
 - **Frontend**: Next.js 14, React 18, TypeScript
 - **Backend**: Node.js, Express.js
 - **Database**: PostgreSQL 15, Prisma ORM
-- **Authentication**: bcrypt for password hashing
+- **Authentication**: JWT tokens, bcrypt password hashing
+- **Testing**: Jest, React Testing Library, Supertest
+- **Code Quality**: ESLint, Prettier, TypeScript
+- **CI/CD**: GitHub Actions
+- **Security**: Helmet.js, npm audit, Trivy scanner
 - **Containerization**: Docker, Docker Compose
 - **Styling**: CSS3 with modern features
 - **Dev Tools**: Prisma Studio for database management
