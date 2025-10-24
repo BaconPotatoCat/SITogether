@@ -59,7 +59,9 @@ app.get('/api', (req, res) => {
       points: {
         getPoints: 'GET /api/points (protected)',
         claimDaily: 'POST /api/points/claim-daily (protected)',
-        claimDailyLike: 'POST /api/points/claim-daily-like (protected)'
+        claimDailyLike: 'POST /api/points/claim-daily-like (protected)',
+        unlockPremium: 'POST /api/points/unlock-premium (protected)',
+        premiumStatus: 'GET /api/points/premium-status (protected)'
       },
       likes: {
         likeUser: 'POST /api/likes (protected)',
@@ -503,6 +505,14 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
       });
     }
 
+    // Check if user has reached 1000 points (premium threshold)
+    if (userPoints.totalPoints >= 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.'
+      });
+    }
+
     if (userPoints.dailyLikeClaimedDate) {
       const claimedDate = new Date(userPoints.dailyLikeClaimedDate);
       claimedDate.setHours(0, 0, 0, 0);
@@ -577,6 +587,14 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
       });
     }
 
+    // Check if user has reached 1000 points (premium threshold)
+    if (userPoints.totalPoints >= 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.'
+      });
+    }
+
     // Check if already claimed today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -634,6 +652,147 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to claim daily points',
+      message: error.message
+    });
+  }
+});
+
+// Unlock premium
+app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Get current user points
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId }
+    });
+
+    if (!userPoints) {
+      return res.status(404).json({
+        success: false,
+        error: 'User points not found'
+      });
+    }
+
+    // Check if user has enough points
+    if (userPoints.totalPoints < 1000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not enough points to unlock premium. Need 1000 points.',
+        currentPoints: userPoints.totalPoints,
+        requiredPoints: 1000
+      });
+    }
+
+    // Check if already premium
+    if (userPoints.isPremium && userPoints.premiumExpiryDate && new Date(userPoints.premiumExpiryDate) > new Date()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Premium is already active',
+        expiryDate: userPoints.premiumExpiryDate
+      });
+    }
+
+    // Calculate premium expiry (5 days from now)
+    const premiumExpiryDate = new Date();
+    premiumExpiryDate.setDate(premiumExpiryDate.getDate() + 5);
+
+    // Update user points to unlock premium and reset points to 0
+    const updatedPoints = await prisma.userPoints.update({
+      where: { userId },
+      data: {
+        premiumExpiryDate: premiumExpiryDate,
+        totalPoints: 0  // Reset points to 0 when premium is unlocked
+      },
+      select: {
+        totalPoints: true,
+        dailyCheckinDate: true,
+        dailyLikeClaimedDate: true,
+        premiumExpiryDate: true
+      }
+    });
+
+    // Add computed field for response
+    const mostRecentLikeAfter = await prisma.userLikes.findFirst({
+      where: { likerId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true }
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const hasLikedTodayAfter = mostRecentLikeAfter &&
+      new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+
+    const pointsWithComputed = {
+      ...updatedPoints,
+      hasLikedToday: hasLikedTodayAfter
+    };
+
+    res.json({
+      success: true,
+      message: 'Premium unlocked successfully',
+      points: pointsWithComputed,
+      premiumExpiryDate: premiumExpiryDate
+    });
+  } catch (error) {
+    console.error('Unlock premium error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to unlock premium',
+      message: error.message
+    });
+  }
+});
+
+// Check premium status
+app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId },
+      select: {
+        isPremium: true,
+        premiumExpiryDate: true,
+        totalPoints: true
+      }
+    });
+
+    if (!userPoints) {
+      return res.status(404).json({
+        success: false,
+        error: 'User points not found'
+      });
+    }
+
+    let isPremiumActive = false;
+    if (userPoints.premiumExpiryDate) {
+      isPremiumActive = new Date(userPoints.premiumExpiryDate) > new Date();
+    }
+
+    // If premium has expired, update the database
+    if (!isPremiumActive && userPoints.premiumExpiryDate) {
+      await prisma.userPoints.update({
+        where: { userId },
+        data: {
+          premiumExpiryDate: null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      isPremiumActive: isPremiumActive,
+      premiumExpiryDate: userPoints.premiumExpiryDate,
+      totalPoints: userPoints.totalPoints,
+      canUnlockPremium: userPoints.totalPoints >= 1000 && !isPremiumActive
+    });
+  } catch (error) {
+    console.error('Check premium status error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check premium status',
       message: error.message
     });
   }

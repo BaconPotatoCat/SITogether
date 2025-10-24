@@ -42,6 +42,7 @@ model UserPoints {
   totalPoints          Int      @default(0)
   dailyCheckinDate     DateTime?
   dailyLikeClaimedDate DateTime?
+  premiumExpiryDate    DateTime?
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
