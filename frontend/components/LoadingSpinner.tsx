@@ -5,9 +5,9 @@ interface LoadingSpinnerProps {
   message?: string
 }
 
-const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
-  fullScreen = false, 
-  message = 'Loading...' 
+const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+  fullScreen = false,
+  message = 'Loading...',
 }) => {
   if (fullScreen) {
     return (
@@ -29,4 +29,3 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 }
 
 export default LoadingSpinner
-

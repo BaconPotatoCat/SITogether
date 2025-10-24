@@ -7,13 +7,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/logout`
-    
+
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include'
+      credentials: 'include',
     })
 
     const data = await response.json()
@@ -26,8 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Logout failed:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to logout: ${error instanceof Error ? error.message : 'Unknown error'}`
+      error: `Failed to logout: ${error instanceof Error ? error.message : 'Unknown error'}`,
     })
   }
 }
-

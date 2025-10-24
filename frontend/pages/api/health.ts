@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Make request from frontend container to backend container
     // Using the environment variable for backend URL
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/health`
-    
+
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
@@ -23,13 +23,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(200).json({
         success: true,
         data: data,
-        message: 'Health check successful'
+        message: 'Health check successful',
       })
     } else {
       res.status(response.status).json({
         success: false,
         error: `Backend responded with error: ${response.status} ${response.statusText}`,
-        data: data
+        data: data,
       })
     }
   } catch (error) {
@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       success: false,
       error: `Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      message: 'Backend container may not be running or accessible',
     })
   }
 }

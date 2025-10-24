@@ -8,14 +8,14 @@ const authenticateToken = (req, res, next) => {
   if (!token) {
     return res.status(401).json({
       success: false,
-      error: 'Authentication required. Please log in.'
+      error: 'Authentication required. Please log in.',
     });
   }
 
   try {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Attach user info to request
     req.user = decoded;
     next();
@@ -23,16 +23,15 @@ const authenticateToken = (req, res, next) => {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
-        error: 'Session expired. Please log in again.'
+        error: 'Session expired. Please log in again.',
       });
     }
-    
+
     return res.status(403).json({
       success: false,
-      error: 'Invalid authentication token.'
+      error: 'Invalid authentication token.',
     });
   }
 };
 
 module.exports = { authenticateToken };
-
