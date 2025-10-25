@@ -159,7 +159,7 @@ app.post('/api/auth/register', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Create user
+    // Create user and verification token in a transaction
     const user = await prisma.user.create({
       data: {
         email,
@@ -172,8 +172,12 @@ app.post('/api/auth/register', async (req, res) => {
         bio: null,
         interests: [],
         verified: false,
-        verificationToken,
-        verificationTokenExpires,
+        verificationTokens: {
+          create: {
+            token: verificationToken,
+            expiresAt: verificationTokenExpires,
+          },
+        },
       },
       select: {
         id: true,
@@ -234,14 +238,13 @@ app.get('/api/auth/verify', async (req, res) => {
       });
     }
 
-    // Find user with this verification token
-    const user = await prisma.user.findFirst({
-      where: {
-        verificationToken: token,
-      },
+    // Find verification token with user
+    const verificationToken = await prisma.verificationToken.findUnique({
+      where: { token },
+      include: { user: true },
     });
 
-    if (!user) {
+    if (!verificationToken) {
       return res.status(400).json({
         success: false,
         error: 'Invalid or expired verification token',
@@ -249,7 +252,11 @@ app.get('/api/auth/verify', async (req, res) => {
     }
 
     // Check if token has expired
-    if (user.verificationTokenExpires && new Date() > user.verificationTokenExpires) {
+    if (new Date() > verificationToken.expiresAt) {
+      // Delete expired token
+      await prisma.verificationToken.delete({
+        where: { id: verificationToken.id },
+      });
       return res.status(400).json({
         success: false,
         error: 'Verification token has expired. Please request a new verification email.',
@@ -257,22 +264,27 @@ app.get('/api/auth/verify', async (req, res) => {
     }
 
     // Check if user is already verified
-    if (user.verified) {
+    if (verificationToken.user.verified) {
+      // Delete token since user is already verified
+      await prisma.verificationToken.delete({
+        where: { id: verificationToken.id },
+      });
       return res.status(200).json({
         success: true,
         message: 'Email already verified. You can now log in.',
       });
     }
 
-    // Update user as verified and clear the token
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        verified: true,
-        verificationToken: null,
-        verificationTokenExpires: null,
-      },
-    });
+    // Update user as verified and delete the token in a transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: { verified: true },
+      }),
+      prisma.verificationToken.delete({
+        where: { id: verificationToken.id },
+      }),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -324,14 +336,19 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Update user with new token
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        verificationToken,
-        verificationTokenExpires,
-      },
-    });
+    // Delete any existing tokens for this user and create new one in a transaction
+    await prisma.$transaction([
+      prisma.verificationToken.deleteMany({
+        where: { userId: user.id },
+      }),
+      prisma.verificationToken.create({
+        data: {
+          token: verificationToken,
+          userId: user.id,
+          expiresAt: verificationTokenExpires,
+        },
+      }),
+    ]);
 
     // Send verification email
     try {
