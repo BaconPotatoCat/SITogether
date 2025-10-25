@@ -8,7 +8,9 @@ export default function Auth() {
   const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -27,6 +29,17 @@ export default function Auth() {
       [name]: value,
     }))
 
+    // Real-time email validation for registration
+    // TODO: Uncomment to enforce SIT email validation
+    // if (!isLogin && name === 'email') {
+    //   const sitEmailRegex = /^\d{7}@sit\.singaporetech\.edu\.sg$/
+    //   if (value && !sitEmailRegex.test(value)) {
+    //     setEmailError('Must be a valid SIT student email (e.g., 2500000@sit.singaporetech.edu.sg)')
+    //   } else {
+    //     setEmailError('')
+    //   }
+    // }
+
     // Real-time password validation for registration
     if (!isLogin && (name === 'password' || name === 'confirmPassword')) {
       const password = name === 'password' ? value : formData.password
@@ -42,6 +55,13 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Email validation for registration
+    // TODO: Uncomment to enforce SIT email validation
+    // if (!isLogin && emailError) {
+    //   showToast('Please use a valid SIT student email address.', 'error')
+    //   return
+    // }
 
     // Password validation for registration
     if (!isLogin && passwordError) {
@@ -106,6 +126,7 @@ export default function Auth() {
       } else {
         // Handle verification error with special message
         if (result.requiresVerification) {
+          setUnverifiedEmail(result.email || formData.email)
           showToast(`${result.error}`, 'warning')
         } else {
           showToast(result.error || 'An error occurred', 'error')
@@ -119,9 +140,39 @@ export default function Auth() {
     }
   }
 
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+
+    setIsLoading(true)
+    try {
+      // Call Next.js API route which proxies to backend using internal Docker networking
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: unverifiedEmail }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast('Verification email sent! Please check your inbox.', 'success')
+        setUnverifiedEmail(null)
+      } else {
+        showToast(result.error || 'Failed to resend verification email', 'error')
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error)
+      showToast('An error occurred. Please try again.', 'error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setPasswordError('')
+    setEmailError('')
+    setUnverifiedEmail(null)
     setFormData({
       email: '',
       password: '',
@@ -248,8 +299,10 @@ export default function Auth() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  placeholder="Enter your email"
+                  placeholder={isLogin ? 'Enter your email' : 'your.email@example.com'}
+                  className={emailError ? 'error' : ''}
                 />
+                {emailError && <span className="error-message">{emailError}</span>}
               </div>
 
               <div className="form-group">
@@ -288,6 +341,24 @@ export default function Auth() {
                 {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
               </button>
             </form>
+
+            {unverifiedEmail && (
+              <div className="verification-reminder">
+                <p>
+                  <strong>Email not verified?</strong>
+                  <br />
+                  Check your inbox or click below to resend the verification email.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  className="btn secondary"
+                  disabled={isLoading}
+                >
+                  Resend Verification Email
+                </button>
+              </div>
+            )}
 
             <div className="auth-footer">
               <p>
