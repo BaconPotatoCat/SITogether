@@ -1417,7 +1417,6 @@ p {
   }
 }
 
-
 .filter-modal-content {
   padding: 0;
 }
@@ -1429,7 +1428,6 @@ p {
   padding: 1rem; /* Reduce padding from 1.5rem to 1rem */
   border-bottom: 1px solid #e9ecef;
 }
-
 
 .filter-modal-header h3 {
   margin: 0;
