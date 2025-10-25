@@ -11,7 +11,7 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Premium System**: Points-based premium features with daily tasks and unlocks
 - **Social Features**: Like/unlike users, pass functionality, and connection matching
 - **Advanced Filtering**: Premium filtering by age, gender, course, and interests
-- **Account Verification**: Email verification system for user accounts
+- **Email Verification**: Automated email verification system with secure tokens
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development

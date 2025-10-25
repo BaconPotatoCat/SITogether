@@ -6,7 +6,7 @@ import { fetchWithAuth } from '../../utils/api'
 // These are false positives - we properly wait for all async operations with waitFor()
 const originalError = console.error
 beforeAll(() => {
-  console.error = jest.fn((...args: any[]) => {
+  console.error = jest.fn((...args: unknown[]) => {
     const message = args[0]
     if (
       typeof message === 'string' &&
