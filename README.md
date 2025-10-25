@@ -4,10 +4,13 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 
 ## 🚀 Features
 
-- **Frontend**: Next.js 14 with TypeScript
+- **Frontend**: Next.js 14 with TypeScript and React 18
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
+- **Premium System**: Points-based premium features with daily tasks and unlocks
+- **Social Features**: Like/unlike users, pass functionality, and connection matching
+- **Advanced Filtering**: Premium filtering by age, gender, course, and interests
 - **Account Verification**: Email verification system for user accounts
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
