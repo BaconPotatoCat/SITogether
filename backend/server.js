@@ -22,8 +22,9 @@ app.use(
 );
 app.use(cookieParser());
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to 10MB for image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Basic route
 app.get('/', (req, res) => {
@@ -98,6 +99,120 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       success: false,
       error: 'Failed to fetch users from database',
       message: error.message,
+    });
+  }
+});
+
+// Get user by ID
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await prisma.user.findUnique({
+      where: {
+        id: id
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        bio: true,
+        interests: true,
+        avatarUrl: true,
+        verified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user from database'
+    });
+  }
+});
+
+// Update user by ID
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, age, course, bio, interests, avatarUrl } = req.body;
+
+    console.log('PUT /api/users/:id called with ID:', id);
+    console.log('Request body:', { name, age, course, bio, interests, avatarUrl: avatarUrl ? 'base64 image...' : null });
+
+    // Validate required fields
+    if (!name || !age) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and age are required'
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
+      name,
+      age: parseInt(age),
+      course: course || null,
+      bio: bio || null,
+      interests: Array.isArray(interests) ? interests : []
+    };
+
+    // Only update avatarUrl if provided
+    if (avatarUrl !== undefined) {
+      updateData.avatarUrl = avatarUrl;
+    }
+
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: id
+      },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        bio: true,
+        interests: true,
+        avatarUrl: true,
+        verified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user profile'
     });
   }
 });
@@ -334,7 +449,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, res) => {
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
@@ -342,7 +457,7 @@ app.use((err, res) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST be last
 app.use('*', (req, res) => {
   res.status(404).json({
     message: 'Route not found',
@@ -354,3 +469,4 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
