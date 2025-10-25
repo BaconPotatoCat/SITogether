@@ -22,5 +22,67 @@ model User {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  conversations    ConversationParticipant[]
+  initiatedMatches Match[]   @relation("MatchInitiator")
+  receivedMatches  Match[]   @relation("MatchReceiver")
+
   @@map("users")
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  senderId       String   @map("sender_id") @db.Uuid
+  receiverId     String   @map("receiver_id") @db.Uuid
+  content        String
+  isLocked       Boolean  @default(false) @map("is_locked")
+  isIntroMessage Boolean  @default(false) @map("is_intro_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User          @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Match {
+  id          String   @id @default(uuid()) @db.Uuid
+  user1Id     String   @map("user1_id") @db.Uuid
+  user2Id     String   @map("user2_id") @db.Uuid
+  status      String   @default("pending") // pending, matched, rejected
+  createdAt   DateTime @default(now()) @map("created_at")
+  matchedAt   DateTime? @map("matched_at")
+
+  user1 User @relation("MatchInitiator", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("MatchReceiver", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
+  @@map("matches")
 }

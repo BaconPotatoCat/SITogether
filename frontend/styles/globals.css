@@ -384,6 +384,16 @@ p {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 0.75rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.chat-item:hover {
+  background-color: #f9fafb;
+}
+
+.chat-item.selected {
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .chat-avatar {
@@ -402,6 +412,205 @@ p {
 .chat-body h3 { margin: 0; color: #111827; }
 .chat-body .time { color: #9ca3af; font-size: 0.85rem; }
 .chat-body .last { color: #6b7280; margin: 0.25rem 0 0 0; }
+
+.empty-state {
+  text-align: center;
+  color: #9ca3af;
+  padding: 2rem;
+  margin: 0;
+}
+
+/* Chat page layout */
+.chat-container {
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
+}
+
+.conversations-panel {
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.conversations-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.conversations-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.conversations-panel .chat-list {
+  overflow-y: auto;
+  padding: 0.75rem;
+  margin: 0;
+  max-width: none;
+}
+
+.messages-panel {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+}
+
+.messages-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.messages-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #111827;
+}
+
+.messages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #f9fafb;
+}
+
+.message {
+  display: flex;
+  max-width: 70%;
+}
+
+.message.sent {
+  align-self: flex-end;
+}
+
+.message.received {
+  align-self: flex-start;
+}
+
+.message-bubble {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.message.sent .message-bubble {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+.message-bubble p {
+  margin: 0;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+.message-time {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  opacity: 0.7;
+}
+
+.message-input-form {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.message-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  outline: none;
+  font-size: 0.95rem;
+}
+
+.message-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.send-button {
+  padding: 0.75rem 1.5rem;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.send-button:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.send-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.no-conversation-selected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .chat-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .conversations-panel {
+    display: none;
+  }
+  
+  .conversations-panel.mobile-show {
+    display: flex;
+  }
+  
+  .messages-panel {
+    display: none;
+  }
+  
+  .messages-panel.mobile-show {
+    display: flex;
+  }
+}
 
 /* Decision overlay */
 .decision-overlay {
@@ -422,4 +631,16 @@ p {
 
 .decision-text {
   filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
+}
+
+/* Match notification animation */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }

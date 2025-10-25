@@ -15,6 +15,12 @@ export default function Home() {
   const [deck, setDeck] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [matchNotification, setMatchNotification] = useState<string | null>(null)
+
+  // Intro message modal state
+  const [showIntroModal, setShowIntroModal] = useState(false)
+  const [introMessage, setIntroMessage] = useState('')
 
   // Gesture state
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false })
@@ -31,6 +37,24 @@ export default function Home() {
   // Fade-out control when removing
   const [removing, setRemoving] = useState<null | 'like' | 'pass'>(null)
 
+  // Get current user (for demo purposes, get the first user)
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/users')
+        const data = await response.json()
+        
+        if (data.success && data.data.length > 0) {
+          setCurrentUserId(data.data[0].id)
+        }
+      } catch (error) {
+        console.error('Failed to fetch current user:', error)
+      }
+    }
+    
+    fetchCurrentUser()
+  }, [])
+
   // Fetch users from database on component mount
   useEffect(() => {
     const fetchUsers = async () => {
@@ -40,7 +64,11 @@ export default function Home() {
         const result = await response.json()
         
         if (result.success) {
-          setDeck(result.data)
+          // Filter out the current user from the deck
+          const filteredUsers = currentUserId 
+            ? result.data.filter((user: Profile) => user.id !== currentUserId)
+            : result.data
+          setDeck(filteredUsers)
           setError(null)
         } else {
           setError(result.error || 'Failed to fetch users')
@@ -52,29 +80,98 @@ export default function Home() {
       }
     }
 
-    fetchUsers()
-  }, [])
+    if (currentUserId) {
+      fetchUsers()
+    }
+  }, [currentUserId])
 
   const topCard = deck[0]
   const restCards = deck.slice(1)
 
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
-  const onLike = () => {
-    if (!topCard) return
+  const showIntroMessageModal = () => {
+    setShowIntroModal(true)
+  }
+
+  const sendLike = async (withIntroMessage: string = '') => {
+    if (!topCard || !currentUserId) return
     setRemoving('like')
     setDrag((d) => ({ ...d, x: 500 }))
+    
+    // Send match request with optional intro message
+    try {
+      const response = await fetch('/api/matches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId1: currentUserId,
+          userId2: topCard.id,
+          action: 'like',
+          introMessage: withIntroMessage || undefined
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.isNewMatch) {
+        // Show match notification
+        setMatchNotification(`🎉 It's a Match with ${topCard.name}!`)
+        setTimeout(() => setMatchNotification(null), 5000)
+      }
+    } catch (error) {
+      console.error('Failed to create match:', error)
+    }
+
     setTimeout(() => {
       setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
       setRemoving(null)
       resetDrag()
+      setShowIntroModal(false)
+      setIntroMessage('')
     }, 220)
   }
 
-  const onPass = () => {
-    if (!topCard) return
+  const onLike = () => {
+    if (!topCard || !currentUserId) return
+    // Show intro message modal
+    showIntroMessageModal()
+  }
+
+  const handleSendWithIntro = () => {
+    sendLike(introMessage)
+  }
+
+  const handleSendWithoutIntro = () => {
+    setShowIntroModal(false)
+    setIntroMessage('')
+    sendLike()
+  }
+
+  const onPass = async () => {
+    if (!topCard || !currentUserId) return
     setRemoving('pass')
     setDrag((d) => ({ ...d, x: -500 }))
+    
+    // Send match request with pass action
+    try {
+      await fetch('/api/matches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId1: currentUserId,
+          userId2: topCard.id,
+          action: 'pass'
+        })
+      })
+    } catch (error) {
+      console.error('Failed to record pass:', error)
+    }
+
     setTimeout(() => {
       setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
       setRemoving(null)
@@ -199,6 +296,27 @@ export default function Home() {
       </Head>
 
       <main className="container">
+        {/* Match notification */}
+        {matchNotification && (
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            backgroundColor: '#10b981',
+            color: 'white',
+            padding: '16px 32px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+            fontSize: '18px',
+            fontWeight: '600',
+            animation: 'slideDown 0.3s ease-out'
+          }}>
+            {matchNotification}
+          </div>
+        )}
+
         {/* Temporary Health Check Section */}
         <section style={{ 
           padding: '20px', 
@@ -384,6 +502,119 @@ export default function Home() {
             </>
           )}
         </section>
+
+        {/* Intro Message Modal */}
+        {showIntroModal && topCard && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '20px'
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)'
+            }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', color: '#111827' }}>
+                Send an intro to {topCard.name}?
+              </h2>
+              <p style={{ margin: '0 0 20px 0', color: '#6b7280', fontSize: '0.95rem' }}>
+                Your message will be revealed when they like you back! 
+              </p>
+
+              <textarea
+                value={introMessage}
+                onChange={(e) => setIntroMessage(e.target.value)}
+                placeholder="Hi! I'd love to connect because..."
+                maxLength={200}
+                style={{
+                  width: '100%',
+                  minHeight: '100px',
+                  padding: '12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  fontSize: '0.95rem',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  marginBottom: '12px'
+                }}
+              />
+              <div style={{ 
+                textAlign: 'right', 
+                fontSize: '0.85rem', 
+                color: '#9ca3af',
+                marginBottom: '20px' 
+              }}>
+                {introMessage.length}/200
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                flexDirection: 'column'
+              }}>
+                <button
+                  onClick={handleSendWithIntro}
+                  disabled={!introMessage.trim()}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: introMessage.trim() ? '#6366f1' : '#9ca3af',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    cursor: introMessage.trim() ? 'pointer' : 'not-allowed',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  Send with intro message
+                </button>
+                <button
+                  onClick={handleSendWithoutIntro}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: 'white',
+                    color: '#6366f1',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    fontSize: '1rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  Like without message
+                </button>
+                <button
+                  onClick={() => {
+                    setShowIntroModal(false)
+                    setIntroMessage('')
+                    resetDrag()
+                  }}
+                  style={{
+                    padding: '8px 24px',
+                    backgroundColor: 'transparent',
+                    color: '#9ca3af',
+                    border: 'none',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </>
   )
