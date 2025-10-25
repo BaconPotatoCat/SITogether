@@ -7,13 +7,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/register`
-    
+
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(req.body),
     })
 
     const data = await response.json()
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(201).json({
         success: true,
         data: data.data,
-        message: data.message || 'Registration successful'
+        message: data.message || 'Registration successful',
       })
     } else {
       // Pass through the backend response directly
@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       success: false,
       error: `Failed to register: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      message: 'Backend container may not be running or accessible',
     })
   }
 }

@@ -1,15 +1,23 @@
 import type { AppProps } from 'next/app'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import { AuthProvider, useSession } from '../contexts/AuthContext'
+import LoadingSpinner from '../components/LoadingSpinner'
 import { CURRENT_USER } from '../lib/profiles'
 import '../styles/globals.css'
 
-export default function App({ Component, pageProps }: AppProps) {
+function Navigation() {
   const router = useRouter()
+  const { status, signOut } = useSession()
   const isActive = (path: string) => router.pathname === path
+  const isAuthenticated = status === 'authenticated'
+
+  const handleLogout = async () => {
+    await signOut()
+  }
 
   return (
-    <div className="app-shell">
+    <>
       <nav className="nav-desktop">
         <div className="nav-inner">
           <div className="brand">
@@ -26,19 +34,71 @@ export default function App({ Component, pageProps }: AppProps) {
               />
             </Link>
             <Link className={isActive('/auth') ? 'nav-link active' : 'nav-link'} href="/auth">Login</Link>
+            <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
+              Discover
+            </Link>
+            <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">
+              Chat
+            </Link>
+            {isAuthenticated ? (
+              <button className="nav-link logout-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            ) : (
+              <Link className={isActive('/auth') ? 'nav-link active' : 'nav-link'} href="/auth">
+                Login
+              </Link>
+            )}
           </div>
         </div>
       </nav>
 
+      <nav className="nav-mobile">
+        <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
+          Discover
+        </Link>
+        <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">
+          Chat
+        </Link>
+        {isAuthenticated ? (
+          <button className="tab-link logout-btn" onClick={handleLogout}>
+            Logout
+          </button>
+        ) : (
+          <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">
+            Login
+          </Link>
+        )}
+      </nav>
+    </>
+  )
+}
+
+function AppContent({ Component, pageProps }: AppProps) {
+  const { status } = useSession()
+  const router = useRouter()
+
+  // Don't show loading spinner on auth page
+  const isAuthPage = router.pathname === '/auth'
+
+  if (status === 'loading' && !isAuthPage) {
+    return <LoadingSpinner fullScreen message="Loading session..." />
+  }
+
+  return (
+    <div className="app-shell">
+      <Navigation />
       <div className="page-content">
         <Component {...pageProps} />
       </div>
-
-      <nav className="nav-mobile">
-        <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">Discover</Link>
-        <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">Chat</Link>
-        <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">Login</Link>
-      </nav>
     </div>
+  )
+}
+
+export default function App(props: AppProps) {
+  return (
+    <AuthProvider>
+      <AppContent {...props} />
+    </AuthProvider>
   )
 }

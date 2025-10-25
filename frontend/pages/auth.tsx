@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 
 export default function Auth() {
+  const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -15,21 +17,21 @@ export default function Auth() {
     name: '',
     age: '',
     gender: '',
-    course: ''
+    course: '',
   })
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }))
-    
+
     // Real-time password validation for registration
     if (!isLogin && (name === 'password' || name === 'confirmPassword')) {
       const password = name === 'password' ? value : formData.password
       const confirmPassword = name === 'confirmPassword' ? value : formData.confirmPassword
-      
+
       if (confirmPassword && password !== confirmPassword) {
         setPasswordError('Passwords do not match')
       } else {
@@ -40,18 +42,18 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Password validation for registration
     if (!isLogin && passwordError) {
       showToast('Please fix the password mismatch before submitting.', 'error')
       return
     }
-    
+
     setIsLoading(true)
-    
+
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register'
-      const payload = isLogin 
+      const payload = isLogin
         ? { email: formData.email, password: formData.password }
         : {
             email: formData.email,
@@ -59,7 +61,7 @@ export default function Auth() {
             name: formData.name,
             age: formData.age ? parseInt(formData.age) : null,
             gender: formData.gender,
-            course: formData.course
+            course: formData.course,
           }
 
       const response = await fetch(endpoint, {
@@ -67,32 +69,43 @@ export default function Auth() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       const result = await response.json()
 
       if (result.success) {
-        showToast(`${isLogin ? 'Login' : 'Registration'} successful! Please check your email for the confirmation link.`, 'success')
-        // Reset form
-        setFormData({
-          email: '',
-          password: '',
-          confirmPassword: '',
-          name: '',
-          age: '',
-          gender: '',
-          course: ''
-        })
-        setPasswordError('')
-        
-        // Switch to login form after successful registration
-        if (!isLogin) {
+        if (isLogin) {
+          showToast('Login successful!', 'success')
+
+          // Redirect to home page after a brief delay
+          setTimeout(() => {
+            router.push('/')
+          }, 500)
+        } else {
+          showToast(
+            'Registration successful! Please check your email for the verification link.',
+            'success'
+          )
+
+          // Reset form
+          setFormData({
+            email: '',
+            password: '',
+            confirmPassword: '',
+            name: '',
+            age: '',
+            gender: '',
+            course: '',
+          })
+          setPasswordError('')
+
+          // Switch to login form after successful registration
           setIsLogin(true)
         }
       } else {
-        // Handle confirmation error with special message
-        if (result.requiresConfirmation) {
+        // Handle verification error with special message
+        if (result.requiresVerification) {
           showToast(`${result.error}`, 'warning')
         } else {
           showToast(result.error || 'An error occurred', 'error')
@@ -116,6 +129,8 @@ export default function Auth() {
       name: '',
       age: '',
       gender: '',
+      course: '',
+      gender: '',
       course: ''
     })
   }
@@ -134,7 +149,11 @@ export default function Auth() {
           <div className="auth-card">
             <div className="auth-header">
               <h1>{isLogin ? 'Welcome Back' : 'Join SITogether'}</h1>
-              <p>{isLogin ? 'Sign in to discover new connections' : 'Create your account to start connecting'}</p>
+              <p>
+                {isLogin
+                  ? 'Sign in to discover new connections'
+                  : 'Create your account to start connecting'}
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="auth-form">
@@ -263,20 +282,18 @@ export default function Auth() {
                     minLength={6}
                     className={passwordError ? 'input-error' : ''}
                   />
-                  {passwordError && (
-                    <span className="error-message">{passwordError}</span>
-                  )}
+                  {passwordError && <span className="error-message">{passwordError}</span>}
                 </div>
               )}
 
               <button type="submit" className="btn primary auth-submit" disabled={isLoading}>
-                {isLoading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
+                {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
               </button>
             </form>
 
             <div className="auth-footer">
               <p>
-                {isLogin ? "Don't have an account?" : "Already have an account?"}
+                {isLogin ? "Don't have an account?" : 'Already have an account?'}
                 <button type="button" onClick={toggleMode} className="auth-toggle">
                   {isLogin ? 'Sign up' : 'Sign in'}
                 </button>

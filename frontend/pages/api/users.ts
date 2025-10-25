@@ -7,36 +7,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/users`
-    
+
+    // Get token from cookie
+    const token = req.cookies.token
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+
+    // Add authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(backendUrl, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
+      credentials: 'include',
     })
 
     const data = await response.json()
 
     if (response.ok) {
-      res.status(200).json({
-        success: true,
-        data: data.data,
-        count: data.count,
-        message: 'Users fetched successfully'
-      })
+      res.status(200).json(data)
     } else {
-      res.status(response.status).json({
-        success: false,
-        error: `Backend responded with error: ${response.status} ${response.statusText}`,
-        data: data
-      })
+      res.status(response.status).json(data)
     }
   } catch (error) {
-    console.error('Users fetch failed:', error)
+    console.error('Failed to fetch users:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to fetch users from backend: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      error: `Failed to fetch users: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      message: 'Backend container may not be running or accessible',
     })
   }
 }
