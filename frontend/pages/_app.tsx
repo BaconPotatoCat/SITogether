@@ -26,6 +26,9 @@ function Navigation() {
             <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
               Discover
             </Link>
+            <Link className={isActive('/premium') ? 'nav-link active' : 'nav-link'} href="/premium">
+              Premium
+            </Link>
             <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">
               Chat
             </Link>
@@ -45,6 +48,9 @@ function Navigation() {
       <nav className="nav-mobile">
         <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
           Discover
+        </Link>
+        <Link className={isActive('/premium') ? 'tab-link active' : 'tab-link'} href="/premium">
+          Premium
         </Link>
         <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">
           Chat

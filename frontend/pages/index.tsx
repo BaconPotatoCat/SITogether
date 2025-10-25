@@ -62,27 +62,57 @@ export default function Home() {
 
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
-  const onLike = () => {
+  const handleSwipeAction = async (
+    endpoint: string,
+    body: object,
+    direction: number,
+    actionType: 'like' | 'pass'
+  ) => {
     if (!topCard) return
-    setRemoving('like')
-    setDrag((d) => ({ ...d, x: 500 }))
-    setTimeout(() => {
-      setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
-      setRemoving(null)
-      resetDrag()
-    }, 220)
+
+    try {
+      const response = await fetchWithAuth(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setRemoving(actionType)
+        setDrag((d) => ({ ...d, x: direction }))
+        setTimeout(() => {
+          setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+          setRemoving(null)
+          resetDrag()
+        }, 220)
+      } else {
+        console.error(`Failed to ${actionType} user:`, result.error)
+        // Still remove card to prevent getting stuck
+        setRemoving(actionType)
+        setDrag((d) => ({ ...d, x: direction }))
+        setTimeout(() => {
+          setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+          setRemoving(null)
+          resetDrag()
+        }, 220)
+      }
+    } catch (error) {
+      console.error(`Error ${actionType}ing user:`, error)
+      // Still remove card to prevent getting stuck
+      setRemoving(actionType)
+      setDrag((d) => ({ ...d, x: direction }))
+      setTimeout(() => {
+        setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
+        setRemoving(null)
+        resetDrag()
+      }, 220)
+    }
   }
 
-  const onPass = () => {
-    if (!topCard) return
-    setRemoving('pass')
-    setDrag((d) => ({ ...d, x: -500 }))
-    setTimeout(() => {
-      setDeck((prev) => prev.filter((p) => p.id !== topCard.id))
-      setRemoving(null)
-      resetDrag()
-    }, 220)
-  }
+  const onLike = () => handleSwipeAction('/api/likes', { likedId: topCard.id }, 500, 'like')
+  const onPass = () => handleSwipeAction('/api/passes', { passedId: topCard.id }, -500, 'pass')
 
   const pointerDown = (clientX: number, clientY: number) => {
     startRef.current = { x: clientX, y: clientY }
