@@ -62,7 +62,12 @@ export default function Home() {
 
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
-  const handleSwipeAction = async (endpoint: string, body: object, direction: number, actionType: 'like' | 'pass') => {
+  const handleSwipeAction = async (
+    endpoint: string,
+    body: object,
+    direction: number,
+    actionType: 'like' | 'pass'
+  ) => {
     if (!topCard) return
 
     try {

@@ -101,17 +101,17 @@ async function main() {
 
   // Get all created users to create points entries
   const allUsers = await prisma.user.findMany({
-    select: { id: true, email: true }
+    select: { id: true, email: true },
   });
 
   // Create points entries for each user
   const pointsEntries = await Promise.all(
-    allUsers.map(user =>
+    allUsers.map((user) =>
       prisma.userPoints.create({
         data: {
           userId: user.id,
-          totalPoints: 0
-        }
+          totalPoints: 0,
+        },
       })
     )
   );

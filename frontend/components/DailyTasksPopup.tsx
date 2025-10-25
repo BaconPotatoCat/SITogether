@@ -30,7 +30,7 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   const baseTasks = [
     { id: 'daily-checkin', name: 'Daily check-in', points: 50 },
     { id: 'like-person', name: 'Like a person', points: 25 },
-    { id: 'send-introduction', name: 'Send an introduction', points: 25 }
+    { id: 'send-introduction', name: 'Send an introduction', points: 25 },
   ]
 
   const totalPoints = 1000
@@ -66,35 +66,35 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
   }
 
   // Build tasks array based on user points data
-  const tasks: Task[] = baseTasks.map(task => {
+  const tasks: Task[] = baseTasks.map((task) => {
     if (task.id === 'daily-checkin') {
-      const claimedToday = userPoints?.dailyCheckinDate ?
-        new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString() :
-        false
+      const claimedToday = userPoints?.dailyCheckinDate
+        ? new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString()
+        : false
 
       return {
         ...task,
         completed: claimedToday, // Show as completed if claimed today
-        canClaim: !claimedToday  // Allow claiming if not claimed today
+        canClaim: !claimedToday, // Allow claiming if not claimed today
       }
     }
     if (task.id === 'like-person') {
       const hasLikedToday = userPoints?.hasLikedToday || false
-      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate ?
-        new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString() :
-        false
+      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate
+        ? new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString()
+        : false
 
       return {
         ...task,
         completed: alreadyClaimedToday, // Show as completed when claimed today
-        canClaim: hasLikedToday && !alreadyClaimedToday // Allow claiming if user liked today and not claimed
+        canClaim: hasLikedToday && !alreadyClaimedToday, // Allow claiming if user liked today and not claimed
       }
     }
     // For now, other tasks are not completed (future implementation)
     return {
       ...task,
       completed: false,
-      canClaim: false
+      canClaim: false,
     }
   })
 
@@ -109,7 +109,7 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
       setError(null)
 
       let endpoint = ''
-      let method = 'POST'
+      const method = 'POST'
 
       switch (taskId) {
         case 'daily-checkin':
@@ -151,7 +151,9 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
         <div className="daily-tasks-popup" onClick={(e) => e.stopPropagation()}>
           <div className="daily-tasks-header">
             <h2>Daily Tasks</h2>
-            <button className="close-button" onClick={onClose}>×</button>
+            <button className="close-button" onClick={onClose}>
+              ×
+            </button>
           </div>
           <div className="loading-content">
             <div className="spinner"></div>
@@ -167,38 +169,42 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
       <div className="daily-tasks-popup" onClick={(e) => e.stopPropagation()}>
         <div className="daily-tasks-header">
           <h2>Daily Tasks</h2>
-          <button className="close-button" onClick={onClose}>×</button>
+          <button className="close-button" onClick={onClose}>
+            ×
+          </button>
         </div>
 
         {error && (
-          <div className="error-message" style={{
-            padding: '1rem',
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
-            color: '#dc2626',
-            marginBottom: '1rem',
-            fontSize: '0.9rem'
-          }}>
+          <div
+            className="error-message"
+            style={{
+              padding: '1rem',
+              backgroundColor: '#fee2e2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              color: '#dc2626',
+              marginBottom: '1rem',
+              fontSize: '0.9rem',
+            }}
+          >
             {error}
           </div>
         )}
 
         <div className="progress-section">
           <div className="progress-info">
-            <span className="points-text">{currentPoints} / {totalPoints} points</span>
+            <span className="points-text">
+              {currentPoints} / {totalPoints} points
+            </span>
             <span className="progress-percentage">{Math.round(progressPercentage)}%</span>
           </div>
           <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${progressPercentage}%` }}
-            ></div>
+            <div className="progress-fill" style={{ width: `${progressPercentage}%` }}></div>
           </div>
         </div>
 
         <div className="tasks-list">
-          {tasks.map(task => (
+          {tasks.map((task) => (
             <div key={task.id} className={`task-item ${task.completed ? 'completed' : ''}`}>
               <div className="task-info">
                 <span className="task-name">{task.name}</span>
@@ -226,4 +232,3 @@ export default function DailyTasksPopup({ onClose }: DailyTasksPopupProps) {
     </div>
   )
 }
-

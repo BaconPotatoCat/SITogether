@@ -56,12 +56,16 @@ export default function Premium() {
       const response = await fetch('/api/points/unlock-premium', { method: 'POST' })
       const data = await response.json()
       if (data.success) {
-        setPremiumStatus(prev => prev ? {
-          ...prev,
-          isPremiumActive: true,
-          premiumExpiryDate: data.premiumExpiryDate,
-          canUnlockPremium: false
-        } : null)
+        setPremiumStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                isPremiumActive: true,
+                premiumExpiryDate: data.premiumExpiryDate,
+                canUnlockPremium: false,
+              }
+            : null
+        )
       } else {
         alert(data.error || 'Failed to unlock premium')
       }
@@ -166,27 +170,31 @@ export default function Premium() {
                 <p>Earn points to unlock premium features!</p>
 
                 <div className="tasks-section">
-                  <div
-                    className="tasks-header"
-                    onClick={() => setTasksCollapsed(!tasksCollapsed)}
-                  >
+                  <div className="tasks-header" onClick={() => setTasksCollapsed(!tasksCollapsed)}>
                     <div className="header-progress">
                       <div className="progress-info">
-                        <span className="points-text">{premiumStatus?.totalPoints || 0} / 1000 points</span>
-                        <span className="progress-percentage">{Math.round(((premiumStatus?.totalPoints || 0) / 1000) * 100)}%</span>
+                        <span className="points-text">
+                          {premiumStatus?.totalPoints || 0} / 1000 points
+                        </span>
+                        <span className="progress-percentage">
+                          {Math.round(((premiumStatus?.totalPoints || 0) / 1000) * 100)}%
+                        </span>
                       </div>
                       <div className="progress-bar">
                         <div
                           className="progress-fill"
                           style={{
-                            width: `${Math.min(((premiumStatus?.totalPoints || 0) / 1000) * 100, 100)}%`
+                            width: `${Math.min(((premiumStatus?.totalPoints || 0) / 1000) * 100, 100)}%`,
                           }}
                         ></div>
                       </div>
                     </div>
                   </div>
                   <div className={`tasks-content ${tasksCollapsed ? 'collapsed' : 'expanded'}`}>
-                    <DailyTasksComponent onPointsUpdate={checkPremiumStatus} currentPoints={premiumStatus?.totalPoints} />
+                    <DailyTasksComponent
+                      onPointsUpdate={checkPremiumStatus}
+                      currentPoints={premiumStatus?.totalPoints}
+                    />
                   </div>
                 </div>
 
@@ -198,11 +206,11 @@ export default function Premium() {
                   {unlockingPremium ? 'Unlocking...' : 'Unlock Premium (5 Days)'}
                 </button>
                 <p className="premium-info">
-                  Premium gives you access to advanced profile filtering and unlimited discovery for 5 days.
-                  {(!premiumStatus || premiumStatus.totalPoints < 1000)
+                  Premium gives you access to advanced profile filtering and unlimited discovery for
+                  5 days.
+                  {!premiumStatus || premiumStatus.totalPoints < 1000
                     ? 'Complete the daily tasks to earn points and unlock premium features!'
-                    : 'You\'ve earned enough points! Unlock premium now to access advanced features.'
-                  }
+                    : "You've earned enough points! Unlock premium now to access advanced features."}
                 </p>
               </div>
             </div>
@@ -212,4 +220,3 @@ export default function Premium() {
     </>
   )
 }
-

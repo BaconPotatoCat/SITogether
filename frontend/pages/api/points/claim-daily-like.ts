@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers,
-      credentials: 'include'
+      credentials: 'include',
     })
 
     const data = await response.json()
@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       success: false,
       error: `Failed to claim daily like points: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      message: 'Backend container may not be running or accessible',
     })
   }
 }

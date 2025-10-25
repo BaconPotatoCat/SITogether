@@ -971,7 +971,9 @@ p {
   font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   margin-bottom: 1rem;
 }
 
@@ -1158,7 +1160,6 @@ p {
   border-color: #4f46e5;
 }
 
-
 .profiles-section {
   margin-top: 2rem;
 }
@@ -1174,7 +1175,9 @@ p {
   border: 1px solid #e9ecef;
   border-radius: 12px;
   padding: 1.5rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   min-height: 280px;
@@ -1392,6 +1395,10 @@ p {
   transition: transform 0.2s ease-out;
 }
 
+.filter-modal-mobile.closing {
+  animation: slideDown 0.3s ease-in;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);
@@ -1401,26 +1408,19 @@ p {
   }
 }
 
-.mobile-modal-handle {
-  width: 40px;
-  height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
-  margin: 12px auto 8px;
-  flex-shrink: 0;
-  cursor: grab;
-  transition: background-color 0.2s ease;
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
 }
 
-.mobile-modal-handle:active {
-  background: #d1d5db;
-  cursor: grabbing;
-}
 
 .filter-modal-content {
   padding: 0;
 }
-
 
 .filter-modal-header {
   display: flex;
@@ -1430,13 +1430,6 @@ p {
   border-bottom: 1px solid #e9ecef;
 }
 
-.filter-modal-mobile .filter-modal-header {
-  cursor: grab;
-}
-
-.filter-modal-mobile .filter-modal-header:active {
-  cursor: grabbing;
-}
 
 .filter-modal-header h3 {
   margin: 0;
@@ -1519,7 +1512,6 @@ p {
   background: #e5e7eb;
 }
 
-
 .apply-button:hover {
   background: #4f46e5;
 }
@@ -1573,7 +1565,6 @@ p {
   border-radius: 3px;
   transition: width 0.3s ease;
 }
-
 
 .tasks-content {
   overflow: hidden;

@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers,
-      credentials: 'include'
+      credentials: 'include',
     })
 
     const data = await response.json()
@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       success: false,
       error: `Failed to check like status: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      message: 'Backend container may not be running or accessible'
+      message: 'Backend container may not be running or accessible',
     })
   }
 }

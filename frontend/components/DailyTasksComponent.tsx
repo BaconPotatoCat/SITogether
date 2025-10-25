@@ -21,7 +21,10 @@ interface DailyTasksComponentProps {
   currentPoints?: number
 }
 
-export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 }: DailyTasksComponentProps) {
+export default function DailyTasksComponent({
+  onPointsUpdate,
+  currentPoints = 0,
+}: DailyTasksComponentProps) {
   const [userPoints, setUserPoints] = useState<UserPoints | null>(null)
   const [loading, setLoading] = useState(true)
   const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null)
@@ -31,7 +34,7 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
   const baseTasks = [
     { id: 'daily-checkin', name: 'Daily check-in', points: 50 },
     { id: 'like-person', name: 'Like a person', points: 25 },
-    { id: 'send-introduction', name: 'Send an introduction', points: 25 }
+    { id: 'send-introduction', name: 'Send an introduction', points: 25 },
   ]
 
   // Fetch user points on component mount
@@ -65,40 +68,37 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
   }
 
   // Build tasks array based on user points data
-  const tasks: Task[] = baseTasks.map(task => {
+  const tasks: Task[] = baseTasks.map((task) => {
     if (task.id === 'daily-checkin') {
-      const claimedToday = userPoints?.dailyCheckinDate ?
-        new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString() :
-        false
+      const claimedToday = userPoints?.dailyCheckinDate
+        ? new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString()
+        : false
 
       return {
         ...task,
         completed: claimedToday, // Show as completed if claimed today
-        canClaim: !claimedToday  // Allow claiming if not claimed today
+        canClaim: !claimedToday, // Allow claiming if not claimed today
       }
     }
     if (task.id === 'like-person') {
       const hasLikedToday = userPoints?.hasLikedToday || false
-      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate ?
-        new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString() :
-        false
+      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate
+        ? new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString()
+        : false
 
       return {
         ...task,
         completed: alreadyClaimedToday, // Show as completed when claimed today
-        canClaim: hasLikedToday && !alreadyClaimedToday // Allow claiming if user liked today and not claimed
+        canClaim: hasLikedToday && !alreadyClaimedToday, // Allow claiming if user liked today and not claimed
       }
     }
     // For now, other tasks are not completed (future implementation)
     return {
       ...task,
       completed: false,
-      canClaim: false
+      canClaim: false,
     }
   })
-
-  const fetchedPoints = userPoints?.totalPoints || 0
-  const progressPercentage = (fetchedPoints / 1000) * 100
 
   const handleClaimTask = async (taskId: string) => {
     if (claimingTaskId === taskId) return
@@ -108,7 +108,7 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
       setError(null)
 
       let endpoint = ''
-      let method = 'POST'
+      const method = 'POST'
 
       switch (taskId) {
         case 'daily-checkin':
@@ -158,15 +158,18 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
   return (
     <div className="daily-tasks-component">
       {error && (
-        <div className="error-message" style={{
-          padding: '1rem',
-          backgroundColor: '#fee2e2',
-          border: '1px solid #fecaca',
-          borderRadius: '8px',
-          color: '#dc2626',
-          marginBottom: '1rem',
-          fontSize: '0.9rem'
-        }}>
+        <div
+          className="error-message"
+          style={{
+            padding: '1rem',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            color: '#dc2626',
+            marginBottom: '1rem',
+            fontSize: '0.9rem',
+          }}
+        >
           {error}
         </div>
       )}
@@ -174,7 +177,7 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
       {/* Progress section moved to header */}
 
       <div className="tasks-list">
-        {tasks.map(task => (
+        {tasks.map((task) => (
           <div key={task.id} className={`task-item ${task.completed ? 'completed' : ''}`}>
             <div className="task-info">
               <span className="task-name">{task.name}</span>
@@ -189,8 +192,11 @@ export default function DailyTasksComponent({ onPointsUpdate, currentPoints = 0 
                   onClick={() => handleClaimTask(task.id)}
                   disabled={claimingTaskId !== null || currentPoints >= 1000}
                 >
-                  {claimingTaskId === task.id ? 'Claiming...' :
-                   currentPoints >= 1000 ? 'Max Points' : 'Claim'}
+                  {claimingTaskId === task.id
+                    ? 'Claiming...'
+                    : currentPoints >= 1000
+                      ? 'Max Points'
+                      : 'Claim'}
                 </button>
               ) : (
                 <span className="task-uncompleted">Not completed</span>

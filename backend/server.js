@@ -63,17 +63,17 @@ app.get('/api', (req, res) => {
         claimDaily: 'POST /api/points/claim-daily (protected)',
         claimDailyLike: 'POST /api/points/claim-daily-like (protected)',
         unlockPremium: 'POST /api/points/unlock-premium (protected)',
-        premiumStatus: 'GET /api/points/premium-status (protected)'
+        premiumStatus: 'GET /api/points/premium-status (protected)',
       },
       likes: {
         likeUser: 'POST /api/likes (protected)',
         checkLike: 'GET /api/likes/check/:userId (protected)',
-        unlikeUser: 'DELETE /api/likes/:userId (protected)'
+        unlikeUser: 'DELETE /api/likes/:userId (protected)',
       },
       passes: {
         passUser: 'POST /api/passes (protected)',
-        unpassUser: 'DELETE /api/passes/:userId (protected)'
-      }
+        unpassUser: 'DELETE /api/passes/:userId (protected)',
+      },
     },
   });
 });
@@ -86,21 +86,21 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     // Get IDs of users that the current user has already liked
     const likedUserIds = await prisma.userLikes.findMany({
       where: {
-        likerId: currentUserId
+        likerId: currentUserId,
       },
       select: {
-        likedId: true
-      }
+        likedId: true,
+      },
     });
 
     // Get IDs of users that the current user has already passed
     const passedUserIds = await prisma.userPasses.findMany({
       where: {
-        passerId: currentUserId
+        passerId: currentUserId,
       },
       select: {
-        passedId: true
-      }
+        passedId: true,
+      },
     });
 
     // Get all users for debugging
@@ -108,19 +108,21 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       select: {
         id: true,
         name: true,
-        verified: true
-      }
+        verified: true,
+      },
     });
 
     console.log(`Total users in database: ${allUsers.length}`);
-    console.log(`Verified users: ${allUsers.filter(u => u.verified).length}`);
-    console.log(`Unverified users: ${allUsers.filter(u => !u.verified).length}`);
+    console.log(`Verified users: ${allUsers.filter((u) => u.verified).length}`);
+    console.log(`Unverified users: ${allUsers.filter((u) => !u.verified).length}`);
 
-    console.log(`User ${currentUserId} has liked ${likedUserIds.length} users and passed ${passedUserIds.length} users`);
+    console.log(
+      `User ${currentUserId} has liked ${likedUserIds.length} users and passed ${passedUserIds.length} users`
+    );
 
-    const excludedIds = likedUserIds.map(like => like.likedId);
+    const excludedIds = likedUserIds.map((like) => like.likedId);
     // Also exclude passed users
-    excludedIds.push(...passedUserIds.map(pass => pass.passedId));
+    excludedIds.push(...passedUserIds.map((pass) => pass.passedId));
     // Also exclude the current user from their own discovery
     excludedIds.push(currentUserId);
 
@@ -131,8 +133,8 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       where: {
         verified: true,
         id: {
-          notIn: excludedIds
-        }
+          notIn: excludedIds,
+        },
       },
       select: {
         id: true,
@@ -240,8 +242,8 @@ app.post('/api/auth/register', async (req, res) => {
     await prisma.userPoints.create({
       data: {
         userId: user.id,
-        totalPoints: 0
-      }
+        totalPoints: 0,
+      },
     });
 
     res.status(201).json({
@@ -419,15 +421,17 @@ app.get('/api/points', authenticateToken, async (req, res) => {
       select: {
         totalPoints: true,
         dailyCheckinDate: true,
-        dailyLikeClaimedDate: true
-      }
+        dailyLikeClaimedDate: true,
+      },
     });
 
     if (!userPoints) {
-      console.error(`UserPoints record not found for user ${userId} - user registration may be incomplete`);
+      console.error(
+        `UserPoints record not found for user ${userId} - user registration may be incomplete`
+      );
       return res.status(500).json({
         success: false,
-        error: 'User points record not found. Please contact support.'
+        error: 'User points record not found. Please contact support.',
       });
     }
 
@@ -435,31 +439,31 @@ app.get('/api/points', authenticateToken, async (req, res) => {
     const mostRecentLike = await prisma.userLikes.findFirst({
       where: { likerId: userId },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true }
+      select: { createdAt: true },
     });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const hasLikedToday = mostRecentLike &&
-      new Date(mostRecentLike.createdAt).getTime() >= today.getTime();
+    const hasLikedToday =
+      mostRecentLike && new Date(mostRecentLike.createdAt).getTime() >= today.getTime();
 
     // Add computed field to response
     const pointsWithComputed = {
       ...userPoints,
-      hasLikedToday
+      hasLikedToday,
     };
 
     res.json({
       success: true,
-      points: pointsWithComputed
+      points: pointsWithComputed,
     });
   } catch (error) {
     console.error('Get points error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve user points',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -473,13 +477,13 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
     const mostRecentLike = await prisma.userLikes.findFirst({
       where: { likerId: userId },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true }
+      select: { createdAt: true },
     });
 
     if (!mostRecentLike) {
       return res.status(400).json({
         success: false,
-        error: 'No likes found for today'
+        error: 'No likes found for today',
       });
     }
 
@@ -492,19 +496,19 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
     if (likeDate.getTime() !== today.getTime()) {
       return res.status(400).json({
         success: false,
-        error: 'Daily like task not completed yet'
+        error: 'Daily like task not completed yet',
       });
     }
 
     // Check if already claimed today
     const userPoints = await prisma.userPoints.findUnique({
-      where: { userId }
+      where: { userId },
     });
 
     if (!userPoints) {
       return res.status(404).json({
         success: false,
-        error: 'User points not found'
+        error: 'User points not found',
       });
     }
 
@@ -512,7 +516,8 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
     if (userPoints.totalPoints >= 1000) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.'
+        error:
+          'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
       });
     }
 
@@ -523,7 +528,7 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
       if (claimedDate.getTime() === today.getTime()) {
         return res.status(400).json({
           success: false,
-          error: 'Daily like points already claimed today'
+          error: 'Daily like points already claimed today',
         });
       }
     }
@@ -533,42 +538,42 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
       where: { userId },
       data: {
         totalPoints: userPoints.totalPoints + 25,
-        dailyLikeClaimedDate: new Date()
+        dailyLikeClaimedDate: new Date(),
       },
       select: {
         totalPoints: true,
         dailyCheckinDate: true,
-        dailyLikeClaimedDate: true
-      }
+        dailyLikeClaimedDate: true,
+      },
     });
 
     // Add computed field for response
     const mostRecentLikeAfter = await prisma.userLikes.findFirst({
       where: { likerId: userId },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true }
+      select: { createdAt: true },
     });
 
-    const hasLikedTodayAfter = mostRecentLikeAfter &&
-      new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+    const hasLikedTodayAfter =
+      mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
 
     const pointsWithComputed = {
       ...updatedPoints,
-      hasLikedToday: hasLikedTodayAfter
+      hasLikedToday: hasLikedTodayAfter,
     };
 
     res.json({
       success: true,
       message: 'Daily like points claimed successfully',
       points: pointsWithComputed,
-      pointsEarned: 25
+      pointsEarned: 25,
     });
   } catch (error) {
     console.error('Claim daily like points error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to claim daily like points',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -580,13 +585,13 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
 
     // Check if user already claimed today
     const userPoints = await prisma.userPoints.findUnique({
-      where: { userId }
+      where: { userId },
     });
 
     if (!userPoints) {
       return res.status(404).json({
         success: false,
-        error: 'User points not found'
+        error: 'User points not found',
       });
     }
 
@@ -594,7 +599,8 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
     if (userPoints.totalPoints >= 1000) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.'
+        error:
+          'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
       });
     }
 
@@ -609,7 +615,7 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
       if (lastClaimDate.getTime() === today.getTime()) {
         return res.status(400).json({
           success: false,
-          error: 'Daily check-in already claimed today'
+          error: 'Daily check-in already claimed today',
         });
       }
     }
@@ -619,43 +625,43 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
       where: { userId },
       data: {
         totalPoints: userPoints.totalPoints + 50,
-        dailyCheckinDate: new Date()
+        dailyCheckinDate: new Date(),
       },
       select: {
         totalPoints: true,
         dailyCheckinDate: true,
-        dailyLikeClaimedDate: true
-      }
+        dailyLikeClaimedDate: true,
+      },
     });
 
     // Add computed field for response
     const mostRecentLikeAfter = await prisma.userLikes.findFirst({
       where: { likerId: userId },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true }
+      select: { createdAt: true },
     });
 
     // 'today' is already declared above in this function
-    const hasLikedTodayAfter = mostRecentLikeAfter &&
-      new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+    const hasLikedTodayAfter =
+      mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
 
     const pointsWithComputed = {
       ...updatedPoints,
-      hasLikedToday: hasLikedTodayAfter
+      hasLikedToday: hasLikedTodayAfter,
     };
 
     res.json({
       success: true,
       message: 'Daily check-in claimed successfully',
       points: pointsWithComputed,
-      pointsEarned: 50
+      pointsEarned: 50,
     });
   } catch (error) {
     console.error('Claim daily points error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to claim daily points',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -667,13 +673,13 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
 
     // Get current user points
     const userPoints = await prisma.userPoints.findUnique({
-      where: { userId }
+      where: { userId },
     });
 
     if (!userPoints) {
       return res.status(404).json({
         success: false,
-        error: 'User points not found'
+        error: 'User points not found',
       });
     }
 
@@ -683,7 +689,7 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
         success: false,
         error: 'Not enough points to unlock premium. Need 1000 points.',
         currentPoints: userPoints.totalPoints,
-        requiredPoints: 1000
+        requiredPoints: 1000,
       });
     }
 
@@ -692,7 +698,7 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Premium is already active',
-        expiryDate: userPoints.premiumExpiryDate
+        expiryDate: userPoints.premiumExpiryDate,
       });
     }
 
@@ -705,45 +711,45 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
       where: { userId },
       data: {
         premiumExpiryDate: premiumExpiryDate,
-        totalPoints: 0  // Reset points to 0 when premium is unlocked
+        totalPoints: 0, // Reset points to 0 when premium is unlocked
       },
       select: {
         totalPoints: true,
         dailyCheckinDate: true,
         dailyLikeClaimedDate: true,
-        premiumExpiryDate: true
-      }
+        premiumExpiryDate: true,
+      },
     });
 
     // Add computed field for response
     const mostRecentLikeAfter = await prisma.userLikes.findFirst({
       where: { likerId: userId },
       orderBy: { createdAt: 'desc' },
-      select: { createdAt: true }
+      select: { createdAt: true },
     });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const hasLikedTodayAfter = mostRecentLikeAfter &&
-      new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+    const hasLikedTodayAfter =
+      mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
 
     const pointsWithComputed = {
       ...updatedPoints,
-      hasLikedToday: hasLikedTodayAfter
+      hasLikedToday: hasLikedTodayAfter,
     };
 
     res.json({
       success: true,
       message: 'Premium unlocked successfully',
       points: pointsWithComputed,
-      premiumExpiryDate: premiumExpiryDate
+      premiumExpiryDate: premiumExpiryDate,
     });
   } catch (error) {
     console.error('Unlock premium error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to unlock premium',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -757,14 +763,14 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
       where: { userId },
       select: {
         premiumExpiryDate: true,
-        totalPoints: true
-      }
+        totalPoints: true,
+      },
     });
 
     if (!userPoints) {
       return res.status(404).json({
         success: false,
-        error: 'User points not found'
+        error: 'User points not found',
       });
     }
 
@@ -778,8 +784,8 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
       await prisma.userPoints.update({
         where: { userId },
         data: {
-          premiumExpiryDate: null
-        }
+          premiumExpiryDate: null,
+        },
       });
     }
 
@@ -788,14 +794,14 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
       isPremiumActive: isPremiumActive,
       premiumExpiryDate: userPoints.premiumExpiryDate,
       totalPoints: userPoints.totalPoints,
-      canUnlockPremium: userPoints.totalPoints >= 1000 && !isPremiumActive
+      canUnlockPremium: userPoints.totalPoints >= 1000 && !isPremiumActive,
     });
   } catch (error) {
     console.error('Check premium status error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to check premium status',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -813,7 +819,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
     if (!likedId) {
       return res.status(400).json({
         success: false,
-        error: 'likedId is required'
+        error: 'likedId is required',
       });
     }
 
@@ -821,20 +827,20 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
     if (likerId === likedId) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot like yourself'
+        error: 'Cannot like yourself',
       });
     }
 
     // Check if the liked user exists and is verified
     const likedUser = await prisma.user.findUnique({
       where: { id: likedId },
-      select: { id: true, verified: true }
+      select: { id: true, verified: true },
     });
 
     if (!likedUser || !likedUser.verified) {
       return res.status(404).json({
         success: false,
-        error: 'User not found or not verified'
+        error: 'User not found or not verified',
       });
     }
 
@@ -843,16 +849,16 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       where: {
         likerId_likedId: {
           likerId: likerId,
-          likedId: likedId
-        }
-      }
+          likedId: likedId,
+        },
+      },
     });
 
     if (existingLike) {
       console.log(`User ${likerId} has already liked user ${likedId} - existing like found`);
       return res.status(409).json({
         success: false,
-        error: 'User already liked'
+        error: 'User already liked',
       });
     }
 
@@ -860,8 +866,8 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
     const like = await prisma.userLikes.create({
       data: {
         likerId: likerId,
-        likedId: likedId
-      }
+        likedId: likedId,
+      },
     });
 
     // Get updated points data (no need to update flags anymore)
@@ -870,22 +876,22 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       select: {
         totalPoints: true,
         dailyCheckinDate: true,
-        dailyLikeClaimedDate: true
-      }
+        dailyLikeClaimedDate: true,
+      },
     });
 
     res.status(201).json({
       success: true,
       message: 'User liked successfully',
       like: like,
-      points: userPoints
+      points: userPoints,
     });
   } catch (error) {
     console.error('Like user error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to like user',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -900,21 +906,21 @@ app.get('/api/likes/check/:userId', authenticateToken, async (req, res) => {
       where: {
         likerId_likedId: {
           likerId: likerId,
-          likedId: likedId
-        }
-      }
+          likedId: likedId,
+        },
+      },
     });
 
     res.json({
       success: true,
-      isLiked: !!like
+      isLiked: !!like,
     });
   } catch (error) {
     console.error('Check like error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to check like status',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -929,15 +935,15 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
       where: {
         likerId_likedId: {
           likerId: likerId,
-          likedId: likedId
-        }
-      }
+          likedId: likedId,
+        },
+      },
     });
 
     if (!like) {
       return res.status(404).json({
         success: false,
-        error: 'Like not found'
+        error: 'Like not found',
       });
     }
 
@@ -945,21 +951,21 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
       where: {
         likerId_likedId: {
           likerId: likerId,
-          likedId: likedId
-        }
-      }
+          likedId: likedId,
+        },
+      },
     });
 
     res.json({
       success: true,
-      message: 'User unliked successfully'
+      message: 'User unliked successfully',
     });
   } catch (error) {
     console.error('Unlike user error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to unlike user',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -974,15 +980,15 @@ app.delete('/api/passes/:userId', authenticateToken, async (req, res) => {
       where: {
         passerId_passedId: {
           passerId: passerId,
-          passedId: passedId
-        }
-      }
+          passedId: passedId,
+        },
+      },
     });
 
     if (!pass) {
       return res.status(404).json({
         success: false,
-        error: 'Pass not found'
+        error: 'Pass not found',
       });
     }
 
@@ -990,21 +996,21 @@ app.delete('/api/passes/:userId', authenticateToken, async (req, res) => {
       where: {
         passerId_passedId: {
           passerId: passerId,
-          passedId: passedId
-        }
-      }
+          passedId: passedId,
+        },
+      },
     });
 
     res.json({
       success: true,
-      message: 'User unpassed successfully'
+      message: 'User unpassed successfully',
     });
   } catch (error) {
     console.error('Unpass user error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to unpass user',
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -1020,7 +1026,7 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
     if (!passedId) {
       return res.status(400).json({
         success: false,
-        error: 'passedId is required'
+        error: 'passedId is required',
       });
     }
 
@@ -1028,20 +1034,20 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
     if (passerId === passedId) {
       return res.status(400).json({
         success: false,
-        error: 'Cannot pass on yourself'
+        error: 'Cannot pass on yourself',
       });
     }
 
     // Check if the passed user exists and is verified
     const passedUser = await prisma.user.findUnique({
       where: { id: passedId },
-      select: { id: true, verified: true }
+      select: { id: true, verified: true },
     });
 
     if (!passedUser || !passedUser.verified) {
       return res.status(404).json({
         success: false,
-        error: 'User not found or not verified'
+        error: 'User not found or not verified',
       });
     }
 
@@ -1050,16 +1056,16 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
       where: {
         passerId_passedId: {
           passerId: passerId,
-          passedId: passedId
-        }
-      }
+          passedId: passedId,
+        },
+      },
     });
 
     if (existingPass) {
       console.log(`User ${passerId} has already passed on user ${passedId} - existing pass found`);
       return res.status(409).json({
         success: false,
-        error: 'User already passed'
+        error: 'User already passed',
       });
     }
 
@@ -1067,8 +1073,8 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
     const pass = await prisma.userPasses.create({
       data: {
         passerId: passerId,
-        passedId: passedId
-      }
+        passedId: passedId,
+      },
     });
 
     console.log(`User ${passerId} passed on user ${passedId}`);
@@ -1076,14 +1082,14 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'User passed successfully',
-      pass: pass
+      pass: pass,
     });
   } catch (error) {
     console.error('Pass user error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to pass user',
-      message: error.message
+      message: error.message,
     });
   }
 });
