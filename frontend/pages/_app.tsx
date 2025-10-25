@@ -2,19 +2,22 @@ import type { AppProps } from 'next/app'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { AuthProvider, useSession } from '../contexts/AuthContext'
+import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { CURRENT_USER } from '../lib/profiles'
 import '../styles/globals.css'
 
 function Navigation() {
   const router = useRouter()
-  const { status, signOut } = useSession()
+  const { session, status, signOut } = useSession()
   const isActive = (path: string) => router.pathname === path
   const isAuthenticated = status === 'authenticated'
 
   const handleLogout = async () => {
     await signOut()
   }
+
+  // Get user avatar URL or use default
+  const avatarUrl = session?.user?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
 
   return (
     <>
@@ -24,16 +27,6 @@ function Navigation() {
             <Link href="/">SITogether</Link>
           </div>
           <div className="nav-links">
-            <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">Discover</Link>
-            <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">Chat</Link>
-            <Link href={`/profile/${CURRENT_USER.id}`} className="nav-profile">
-              <img 
-                src={CURRENT_USER.avatarUrl} 
-                alt={`${CURRENT_USER.name} profile`} 
-                className="nav-avatar"
-              />
-            </Link>
-            <Link className={isActive('/auth') ? 'nav-link active' : 'nav-link'} href="/auth">Login</Link>
             <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
               Discover
             </Link>
@@ -41,9 +34,32 @@ function Navigation() {
               Chat
             </Link>
             {isAuthenticated ? (
-              <button className="nav-link logout-btn" onClick={handleLogout}>
-                Logout
-              </button>
+              <div className="profile-dropdown">
+                <div className="nav-profile">
+                  <img 
+                    src={avatarUrl} 
+                    alt="Profile" 
+                    className="nav-avatar"
+                  />
+                </div>
+                <div className="dropdown-menu">
+                  <Link href="/profile" className="dropdown-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    View Profile
+                  </Link>
+                  <button className="dropdown-item logout" onClick={handleLogout}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                      <polyline points="16 17 21 12 16 7"></polyline>
+                      <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Logout
+                  </button>
+                </div>
+              </div>
             ) : (
               <Link className={isActive('/auth') ? 'nav-link active' : 'nav-link'} href="/auth">
                 Login
@@ -61,9 +77,11 @@ function Navigation() {
           Chat
         </Link>
         {isAuthenticated ? (
-          <button className="tab-link logout-btn" onClick={handleLogout}>
-            Logout
-          </button>
+          <>
+            <Link className={isActive('/profile') ? 'tab-link active' : 'tab-link'} href="/profile">
+              Profile
+            </Link>
+          </>
         ) : (
           <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">
             Login
@@ -97,8 +115,10 @@ function AppContent({ Component, pageProps }: AppProps) {
 
 export default function App(props: AppProps) {
   return (
-    <AuthProvider>
-      <AppContent {...props} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent {...props} />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

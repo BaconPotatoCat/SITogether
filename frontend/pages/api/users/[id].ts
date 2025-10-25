@@ -22,13 +22,22 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
             error: 'User not found'
           })
         }
-        throw new Error(`Backend API error: ${response.status}`)
+        
+        // Try to get error details from backend
+        const errorText = await response.text()
+        console.error(`Backend API error (${response.status}):`, errorText)
+        
+        return res.status(response.status).json({
+          success: false,
+          error: `Backend API error: ${response.status}`,
+          details: errorText
+        })
       }
 
       const result = await response.json()
       res.status(200).json(result)
     } else if (req.method === 'PUT') {
-      const { name, age, course, bio, interests } = req.body
+      const { name, age, course, bio, interests, avatarUrl } = req.body
 
       // Validate required fields
       if (!name || !age) {
@@ -38,19 +47,28 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
         })
       }
 
+      // Prepare update payload
+      const updatePayload: any = {
+        name,
+        age: parseInt(age),
+        course: course || null,
+        bio: bio || null,
+        interests: Array.isArray(interests) ? interests : []
+      }
+
+      // Only include avatarUrl if provided
+      if (avatarUrl !== undefined) {
+        updatePayload.avatarUrl = avatarUrl
+        console.log('Frontend API: Forwarding avatarUrl to backend (length:', avatarUrl?.length, ')')
+      }
+
       // Call backend API to update user
       const response = await fetch(`${backendUrl}/api/users/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name,
-          age: parseInt(age),
-          course: course || null,
-          bio: bio || null,
-          interests: Array.isArray(interests) ? interests : []
-        })
+        body: JSON.stringify(updatePayload)
       })
 
       if (!response.ok) {

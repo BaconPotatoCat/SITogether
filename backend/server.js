@@ -22,8 +22,9 @@ app.use(
 );
 app.use(cookieParser());
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to 10MB for image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Basic route
 app.get('/', (req, res) => {
@@ -113,6 +114,7 @@ app.get('/api/users/:id', async (req, res) => {
       },
       select: {
         id: true,
+        email: true,
         name: true,
         age: true,
         gender: true,
@@ -121,7 +123,7 @@ app.get('/api/users/:id', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true,
         updatedAt: true
       }
@@ -151,10 +153,10 @@ app.get('/api/users/:id', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, age, course, bio, interests } = req.body;
+    const { name, age, course, bio, interests, avatarUrl } = req.body;
 
     console.log('PUT /api/users/:id called with ID:', id);
-    console.log('Request body:', req.body);
+    console.log('Request body:', { name, age, course, bio, interests, avatarUrl: avatarUrl ? 'base64 image...' : null });
 
     // Validate required fields
     if (!name || !age) {
@@ -164,20 +166,29 @@ app.put('/api/users/:id', async (req, res) => {
       });
     }
 
+    // Prepare update data
+    const updateData = {
+      name,
+      age: parseInt(age),
+      course: course || null,
+      bio: bio || null,
+      interests: Array.isArray(interests) ? interests : []
+    };
+
+    // Only update avatarUrl if provided
+    if (avatarUrl !== undefined) {
+      updateData.avatarUrl = avatarUrl;
+    }
+
     // Update user profile
     const updatedUser = await prisma.user.update({
       where: {
         id: id
       },
-      data: {
-        name,
-        age: parseInt(age),
-        course: course || null,
-        bio: bio || null,
-        interests: Array.isArray(interests) ? interests : []
-      },
+      data: updateData,
       select: {
         id: true,
+        email: true,
         name: true,
         age: true,
         gender: true,
@@ -186,7 +197,7 @@ app.put('/api/users/:id', async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
-        confirmed: true,
+        verified: true,
         createdAt: true,
         updatedAt: true
       }
@@ -437,16 +448,8 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
   }
 });
 
-// 404 handler - MUST be last before app.listen()
-app.use('*', (req, res) => {
-  res.status(404).json({
-    message: 'Route not found',
-    path: req.originalUrl
-  });
-});
-
 // Error handling middleware
-app.use((err, res) => {
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
@@ -454,7 +457,7 @@ app.use((err, res) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST be last
 app.use('*', (req, res) => {
   res.status(404).json({
     message: 'Route not found',

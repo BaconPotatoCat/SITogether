@@ -21,7 +21,7 @@ model User {
   course     String?
   bio        String?
   interests  String[]
-  avatarUrl  String?  @map("avatar_url")
+  avatarUrl  String?  @map("avatar_url") @db.Text
   verified   Boolean  @default(false)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

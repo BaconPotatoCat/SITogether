@@ -2,10 +2,12 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { getProfileById, CURRENT_USER } from '../../lib/profiles'
+import { useSession } from '../../contexts/AuthContext'
+import { getProfileById } from '../../lib/profiles'
 
 interface User {
   id: string
+  email?: string
   name: string
   age: number
   gender: string
@@ -13,16 +15,17 @@ interface User {
   bio: string | null
   interests: string[]
   avatarUrl: string | null
-  confirmed: boolean
+  verified?: boolean
   createdAt: string
   updatedAt: string
 }
 
 export default function ProfilePage() {
   const router = useRouter()
+  const { session } = useSession()
   const idParam = router.query.id
-  const id = typeof idParam === 'string' ? parseInt(idParam, 10) : NaN
-  const isCurrentUser = id === CURRENT_USER.id
+  const id = typeof idParam === 'string' ? idParam : null
+  const isCurrentUser = id === session?.user?.id
   const [profile, setProfile] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
@@ -35,49 +38,50 @@ export default function ProfilePage() {
   })
   const [isSaving, setIsSaving] = useState(false)
 
-  // Fetch user data from database
+  // Fetch user data
   useEffect(() => {
     const fetchUser = async () => {
-      if (!router.isReady) return
+      if (!router.isReady || !id) return
 
       try {
         setIsLoading(true)
         
-        if (isCurrentUser) {
-          // For current user, get the first user from database
-          const response = await fetch('/api/users/first')
-          const result = await response.json()
-          
-          if (result.success) {
-            setProfile(result.data)
+        // Try to get user from database first
+        const response = await fetch(`/api/users/${id}`)
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          setProfile(result.data)
+          if (isCurrentUser) {
             setEditForm({
               name: result.data.name,
               age: result.data.age,
               course: result.data.course || '',
               bio: result.data.bio || '',
-              interests: result.data.interests.join(', ')
+              interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : ''
             })
-          } else {
-            console.error('Failed to fetch user:', result.error)
           }
-        } else if (Number.isFinite(id)) {
-          // For other users, get from static profiles
-          const staticProfile = getProfileById(id)
-          if (staticProfile) {
-            const userProfile: User = {
-              id: staticProfile.id.toString(),
-              name: staticProfile.name,
-              age: staticProfile.age,
-              gender: 'Other',
-              course: staticProfile.course,
-              bio: staticProfile.bio,
-              interests: staticProfile.interests,
-              avatarUrl: staticProfile.avatarUrl,
-              confirmed: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
+        } else {
+          // Fallback to static profiles if not found in database
+          const numericId = parseInt(id, 10)
+          if (Number.isFinite(numericId)) {
+            const staticProfile = getProfileById(numericId)
+            if (staticProfile) {
+              const userProfile: User = {
+                id: staticProfile.id.toString(),
+                name: staticProfile.name,
+                age: staticProfile.age,
+                gender: 'Other',
+                course: staticProfile.course,
+                bio: staticProfile.bio,
+                interests: staticProfile.interests,
+                avatarUrl: staticProfile.avatarUrl,
+                verified: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              }
+              setProfile(userProfile)
             }
-            setProfile(userProfile)
           }
         }
       } catch (error) {
@@ -88,7 +92,7 @@ export default function ProfilePage() {
     }
 
     fetchUser()
-  }, [router.isReady, isCurrentUser, id])
+  }, [router.isReady, id, isCurrentUser])
 
   if (!router.isReady || isLoading) {
     return (
@@ -237,26 +241,34 @@ export default function ProfilePage() {
             ) : (
               <>
                 <h1>{profile.name}, {profile.age}</h1>
-                <p className="muted">{profile.course || 'No course specified'}</p>
+                {profile.email && <p className="muted">{profile.email}</p>}
+                <p className="muted" style={{ marginTop: profile.email ? '0.25rem' : 0 }}>
+                  {profile.course || 'No course specified'}
+                </p>
                 <p className="bio" style={{ marginTop: 12 }}>
                   {profile.bio || 'No bio available'}
                 </p>
                 <div className="chips" style={{ marginTop: 12 }}>
-                  {profile.interests.length > 0 ? (
-                    profile.interests.map((i) => (
-                      <span key={i} className="chip">{i}</span>
+                  {profile.interests && profile.interests.length > 0 ? (
+                    profile.interests.map((interest, idx) => (
+                      <span key={idx} className="chip">{interest}</span>
                     ))
                   ) : (
                     <span className="chip muted">No interests specified</span>
                   )}
                 </div>
-                <div style={{ marginTop: 16 }}>
+                <div style={{ marginTop: 16, display: 'flex', gap: '0.5rem' }}>
                   {isCurrentUser ? (
                     <button className="btn primary" onClick={() => setIsEditing(true)}>
                       Edit Profile
                     </button>
                   ) : (
-                    <Link className="btn" href="/chat">Message</Link>
+                    <>
+                      <Link className="btn primary" href="/chat">Message</Link>
+                      <Link className="btn ghost" href="/">
+                        Back to Discover
+                      </Link>
+                    </>
                   )}
                 </div>
               </>

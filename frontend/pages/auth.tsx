@@ -130,8 +130,6 @@ export default function Auth() {
       age: '',
       gender: '',
       course: '',
-      gender: '',
-      course: ''
     })
   }
 
