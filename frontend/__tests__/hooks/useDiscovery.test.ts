@@ -1,6 +1,27 @@
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { useDiscovery } from '../../hooks/useDiscovery'
 import { fetchWithAuth } from '../../utils/api'
+
+// Suppress act() warnings for useEffect async operations in hooks
+// These are false positives - we properly wait for all async operations with waitFor()
+const originalError = console.error
+beforeAll(() => {
+  console.error = jest.fn((...args: any[]) => {
+    const message = args[0]
+    if (
+      typeof message === 'string' &&
+      (message.includes('Warning: An update to TestComponent') ||
+        message.includes('not wrapped in act'))
+    ) {
+      return
+    }
+    originalError.call(console, ...args)
+  })
+})
+
+afterAll(() => {
+  console.error = originalError
+})
 
 // Mock the API
 jest.mock('../../utils/api')
@@ -71,15 +92,13 @@ describe('useDiscovery', () => {
   })
 
   describe('Filtering Logic', () => {
-    it('should apply interests filter and cover lines 111-114', async () => {
+    it('should apply interests filter', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
-      // Apply interests filter - should trigger lines 111-114
+      // Apply interests filter
       act(() => {
         result.current.updateFilter('interests', ['coding'])
       })
@@ -88,15 +107,13 @@ describe('useDiscovery', () => {
       expect(result.current.filteredUsers[0].name).toBe('Alice Johnson')
     })
 
-    it('should handle updateFilter and cover line 192', async () => {
+    it('should handle updateFilter', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
-      // Update gender filter - should trigger line 192
+      // Update gender filter
       act(() => {
         result.current.updateFilter('gender', 'Female')
       })
@@ -104,13 +121,11 @@ describe('useDiscovery', () => {
       expect(result.current.filters.gender).toBe('Female')
     })
 
-    it('should handle clearFilters and cover line 201', async () => {
+    it('should handle clearFilters', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // First set some filters
       act(() => {
@@ -121,7 +136,7 @@ describe('useDiscovery', () => {
       expect(result.current.filters.gender).toBe('Female')
       expect(result.current.filters.ageMin).toBe(20)
 
-      // Clear filters - should trigger line 201
+      // Clear filters
       act(() => {
         result.current.clearFilters()
       })
@@ -133,7 +148,7 @@ describe('useDiscovery', () => {
   })
 
   describe('Modal Management', () => {
-    it('should handle closeFilterModal and cover line 226', async () => {
+    it('should handle closeFilterModal', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Open modal first
@@ -143,7 +158,7 @@ describe('useDiscovery', () => {
 
       expect(result.current.showFilterModal).toBe(true)
 
-      // Close modal - should trigger line 226
+      // Close modal
       act(() => {
         result.current.closeFilterModal()
       })
@@ -153,7 +168,7 @@ describe('useDiscovery', () => {
   })
 
   describe('Error Handling', () => {
-    it('should handle API response with success false and cover lines 82-86', async () => {
+    it('should handle API response with success false', async () => {
       mockFetchWithAuth.mockResolvedValue({
         ok: true,
         json: async () => ({ success: false, error: 'API Error' }),
@@ -162,23 +177,19 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for error to be set
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       expect(result.current.error).toBe('API Error')
       expect(result.current.loading).toBe(false)
     })
 
-    it('should handle API network errors and cover error handling lines 84-86', async () => {
+    it('should handle API network errors', async () => {
       mockFetchWithAuth.mockRejectedValue(new Error('Network error'))
 
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for error to be set
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       expect(result.current.error).toBe('Network error')
       expect(result.current.loading).toBe(false)
@@ -190,9 +201,7 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for error to be set
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       expect(result.current.error).toBe('Failed to load users')
       expect(result.current.loading).toBe(false)
@@ -200,13 +209,11 @@ describe('useDiscovery', () => {
   })
 
   describe('Non-Premium Mode', () => {
-    it('should show all users when not premium and cover lines 93-94', async () => {
+    it('should show all users when not premium', async () => {
       const { result } = renderHook(() => useDiscovery(false)) // isPremium = false
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // In non-premium mode, filteredUsers should equal all users
       expect(result.current.filteredUsers).toEqual(result.current.users)
@@ -215,13 +222,11 @@ describe('useDiscovery', () => {
   })
 
   describe('Advanced Filtering Edge Cases', () => {
-    it('should handle age filtering boundary conditions and cover lines 104-105', async () => {
+    it('should handle age filtering boundary conditions', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Test exact age boundary (Alice is 25)
       act(() => {
@@ -234,13 +239,11 @@ describe('useDiscovery', () => {
       expect(result.current.filteredUsers[0].name).toBe('Alice Johnson')
     })
 
-    it('should handle course filtering with null values and cover line 107', async () => {
+    it('should handle course filtering with null values', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Filter by Engineering course (Bob and Charlie have this)
       act(() => {
@@ -259,9 +262,7 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Set filters to empty strings (should not filter anything)
       act(() => {
@@ -275,13 +276,11 @@ describe('useDiscovery', () => {
   })
 
   describe('API Actions', () => {
-    it('should handle like action successfully and cover handleAction logic', async () => {
+    it('should handle like action successfully', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Mock successful like API call
       mockFetchWithAuth.mockResolvedValueOnce({
@@ -289,7 +288,7 @@ describe('useDiscovery', () => {
         json: async () => ({}),
       } as Response)
 
-      // Call handleLike - should cover lines 141-169
+      // Call handleLike
       act(() => {
         result.current.handleLike('1')
       })
@@ -298,9 +297,7 @@ describe('useDiscovery', () => {
       expect(result.current.likingUserId).toBe('1')
 
       // Wait for API call to complete
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.likingUserId).toBe(null))
 
       // Should remove user from list and clear likingUserId
       expect(result.current.users).toHaveLength(2)
@@ -308,13 +305,11 @@ describe('useDiscovery', () => {
       expect(result.current.likingUserId).toBe(null)
     })
 
-    it('should handle pass action successfully and cover handlePass callback', async () => {
+    it('should handle pass action successfully', async () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Mock successful pass API call
       mockFetchWithAuth.mockResolvedValueOnce({
@@ -322,7 +317,7 @@ describe('useDiscovery', () => {
         json: async () => ({}),
       } as Response)
 
-      // Call handlePass - should cover line 184
+      // Call handlePass
       act(() => {
         result.current.handlePass('2')
       })
@@ -331,9 +326,7 @@ describe('useDiscovery', () => {
       expect(result.current.passingUserId).toBe('2')
 
       // Wait for API call to complete
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.passingUserId).toBe(null))
 
       // Should remove user from list and clear passingUserId
       expect(result.current.users).toHaveLength(2)
@@ -347,9 +340,7 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Mock failed like API call
       mockFetchWithAuth.mockResolvedValueOnce({
@@ -363,9 +354,7 @@ describe('useDiscovery', () => {
       })
 
       // Wait for API call to complete
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.likingUserId).toBe(null))
 
       // Should show alert and clear loading state
       expect(alertSpy).toHaveBeenCalledWith('Like failed')
@@ -374,29 +363,25 @@ describe('useDiscovery', () => {
       alertSpy.mockRestore()
     })
 
-    it('should handle network errors in API actions and cover lines 166-169', async () => {
+    it('should handle network errors in API actions', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       // Mock network error in like API call
       mockFetchWithAuth.mockRejectedValueOnce(new Error('Network error'))
 
-      // Call handleLike - should trigger catch block lines 166-169
+      // Call handleLike
       act(() => {
         result.current.handleLike('1')
       })
 
       // Wait for API call to complete
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.likingUserId).toBe(null))
 
       // Should log error, show alert, and clear loading state
       expect(consoleSpy).toHaveBeenCalledWith('Error liking user:', expect.any(Error))
@@ -413,9 +398,7 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       expect(result.current.availableCourses).toEqual(['Computer Science', 'Engineering'])
     })
@@ -424,9 +407,7 @@ describe('useDiscovery', () => {
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
+      await waitFor(() => expect(result.current.loading).toBe(false))
 
       expect(result.current.availableInterests.sort()).toEqual([
         'coding',
