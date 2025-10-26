@@ -832,6 +832,30 @@ html.dark .form-group input::placeholder {
   cursor: not-allowed;
 }
 
+.verification-reminder {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.verification-reminder p {
+  margin: 0 0 1rem 0;
+  color: #856404;
+  font-size: 0.9rem;
+}
+
+.verification-reminder strong {
+  color: #856404;
+  font-size: 1rem;
+}
+
+.verification-reminder button {
+  margin-top: 0.5rem;
+}
+
 .auth-footer {
   text-align: center;
   margin-top: 1.5rem;
