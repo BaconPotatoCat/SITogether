@@ -39,7 +39,7 @@ describe('DailyTasksComponent', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    // Suppress console errors during tests to reduce noise
+    // Suppress console.error for cleaner test output (errors are intentionally tested)
     jest.spyOn(console, 'error').mockImplementation(() => {})
     mockFetchWithAuth.mockResolvedValue({
       ok: true,
@@ -114,6 +114,40 @@ describe('DailyTasksComponent', () => {
       await waitFor(() => {
         expect(screen.getByText('Database error')).toBeInTheDocument()
       })
+    })
+
+    it('should handle edge case when user points are auto-created (not in DB initially)', async () => {
+      // Simulate backend auto-creating userPoints record with 0 points
+      const newlyCreatedPoints = {
+        totalPoints: 0,
+        dailyCheckinDate: null,
+        hasLikedToday: false,
+        dailyLikeClaimedDate: null,
+      }
+
+      mockFetchWithAuth.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          points: newlyCreatedPoints,
+        }),
+      } as Response)
+
+      render(<DailyTasksComponent />)
+
+      // Should successfully load with 0 points (newly created record)
+      await waitFor(() => {
+        expect(screen.getByText('Daily check-in')).toBeInTheDocument()
+      })
+
+      // All tasks should be claimable (no tasks completed yet)
+      await waitFor(() => {
+        const claimButtons = screen.getAllByText('Claim')
+        expect(claimButtons.length).toBeGreaterThan(0)
+      })
+
+      // Verify the API was called
+      expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/points')
     })
   })
 

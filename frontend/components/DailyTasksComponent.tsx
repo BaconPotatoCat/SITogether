@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { fetchWithAuth } from '../utils/api'
 
 interface Task {
@@ -29,6 +29,7 @@ export default function DailyTasksComponent({
   const [loading, setLoading] = useState(true)
   const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   // Fixed tasks (for now - future tasks will be dynamic)
   const baseTasks = [
@@ -37,12 +38,7 @@ export default function DailyTasksComponent({
     { id: 'send-introduction', name: 'Send an introduction', points: 25 },
   ]
 
-  // Fetch user points on component mount
-  useEffect(() => {
-    fetchUserPoints()
-  }, [])
-
-  const fetchUserPoints = async () => {
+  const fetchUserPoints = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -56,16 +52,35 @@ export default function DailyTasksComponent({
 
       if (result.success) {
         setUserPoints(result.points)
+        setRetryCount(0) // Reset retry count on success
       } else {
         throw new Error(result.error || 'Failed to fetch points')
       }
     } catch (err) {
       console.error('Error fetching points:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load points')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load points'
+
+      // Auto-retry once if it's the first failure (likely auth not ready)
+      if (retryCount === 0 && errorMessage !== 'Unauthorized') {
+        setTimeout(() => setRetryCount(1), 500)
+        return
+      }
+
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
-  }
+  }, [retryCount])
+
+  // Fetch user points on component mount with retry logic
+  useEffect(() => {
+    // Small delay on first load to ensure session is established
+    const timer = setTimeout(() => {
+      fetchUserPoints()
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [fetchUserPoints])
 
   // Build tasks array based on user points data
   const tasks: Task[] = baseTasks.map((task) => {
@@ -170,7 +185,21 @@ export default function DailyTasksComponent({
             fontSize: '0.9rem',
           }}
         >
-          {error}
+          <div style={{ marginBottom: '0.5rem' }}>{error}</div>
+          <button
+            onClick={() => setRetryCount((prev) => prev + 1)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            Retry
+          </button>
         </div>
       )}
 
