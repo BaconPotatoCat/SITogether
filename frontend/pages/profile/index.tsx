@@ -87,7 +87,7 @@ export default function MyProfilePage() {
     if (status === 'authenticated') {
       fetchProfile()
     }
-  }, [session?.user?.id, status])
+  }, [session?.user?.id, status, showToast])
 
   const handleSave = async () => {
     if (!profile) return

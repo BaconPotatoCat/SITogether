@@ -83,7 +83,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       }
-      
+
       // Forward authentication token if present
       if (token) {
         headers['Cookie'] = `token=${token}`

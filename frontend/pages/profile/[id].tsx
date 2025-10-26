@@ -56,7 +56,7 @@ export default function ProfilePage() {
     }
 
     fetchUser()
-  }, [router.isReady, id, session])
+  }, [router.isReady, router, id, session])
 
   if (!router.isReady || isLoading) {
     return (
@@ -73,28 +73,36 @@ export default function ProfilePage() {
           <title>Profile Not Found • SITogether</title>
           <meta name="viewport" content="width=device-width, initial-scale=1" />
         </Head>
-        <main className="container" style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          minHeight: '60vh',
-          textAlign: 'center',
-          padding: '2rem'
-        }}>
-          <div style={{ 
-            fontSize: '4rem', 
-            marginBottom: '1rem',
-            opacity: 0.5 
-          }}>
+        <main
+          className="container"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            textAlign: 'center',
+            padding: '2rem',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '4rem',
+              marginBottom: '1rem',
+              opacity: 0.5,
+            }}
+          >
             👤
           </div>
           <h1 style={{ marginBottom: '0.5rem' }}>Profile Not Found</h1>
-          <p className="muted" style={{ 
-            marginBottom: '2rem',
-            maxWidth: '400px' 
-          }}>
-            The profile you're looking for doesn't exist or may have been removed.
+          <p
+            className="muted"
+            style={{
+              marginBottom: '2rem',
+              maxWidth: '400px',
+            }}
+          >
+            The profile you&apos;re looking for doesn&apos;t exist or may have been removed.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <Link className="btn primary" href="/">
@@ -129,9 +137,7 @@ export default function ProfilePage() {
             <h1>
               {profile.name}, {profile.age}
             </h1>
-            <p className="muted">
-              {profile.course || 'No course specified'}
-            </p>
+            <p className="muted">{profile.course || 'No course specified'}</p>
             <p className="bio" style={{ marginTop: 12 }}>
               {profile.bio || 'No bio available'}
             </p>
