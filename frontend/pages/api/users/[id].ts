@@ -1,5 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+interface UpdateUserPayload {
+  name: string
+  age: number
+  course: string | null
+  bio: string | null
+  interests: string[]
+  avatarUrl?: string
+}
+
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query
 
@@ -48,7 +57,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       }
 
       // Prepare update payload
-      const updatePayload: any = {
+      const updatePayload: UpdateUserPayload = {
         name,
         age: parseInt(age),
         course: course || null,

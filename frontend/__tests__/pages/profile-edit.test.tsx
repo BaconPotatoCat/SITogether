@@ -144,7 +144,7 @@ describe('Profile Edit Feature', () => {
         }),
       })
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     render(<MyProfilePage />)
 
@@ -190,7 +190,7 @@ describe('Profile Edit Feature', () => {
         }),
       })
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     render(<MyProfilePage />)
 
@@ -246,7 +246,7 @@ describe('Profile Edit Feature', () => {
         }),
       })
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     render(<MyProfilePage />)
 

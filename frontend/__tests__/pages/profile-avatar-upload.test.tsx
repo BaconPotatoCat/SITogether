@@ -114,16 +114,16 @@ describe('Profile Avatar Upload Feature', () => {
         }),
       })
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     // Mock FileReader
     const mockFileReader = {
       readAsDataURL: jest.fn(),
-      onloadend: null as any,
+      onloadend: null as ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null,
       result: 'data:image/png;base64,testimage',
     }
 
-    global.FileReader = jest.fn(() => mockFileReader) as any
+    global.FileReader = jest.fn(() => mockFileReader) as unknown as typeof FileReader
 
     render(<MyProfilePage />)
 
@@ -143,7 +143,7 @@ describe('Profile Avatar Upload Feature', () => {
     // Simulate FileReader onloadend
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as any)
+        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
       }
     })
 
@@ -217,15 +217,15 @@ describe('Profile Avatar Upload Feature', () => {
         }),
       })
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     const mockFileReader = {
       readAsDataURL: jest.fn(),
-      onloadend: null as any,
+      onloadend: null as ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null,
       result: 'data:image/png;base64,testimage',
     }
 
-    global.FileReader = jest.fn(() => mockFileReader) as any
+    global.FileReader = jest.fn(() => mockFileReader) as unknown as typeof FileReader
 
     render(<MyProfilePage />)
 
@@ -243,7 +243,7 @@ describe('Profile Avatar Upload Feature', () => {
 
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as any)
+        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
       }
     })
 
@@ -253,7 +253,7 @@ describe('Profile Avatar Upload Feature', () => {
   })
 
   it('should disable button while uploading', async () => {
-    let resolveFetch: any
+    let resolveFetch: ((value: Response | PromiseLike<Response>) => void) | undefined
     const mockFetch = jest.fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
@@ -262,15 +262,15 @@ describe('Profile Avatar Upload Feature', () => {
         resolveFetch = resolve
       }))
 
-    global.fetch = mockFetch as any
+    global.fetch = mockFetch as unknown as typeof fetch
 
     const mockFileReader = {
       readAsDataURL: jest.fn(),
-      onloadend: null as any,
+      onloadend: null as ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null,
       result: 'data:image/png;base64,testimage',
     }
 
-    global.FileReader = jest.fn(() => mockFileReader) as any
+    global.FileReader = jest.fn(() => mockFileReader) as unknown as typeof FileReader
 
     render(<MyProfilePage />)
 
@@ -288,7 +288,7 @@ describe('Profile Avatar Upload Feature', () => {
 
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as any)
+        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
       }
     })
 
