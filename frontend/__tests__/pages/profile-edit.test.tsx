@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useToast } from '../../hooks/useToast'
 
 jest.mock('next/router', () => ({
   useRouter: jest.fn(),
@@ -17,6 +18,16 @@ jest.mock('../../contexts/ThemeContext', () => ({
   useTheme: jest.fn(),
 }))
 
+jest.mock('../../hooks/useToast', () => ({
+  useToast: jest.fn(),
+}))
+
+jest.mock('../../components/ToastContainer', () => {
+  return function ToastContainer() {
+    return null
+  }
+})
+
 jest.mock('../../components/LoadingSpinner', () => {
   return function LoadingSpinner() {
     return <div data-testid="loading-spinner">Loading...</div>
@@ -25,6 +36,8 @@ jest.mock('../../components/LoadingSpinner', () => {
 
 const mockPush = jest.fn()
 const mockSignOut = jest.fn()
+const mockShowToast = jest.fn()
+const mockRemoveToast = jest.fn()
 
 const mockUserData = {
   id: 'user-123',
@@ -52,6 +65,11 @@ describe('Profile Edit Feature', () => {
       isDarkMode: false,
       toggleDarkMode: jest.fn(),
     })
+    ;(useToast as jest.Mock).mockReturnValue({
+      toasts: [],
+      showToast: mockShowToast,
+      removeToast: mockRemoveToast,
+    })
     ;(useSession as jest.Mock).mockReturnValue({
       session: {
         user: {
@@ -66,13 +84,15 @@ describe('Profile Edit Feature', () => {
 
     global.fetch = jest.fn(() =>
       Promise.resolve({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
             data: mockUserData,
           }),
       })
-    ) as jest.Mock
+    ) as unknown as jest.Mock
   })
 
   it('should switch to edit mode when Edit Profile button is clicked', async () => {
@@ -136,9 +156,13 @@ describe('Profile Edit Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
@@ -184,9 +208,13 @@ describe('Profile Edit Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
@@ -242,9 +270,13 @@ describe('Profile Edit Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
         json: () =>
           Promise.resolve({
             success: false,
@@ -269,7 +301,7 @@ describe('Profile Edit Feature', () => {
     fireEvent.click(screen.getByText('Save Changes'))
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to update profile')).toBeInTheDocument()
+      expect(mockShowToast).toHaveBeenCalledWith('Failed to update profile', 'error')
     })
   })
 

@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useToast } from '../../hooks/useToast'
 
 // Mock next/router
 jest.mock('next/router', () => ({
@@ -20,6 +21,18 @@ jest.mock('../../contexts/ThemeContext', () => ({
   useTheme: jest.fn(),
 }))
 
+// Mock useToast hook
+jest.mock('../../hooks/useToast', () => ({
+  useToast: jest.fn(),
+}))
+
+// Mock ToastContainer
+jest.mock('../../components/ToastContainer', () => {
+  return function ToastContainer() {
+    return null
+  }
+})
+
 // Mock LoadingSpinner
 jest.mock('../../components/LoadingSpinner', () => {
   return function LoadingSpinner({ message }: { message: string }) {
@@ -30,6 +43,8 @@ jest.mock('../../components/LoadingSpinner', () => {
 const mockPush = jest.fn()
 const mockSignOut = jest.fn()
 const mockToggleDarkMode = jest.fn()
+const mockShowToast = jest.fn()
+const mockRemoveToast = jest.fn()
 
 describe('MyProfilePage', () => {
   beforeEach(() => {
@@ -42,6 +57,11 @@ describe('MyProfilePage', () => {
     ;(useTheme as jest.Mock).mockReturnValue({
       isDarkMode: false,
       toggleDarkMode: mockToggleDarkMode,
+    })
+    ;(useToast as jest.Mock).mockReturnValue({
+      toasts: [],
+      showToast: mockShowToast,
+      removeToast: mockRemoveToast,
     })
   })
 
@@ -88,6 +108,8 @@ describe('MyProfilePage', () => {
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
+          ok: true,
+          status: 200,
           json: () =>
             Promise.resolve({
               success: true,
@@ -106,7 +128,7 @@ describe('MyProfilePage', () => {
               },
             }),
         })
-      ) as jest.Mock
+      ) as unknown as jest.Mock
     })
 
     it('should display user profile information', async () => {
@@ -158,6 +180,8 @@ describe('MyProfilePage', () => {
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
+          ok: true,
+          status: 200,
           json: () =>
             Promise.resolve({
               success: true,
@@ -169,7 +193,7 @@ describe('MyProfilePage', () => {
               },
             }),
         })
-      ) as jest.Mock
+      ) as unknown as jest.Mock
     })
 
     it('should toggle dark mode when clicked', async () => {
@@ -202,6 +226,8 @@ describe('MyProfilePage', () => {
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
+          ok: true,
+          status: 200,
           json: () =>
             Promise.resolve({
               success: true,
@@ -213,7 +239,7 @@ describe('MyProfilePage', () => {
               },
             }),
         })
-      ) as jest.Mock
+      ) as unknown as jest.Mock
     })
 
     it('should call signOut when logout button is clicked', async () => {
@@ -248,18 +274,20 @@ describe('MyProfilePage', () => {
     it('should display error message when profile fetch fails', async () => {
       global.fetch = jest.fn(() =>
         Promise.resolve({
+          ok: false,
+          status: 500,
           json: () =>
             Promise.resolve({
               success: false,
               error: 'Failed to fetch profile',
             }),
         })
-      ) as jest.Mock
+      ) as unknown as jest.Mock
 
       render(<MyProfilePage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Failed to fetch profile')).toBeInTheDocument()
+        expect(mockShowToast).toHaveBeenCalledWith('Failed to fetch profile', 'error')
       })
     })
   })

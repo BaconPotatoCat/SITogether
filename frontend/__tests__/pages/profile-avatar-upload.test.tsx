@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useToast } from '../../hooks/useToast'
 
 jest.mock('next/router', () => ({
   useRouter: jest.fn(),
@@ -17,6 +18,16 @@ jest.mock('../../contexts/ThemeContext', () => ({
   useTheme: jest.fn(),
 }))
 
+jest.mock('../../hooks/useToast', () => ({
+  useToast: jest.fn(),
+}))
+
+jest.mock('../../components/ToastContainer', () => {
+  return function ToastContainer() {
+    return null
+  }
+})
+
 jest.mock('../../components/LoadingSpinner', () => {
   return function LoadingSpinner() {
     return <div data-testid="loading-spinner">Loading...</div>
@@ -25,6 +36,8 @@ jest.mock('../../components/LoadingSpinner', () => {
 
 const mockPush = jest.fn()
 const mockSignOut = jest.fn()
+const mockShowToast = jest.fn()
+const mockRemoveToast = jest.fn()
 
 const mockUserData = {
   id: 'user-123',
@@ -52,6 +65,11 @@ describe('Profile Avatar Upload Feature', () => {
       isDarkMode: false,
       toggleDarkMode: jest.fn(),
     })
+    ;(useToast as jest.Mock).mockReturnValue({
+      toasts: [],
+      showToast: mockShowToast,
+      removeToast: mockRemoveToast,
+    })
     ;(useSession as jest.Mock).mockReturnValue({
       session: {
         user: {
@@ -66,13 +84,15 @@ describe('Profile Avatar Upload Feature', () => {
 
     global.fetch = jest.fn(() =>
       Promise.resolve({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
             data: mockUserData,
           }),
       })
-    ) as jest.Mock
+    ) as unknown as jest.Mock
   })
 
   it('should have a file input for avatar upload', async () => {
@@ -106,9 +126,13 @@ describe('Profile Avatar Upload Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
@@ -189,7 +213,7 @@ describe('Profile Avatar Upload Feature', () => {
     fireEvent.change(fileInput)
 
     await waitFor(() => {
-      expect(screen.getByText('Please select an image file')).toBeInTheDocument()
+      expect(mockShowToast).toHaveBeenCalledWith('Please select an image file', 'error')
     })
   })
 
@@ -212,7 +236,7 @@ describe('Profile Avatar Upload Feature', () => {
     fireEvent.change(fileInput)
 
     await waitFor(() => {
-      expect(screen.getByText('Image size must be less than 5MB')).toBeInTheDocument()
+      expect(mockShowToast).toHaveBeenCalledWith('Image size must be less than 5MB', 'error')
     })
   })
 
@@ -220,9 +244,13 @@ describe('Profile Avatar Upload Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: () =>
           Promise.resolve({
             success: true,
@@ -264,7 +292,7 @@ describe('Profile Avatar Upload Feature', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Profile picture updated successfully!')).toBeInTheDocument()
+      expect(mockShowToast).toHaveBeenCalledWith('Profile picture updated successfully!', 'success')
     })
 
     // Wait for upload to complete
