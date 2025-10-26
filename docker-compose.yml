@@ -36,8 +36,6 @@ services:
     environment:
       NODE_ENV: development
       DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      NEXT_PUBLIC_FRONTEND_EXTERNALURL: ${NEXT_PUBLIC_FRONTEND_EXTERNALURL}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app

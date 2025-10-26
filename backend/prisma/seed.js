@@ -18,7 +18,7 @@ async function main() {
         email: 'kira.belle@example.com',
         password: hashedPassword,
         name: 'Kira Belle',
-        age: 13,
+        age: 23,
         gender: 'Female',
         course: 'CSC',
         bio: "Computer Science student who loves coding and gaming. Let's study algorithms together!",

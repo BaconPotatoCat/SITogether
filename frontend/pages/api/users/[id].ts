@@ -13,7 +13,15 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query
 
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://sitogether-backend:5000'
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_INTERNALURL
+
+    if (!backendUrl) {
+      console.error('NEXT_PUBLIC_BACKEND_INTERNALURL environment variable is not set')
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error',
+      })
+    }
 
     if (req.method === 'GET') {
       // Call backend API to get user by ID
@@ -68,19 +76,22 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       // Only include avatarUrl if provided
       if (avatarUrl !== undefined) {
         updatePayload.avatarUrl = avatarUrl
-        console.log(
-          'Frontend API: Forwarding avatarUrl to backend (length:',
-          avatarUrl?.length,
-          ')'
-        )
       }
 
-      // Call backend API to update user
+      // Call backend API to update user (with authentication)
+      const token = req.cookies?.token
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+      
+      // Forward authentication token if present
+      if (token) {
+        headers['Cookie'] = `token=${token}`
+      }
+
       const response = await fetch(`${backendUrl}/api/users/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(updatePayload),
       })
 

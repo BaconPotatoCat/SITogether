@@ -69,6 +69,15 @@ export default function Auth() {
       return
     }
 
+    // Age validation for registration
+    if (!isLogin) {
+      const age = formData.age ? parseInt(formData.age) : 0
+      if (!age || age < 18 || age > 65) {
+        showToast('Age must be between 18 and 65.', 'error')
+        return
+      }
+    }
+
     setIsLoading(true)
 
     try {
@@ -232,7 +241,7 @@ export default function Auth() {
                       required={!isLogin}
                       placeholder="Enter your age"
                       min="18"
-                      max="100"
+                      max="65"
                     />
                   </div>
 

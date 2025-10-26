@@ -5,6 +5,9 @@ import React, { useState, useEffect } from 'react'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import ToastContainer from '../../components/ToastContainer'
+import { useToast } from '../../hooks/useToast'
+import { fetchWithAuth } from '../../utils/api'
 
 interface User {
   id: string
@@ -28,6 +31,7 @@ export default function MyProfilePage() {
   const router = useRouter()
   const { session, status, signOut } = useSession()
   const { isDarkMode, toggleDarkMode } = useTheme()
+  const { toasts, showToast, removeToast } = useToast()
   const [profile, setProfile] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('menu')
@@ -39,8 +43,6 @@ export default function MyProfilePage() {
     interests: '',
   })
   const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -58,9 +60,8 @@ export default function MyProfilePage() {
 
       try {
         setIsLoading(true)
-        setError(null)
 
-        const response = await fetch(`/api/users/${session.user.id}`)
+        const response = await fetchWithAuth(`/api/users/${session.user.id}`)
         const result = await response.json()
 
         if (result.success && result.data) {
@@ -73,11 +74,11 @@ export default function MyProfilePage() {
             interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : '',
           })
         } else {
-          setError(result.error || 'Failed to fetch profile')
+          showToast(result.error || 'Failed to fetch profile', 'error')
         }
       } catch (error) {
         console.error('Error fetching profile:', error)
-        setError('An error occurred while fetching your profile')
+        showToast('An error occurred while fetching your profile', 'error')
       } finally {
         setIsLoading(false)
       }
@@ -91,15 +92,17 @@ export default function MyProfilePage() {
   const handleSave = async () => {
     if (!profile) return
 
+    // Validate age
+    if (!editForm.age || editForm.age < 18 || editForm.age > 65) {
+      showToast('Age must be between 18 and 65', 'error')
+      return
+    }
+
     try {
       setIsSaving(true)
-      setError(null)
 
-      const response = await fetch(`/api/users/${profile.id}`, {
+      const response = await fetchWithAuth(`/api/users/${profile.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           name: editForm.name,
           age: editForm.age,
@@ -117,12 +120,13 @@ export default function MyProfilePage() {
       if (result.success) {
         setProfile(result.data)
         setViewMode('menu')
+        showToast('Profile updated successfully!', 'success')
       } else {
-        setError(result.error || 'Failed to update profile')
+        showToast(result.error || 'Failed to update profile', 'error')
       }
     } catch (error) {
       console.error('Error updating profile:', error)
-      setError('An error occurred while updating your profile')
+      showToast('An error occurred while updating your profile', 'error')
     } finally {
       setIsSaving(false)
     }
@@ -139,7 +143,6 @@ export default function MyProfilePage() {
       })
     }
     setViewMode('menu')
-    setError(null)
   }
 
   const handleLogout = async () => {
@@ -156,18 +159,17 @@ export default function MyProfilePage() {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file')
+      showToast('Please select an image file', 'error')
       return
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB')
+      showToast('Image size must be less than 5MB', 'error')
       return
     }
 
     setIsUploadingAvatar(true)
-    setError(null)
 
     try {
       // Convert image to base64
@@ -178,15 +180,10 @@ export default function MyProfilePage() {
         reader.readAsDataURL(file)
       })
 
-      console.log('Image converted to base64, uploading...')
-
       // Update profile with new avatar
       if (profile) {
-        const response = await fetch(`/api/users/${profile.id}`, {
+        const response = await fetchWithAuth(`/api/users/${profile.id}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
             name: profile.name,
             age: profile.age,
@@ -198,25 +195,18 @@ export default function MyProfilePage() {
         })
 
         const result = await response.json()
-        console.log('Upload response:', result)
 
         if (result.success) {
           setProfile(result.data)
-          setSuccessMessage('Profile picture updated successfully!')
-          console.log('Profile updated successfully with new avatar')
-
-          // Clear success message after 3 seconds
-          setTimeout(() => {
-            setSuccessMessage(null)
-          }, 3000)
+          showToast('Profile picture updated successfully!', 'success')
         } else {
-          setError(result.error || 'Failed to update profile picture')
+          showToast(result.error || 'Failed to update profile picture', 'error')
           console.error('Failed to update profile:', result.error)
         }
       }
     } catch (error) {
       console.error('Error uploading avatar:', error)
-      setError('An error occurred while uploading your profile picture')
+      showToast('An error occurred while uploading your profile picture', 'error')
     } finally {
       setIsUploadingAvatar(false)
       // Reset file input
@@ -232,19 +222,6 @@ export default function MyProfilePage() {
 
   if (status === 'unauthenticated') {
     return null // Will redirect in useEffect
-  }
-
-  if (error && !profile) {
-    return (
-      <main className="container">
-        <div className="error-message">
-          <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</p>
-          <Link className="btn" href="/">
-            Back to Home
-          </Link>
-        </div>
-      </main>
-    )
   }
 
   if (!profile) {
@@ -267,10 +244,6 @@ export default function MyProfilePage() {
       <main className="profile-page-container">
         {viewMode === 'menu' ? (
           <div className="profile-menu-view">
-            {successMessage && <div className="success-alert">{successMessage}</div>}
-
-            {error && <div className="error-alert">{error}</div>}
-
             <div className="profile-header-section">
               <div className="profile-avatar-wrapper">
                 <img
@@ -423,19 +396,6 @@ export default function MyProfilePage() {
                   </svg>
                 </div>
                 <span className="menu-item-text">Logout</span>
-                <svg
-                  className="menu-item-arrow"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
               </button>
             </div>
           </div>
@@ -460,8 +420,6 @@ export default function MyProfilePage() {
               <div style={{ width: '24px' }}></div>
             </div>
 
-            {error && <div className="error-alert">{error}</div>}
-
             <div className="edit-form-container">
               <div className="form-group">
                 <label>Name</label>
@@ -481,7 +439,7 @@ export default function MyProfilePage() {
                   onChange={(e) => setEditForm({ ...editForm, age: parseInt(e.target.value) || 0 })}
                   className="input"
                   min="18"
-                  max="100"
+                  max="65"
                   required
                 />
               </div>
@@ -526,6 +484,9 @@ export default function MyProfilePage() {
           </div>
         )}
       </main>
+
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

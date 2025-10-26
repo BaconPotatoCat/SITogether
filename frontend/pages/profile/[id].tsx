@@ -3,7 +3,6 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useSession } from '../../contexts/AuthContext'
-import { getProfileById } from '../../lib/profiles'
 
 interface User {
   id: string
@@ -25,66 +24,29 @@ export default function ProfilePage() {
   const { session } = useSession()
   const idParam = router.query.id
   const id = typeof idParam === 'string' ? idParam : null
-  const isCurrentUser = id === session?.user?.id
   const [profile, setProfile] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState({
-    name: '',
-    age: 0,
-    course: '',
-    bio: '',
-    interests: '',
-  })
-  const [isSaving, setIsSaving] = useState(false)
 
   // Fetch user data
   useEffect(() => {
     const fetchUser = async () => {
       if (!router.isReady || !id) return
 
+      // If accessing own profile via UUID, redirect to /profile
+      if (id === session?.user?.id) {
+        router.push('/profile')
+        return
+      }
+
       try {
         setIsLoading(true)
 
-        // Try to get user from database first
+        // Get user from database
         const response = await fetch(`/api/users/${id}`)
         const result = await response.json()
 
         if (result.success && result.data) {
           setProfile(result.data)
-          if (isCurrentUser) {
-            setEditForm({
-              name: result.data.name,
-              age: result.data.age,
-              course: result.data.course || '',
-              bio: result.data.bio || '',
-              interests: Array.isArray(result.data.interests)
-                ? result.data.interests.join(', ')
-                : '',
-            })
-          }
-        } else {
-          // Fallback to static profiles if not found in database
-          const numericId = parseInt(id, 10)
-          if (Number.isFinite(numericId)) {
-            const staticProfile = getProfileById(numericId)
-            if (staticProfile) {
-              const userProfile: User = {
-                id: staticProfile.id.toString(),
-                name: staticProfile.name,
-                age: staticProfile.age,
-                gender: 'Other',
-                course: staticProfile.course,
-                bio: staticProfile.bio,
-                interests: staticProfile.interests,
-                avatarUrl: staticProfile.avatarUrl,
-                verified: true,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              }
-              setProfile(userProfile)
-            }
-          }
         }
       } catch (error) {
         console.error('Error fetching user:', error)
@@ -94,7 +56,7 @@ export default function ProfilePage() {
     }
 
     fetchUser()
-  }, [router.isReady, id, isCurrentUser])
+  }, [router.isReady, id, session])
 
   if (!router.isReady || isLoading) {
     return (
@@ -106,68 +68,45 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <main className="container">
-        <p className="muted">Profile not found.</p>
-        <Link className="btn" href="/">
-          Back
-        </Link>
-      </main>
+      <>
+        <Head>
+          <title>Profile Not Found • SITogether</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </Head>
+        <main className="container" style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          minHeight: '60vh',
+          textAlign: 'center',
+          padding: '2rem'
+        }}>
+          <div style={{ 
+            fontSize: '4rem', 
+            marginBottom: '1rem',
+            opacity: 0.5 
+          }}>
+            👤
+          </div>
+          <h1 style={{ marginBottom: '0.5rem' }}>Profile Not Found</h1>
+          <p className="muted" style={{ 
+            marginBottom: '2rem',
+            maxWidth: '400px' 
+          }}>
+            The profile you're looking for doesn't exist or may have been removed.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Link className="btn primary" href="/">
+              Back to Discover
+            </Link>
+            <Link className="btn ghost" href="/profile">
+              My Profile
+            </Link>
+          </div>
+        </main>
+      </>
     )
-  }
-
-  const handleSave = async () => {
-    if (!profile) return
-
-    try {
-      setIsSaving(true)
-
-      const response = await fetch(`/api/users/${profile.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: editForm.name,
-          age: editForm.age,
-          course: editForm.course,
-          bio: editForm.bio,
-          interests: editForm.interests
-            .split(',')
-            .map((i) => i.trim())
-            .filter((i) => i),
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        // Update the profile state with the updated data
-        setProfile(result.data)
-        setIsEditing(false)
-        console.log('Profile updated successfully')
-      } else {
-        console.error('Failed to update profile:', result.error)
-        alert(`Failed to update profile: ${result.error}`)
-      }
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      alert(`An error occurred while updating the profile.`)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleCancel = () => {
-    if (profile) {
-      setEditForm({
-        name: profile.name,
-        age: profile.age,
-        course: profile.course || '',
-        bio: profile.bio || '',
-        interests: profile.interests.join(', '),
-      })
-    }
-    setIsEditing(false)
   }
 
   return (
@@ -187,106 +126,34 @@ export default function ProfilePage() {
             alt={`${profile.name} avatar`}
           />
           <div className="profile-body">
-            {isEditing ? (
-              <div className="edit-form">
-                <div className="form-group">
-                  <label>Name</label>
-                  <input
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    className="input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Age</label>
-                  <input
-                    type="number"
-                    value={editForm.age}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, age: parseInt(e.target.value) || 0 })
-                    }
-                    className="input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Course</label>
-                  <input
-                    type="text"
-                    value={editForm.course}
-                    onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
-                    className="input"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Bio</label>
-                  <textarea
-                    value={editForm.bio}
-                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                    className="input"
-                    rows={3}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Interests (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={editForm.interests}
-                    onChange={(e) => setEditForm({ ...editForm, interests: e.target.value })}
-                    className="input"
-                    placeholder="Coding, Gaming, Tech"
-                  />
-                </div>
-                <div className="form-actions">
-                  <button className="btn ghost" onClick={handleCancel} disabled={isSaving}>
-                    Cancel
-                  </button>
-                  <button className="btn primary" onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <h1>
-                  {profile.name}, {profile.age}
-                </h1>
-                {profile.email && <p className="muted">{profile.email}</p>}
-                <p className="muted" style={{ marginTop: profile.email ? '0.25rem' : 0 }}>
-                  {profile.course || 'No course specified'}
-                </p>
-                <p className="bio" style={{ marginTop: 12 }}>
-                  {profile.bio || 'No bio available'}
-                </p>
-                <div className="chips" style={{ marginTop: 12 }}>
-                  {profile.interests && profile.interests.length > 0 ? (
-                    profile.interests.map((interest, idx) => (
-                      <span key={idx} className="chip">
-                        {interest}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="chip muted">No interests specified</span>
-                  )}
-                </div>
-                <div style={{ marginTop: 16, display: 'flex', gap: '0.5rem' }}>
-                  {isCurrentUser ? (
-                    <button className="btn primary" onClick={() => setIsEditing(true)}>
-                      Edit Profile
-                    </button>
-                  ) : (
-                    <>
-                      <Link className="btn primary" href="/chat">
-                        Message
-                      </Link>
-                      <Link className="btn ghost" href="/">
-                        Back to Discover
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+            <h1>
+              {profile.name}, {profile.age}
+            </h1>
+            <p className="muted">
+              {profile.course || 'No course specified'}
+            </p>
+            <p className="bio" style={{ marginTop: 12 }}>
+              {profile.bio || 'No bio available'}
+            </p>
+            <div className="chips" style={{ marginTop: 12 }}>
+              {profile.interests && profile.interests.length > 0 ? (
+                profile.interests.map((interest, idx) => (
+                  <span key={idx} className="chip">
+                    {interest}
+                  </span>
+                ))
+              ) : (
+                <span className="chip muted">No interests specified</span>
+              )}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', gap: '0.5rem' }}>
+              <Link className="btn primary" href="/chat">
+                Message
+              </Link>
+              <Link className="btn ghost" href="/">
+                Back to Discover
+              </Link>
+            </div>
           </div>
         </article>
       </main>

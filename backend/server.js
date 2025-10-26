@@ -153,21 +153,19 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-// Update user by ID
-app.put('/api/users/:id', async (req, res) => {
+// Update user by ID (Protected - requires authentication and authorization)
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, age, course, bio, interests, avatarUrl } = req.body;
 
-    console.log('PUT /api/users/:id called with ID:', id);
-    console.log('Request body:', {
-      name,
-      age,
-      course,
-      bio,
-      interests,
-      avatarUrl: avatarUrl ? 'base64 image...' : null,
-    });
+    // Authorization check: Users can only update their own profile
+    if (req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only update your own profile.',
+      });
+    }
 
     // Validate required fields
     if (!name || !age) {
@@ -177,10 +175,19 @@ app.put('/api/users/:id', async (req, res) => {
       });
     }
 
+    // Validate age range
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 18 || ageNum > 65) {
+      return res.status(400).json({
+        success: false,
+        error: 'Age must be a positive number between 18 and 65',
+      });
+    }
+
     // Prepare update data
     const updateData = {
       name,
-      age: parseInt(age),
+      age: ageNum,
       course: course || null,
       bio: bio || null,
       interests: Array.isArray(interests) ? interests : [],
@@ -251,6 +258,15 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Validate age range
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 18 || ageNum > 65) {
+      return res.status(400).json({
+        success: false,
+        error: 'Age must be a positive number between 18 and 65',
+      });
+    }
+
     // Validate SIT student email format
     // TODO: Uncomment to enforce SIT email validation
     // const sitEmailRegex = /^\d{7}@sit\.singaporetech\.edu\.sg$/;
@@ -287,7 +303,7 @@ app.post('/api/auth/register', async (req, res) => {
         email,
         password: hashedPassword,
         name,
-        age: parseInt(age),
+        age: ageNum,
         gender,
         role: 'User',
         course,
@@ -528,12 +544,6 @@ app.post('/api/auth/login', async (req, res) => {
         createdAt: true,
         updatedAt: true,
       },
-    });
-
-    console.log('User found in database:', {
-      email: user?.email,
-      verified: user?.verified,
-      verifiedType: typeof user?.verified,
     });
 
     if (!user) {
