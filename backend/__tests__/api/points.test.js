@@ -7,6 +7,7 @@ const { authenticateToken } = require('../../middleware/auth');
 const mockPrismaClient = {
   userPoints: {
     findUnique: jest.fn(),
+    create: jest.fn(),
     update: jest.fn(),
   },
   userLikes: {
@@ -32,7 +33,7 @@ describe('Points API Endpoints', () => {
       try {
         const userId = req.user.userId;
 
-        const userPoints = await mockPrismaClient.userPoints.findUnique({
+        let userPoints = await mockPrismaClient.userPoints.findUnique({
           where: { userId },
           select: {
             totalPoints: true,
@@ -41,11 +42,26 @@ describe('Points API Endpoints', () => {
           },
         });
 
+        // Fallback: Create userPoints record if it doesn't exist (edge case)
         if (!userPoints) {
-          return res.status(500).json({
-            success: false,
-            error: 'User points record not found',
-          });
+          try {
+            userPoints = await mockPrismaClient.userPoints.create({
+              data: {
+                userId: userId,
+                totalPoints: 0,
+              },
+              select: {
+                totalPoints: true,
+                dailyCheckinDate: true,
+                dailyLikeClaimedDate: true,
+              },
+            });
+          } catch (createError) {
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to initialize user points. Please contact support.',
+            });
+          }
         }
 
         const mostRecentLike = await mockPrismaClient.userLikes.findFirst({
@@ -413,8 +429,17 @@ describe('Points API Endpoints', () => {
       expect(response.status).toBe(401);
     });
 
-    it('should return 500 if user points record not found', async () => {
+    it('should auto-create user points record if not found (fallback)', async () => {
+      const newlyCreatedPoints = {
+        totalPoints: 0,
+        dailyCheckinDate: null,
+        dailyLikeClaimedDate: null,
+      };
+
+      // First call returns null (not found), then create is called
       mockPrismaClient.userPoints.findUnique.mockResolvedValue(null);
+      mockPrismaClient.userPoints.create.mockResolvedValue(newlyCreatedPoints);
+      mockPrismaClient.userLikes.findFirst.mockResolvedValue(null);
 
       const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
 
@@ -422,8 +447,20 @@ describe('Points API Endpoints', () => {
         .get('/api/points')
         .set('Cookie', [`token=${token}`]);
 
-      expect(response.status).toBe(500);
-      expect(response.body.error).toBe('User points record not found');
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.points.totalPoints).toBe(0);
+      expect(mockPrismaClient.userPoints.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          totalPoints: 0,
+        },
+        select: {
+          totalPoints: true,
+          dailyCheckinDate: true,
+          dailyLikeClaimedDate: true,
+        },
+      });
     });
   });
 

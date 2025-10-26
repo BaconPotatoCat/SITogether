@@ -605,7 +605,7 @@ app.get('/api/points', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
     // Get user points (should always exist since created during registration)
-    const userPoints = await prisma.userPoints.findUnique({
+    let userPoints = await prisma.userPoints.findUnique({
       where: { userId },
       select: {
         totalPoints: true,
@@ -614,14 +614,30 @@ app.get('/api/points', authenticateToken, async (req, res) => {
       },
     });
 
+    // Fallback: Create userPoints record if it doesn't exist (edge case)
     if (!userPoints) {
-      console.error(
-        `UserPoints record not found for user ${userId} - user registration may be incomplete`
-      );
-      return res.status(500).json({
-        success: false,
-        error: 'User points record not found. Please contact support.',
-      });
+      console.warn(`UserPoints record not found for user ${userId} - creating as fallback`);
+
+      try {
+        userPoints = await prisma.userPoints.create({
+          data: {
+            userId: userId,
+            totalPoints: 0,
+          },
+          select: {
+            totalPoints: true,
+            dailyCheckinDate: true,
+            dailyLikeClaimedDate: true,
+          },
+        });
+        console.log(`✓ Created UserPoints record for user ${userId}`);
+      } catch (createError) {
+        console.error(`Failed to create UserPoints for user ${userId}:`, createError);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to initialize user points. Please contact support.',
+        });
+      }
     }
 
     // Check if user has liked someone today
