@@ -1,0 +1,239 @@
+import { useState, useEffect, useCallback } from 'react'
+import { fetchWithAuth } from '../utils/api'
+
+interface Task {
+  id: string
+  name: string
+  completed: boolean
+  canClaim: boolean
+  points: number
+}
+
+interface UserPoints {
+  totalPoints: number
+  dailyCheckinDate: string | null
+  hasLikedToday: boolean
+  dailyLikeClaimedDate: string | null
+}
+
+interface DailyTasksComponentProps {
+  onPointsUpdate?: () => void
+  currentPoints?: number
+}
+
+export default function DailyTasksComponent({
+  onPointsUpdate,
+  currentPoints = 0,
+}: DailyTasksComponentProps) {
+  const [userPoints, setUserPoints] = useState<UserPoints | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  // Fixed tasks (for now - future tasks will be dynamic)
+  const baseTasks = [
+    { id: 'daily-checkin', name: 'Daily check-in', points: 50 },
+    { id: 'like-person', name: 'Like a person', points: 25 },
+    { id: 'send-introduction', name: 'Send an introduction', points: 25 },
+  ]
+
+  const fetchUserPoints = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetchWithAuth('/api/points')
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch points')
+      }
+
+      const result = await response.json()
+
+      if (result.success) {
+        setUserPoints(result.points)
+        setRetryCount(0) // Reset retry count on success
+      } else {
+        throw new Error(result.error || 'Failed to fetch points')
+      }
+    } catch (err) {
+      console.error('Error fetching points:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load points'
+
+      // Auto-retry once if it's the first failure (likely auth not ready)
+      if (retryCount === 0 && errorMessage !== 'Unauthorized') {
+        setTimeout(() => setRetryCount(1), 500)
+        return
+      }
+
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }, [retryCount])
+
+  // Fetch user points on component mount with retry logic
+  useEffect(() => {
+    // Small delay on first load to ensure session is established
+    const timer = setTimeout(() => {
+      fetchUserPoints()
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [fetchUserPoints])
+
+  // Build tasks array based on user points data
+  const tasks: Task[] = baseTasks.map((task) => {
+    if (task.id === 'daily-checkin') {
+      const claimedToday = userPoints?.dailyCheckinDate
+        ? new Date(userPoints.dailyCheckinDate).toDateString() === new Date().toDateString()
+        : false
+
+      return {
+        ...task,
+        completed: claimedToday, // Show as completed if claimed today
+        canClaim: !claimedToday, // Allow claiming if not claimed today
+      }
+    }
+    if (task.id === 'like-person') {
+      const hasLikedToday = userPoints?.hasLikedToday || false
+      const alreadyClaimedToday = userPoints?.dailyLikeClaimedDate
+        ? new Date(userPoints.dailyLikeClaimedDate).toDateString() === new Date().toDateString()
+        : false
+
+      return {
+        ...task,
+        completed: alreadyClaimedToday, // Show as completed when claimed today
+        canClaim: hasLikedToday && !alreadyClaimedToday, // Allow claiming if user liked today and not claimed
+      }
+    }
+    // For now, other tasks are not completed (future implementation)
+    return {
+      ...task,
+      completed: false,
+      canClaim: false,
+    }
+  })
+
+  const handleClaimTask = async (taskId: string) => {
+    if (claimingTaskId === taskId) return
+
+    try {
+      setClaimingTaskId(taskId)
+      setError(null)
+
+      let endpoint = ''
+      const method = 'POST'
+
+      switch (taskId) {
+        case 'daily-checkin':
+          endpoint = '/api/points/claim-daily'
+          break
+        case 'like-person':
+          endpoint = '/api/points/claim-daily-like'
+          break
+        default:
+          throw new Error(`Unknown task: ${taskId}`)
+      }
+
+      const response = await fetchWithAuth(endpoint, { method })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Failed to claim ${taskId} points`)
+      }
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Update local state
+        setUserPoints(result.points)
+        // Notify parent component to refresh premium status
+        onPointsUpdate?.()
+      } else {
+        throw new Error(result.error || `Failed to claim ${taskId} points`)
+      }
+    } catch (err) {
+      console.error(`Error claiming ${taskId} points:`, err)
+      setError(err instanceof Error ? err.message : `Failed to claim ${taskId} points`)
+    } finally {
+      setClaimingTaskId(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="daily-tasks-loading">
+        <div className="spinner"></div>
+        <p>Loading your points...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="daily-tasks-component">
+      {error && (
+        <div
+          className="error-message"
+          style={{
+            padding: '1rem',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            color: '#dc2626',
+            marginBottom: '1rem',
+            fontSize: '0.9rem',
+          }}
+        >
+          <div style={{ marginBottom: '0.5rem' }}>{error}</div>
+          <button
+            onClick={() => setRetryCount((prev) => prev + 1)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Progress section moved to header */}
+
+      <div className="tasks-list">
+        {tasks.map((task) => (
+          <div key={task.id} className={`task-item ${task.completed ? 'completed' : ''}`}>
+            <div className="task-info">
+              <span className="task-name">{task.name}</span>
+              <span className="task-points">+{task.points} pts</span>
+            </div>
+            <div className="task-action">
+              {task.completed ? (
+                <span className="task-completed">✓ Completed</span>
+              ) : task.canClaim ? (
+                <button
+                  className="claim-button"
+                  onClick={() => handleClaimTask(task.id)}
+                  disabled={claimingTaskId !== null || currentPoints >= 1000}
+                >
+                  {claimingTaskId === task.id
+                    ? 'Claiming...'
+                    : currentPoints >= 1000
+                      ? 'Max Points'
+                      : 'Claim'}
+                </button>
+              ) : (
+                <span className="task-uncompleted">Not completed</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
