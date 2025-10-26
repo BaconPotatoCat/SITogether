@@ -26,19 +26,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const firstUser = result.data[0]
       res.status(200).json({
         success: true,
-        data: firstUser
+        data: firstUser,
       })
     } else {
       res.status(404).json({
         success: false,
-        error: 'No confirmed users found'
+        error: 'No confirmed users found',
       })
     }
   } catch (error) {
     console.error('Error fetching first user:', error)
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch user from database'
+      error: 'Failed to fetch user from database',
     })
   }
 }

@@ -111,10 +111,10 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const user = await prisma.user.findUnique({
       where: {
-        id: id
+        id: id,
       },
       select: {
         id: true,
@@ -129,26 +129,26 @@ app.get('/api/users/:id', async (req, res) => {
         avatarUrl: true,
         verified: true,
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'User not found'
+        error: 'User not found',
       });
     }
 
     res.json({
       success: true,
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch user from database'
+      error: 'Failed to fetch user from database',
     });
   }
 });
@@ -160,13 +160,20 @@ app.put('/api/users/:id', async (req, res) => {
     const { name, age, course, bio, interests, avatarUrl } = req.body;
 
     console.log('PUT /api/users/:id called with ID:', id);
-    console.log('Request body:', { name, age, course, bio, interests, avatarUrl: avatarUrl ? 'base64 image...' : null });
+    console.log('Request body:', {
+      name,
+      age,
+      course,
+      bio,
+      interests,
+      avatarUrl: avatarUrl ? 'base64 image...' : null,
+    });
 
     // Validate required fields
     if (!name || !age) {
       return res.status(400).json({
         success: false,
-        error: 'Name and age are required'
+        error: 'Name and age are required',
       });
     }
 
@@ -176,7 +183,7 @@ app.put('/api/users/:id', async (req, res) => {
       age: parseInt(age),
       course: course || null,
       bio: bio || null,
-      interests: Array.isArray(interests) ? interests : []
+      interests: Array.isArray(interests) ? interests : [],
     };
 
     // Only update avatarUrl if provided
@@ -187,7 +194,7 @@ app.put('/api/users/:id', async (req, res) => {
     // Update user profile
     const updatedUser = await prisma.user.update({
       where: {
-        id: id
+        id: id,
       },
       data: updateData,
       select: {
@@ -203,20 +210,20 @@ app.put('/api/users/:id', async (req, res) => {
         avatarUrl: true,
         verified: true,
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: updatedUser
+      data: updatedUser,
     });
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to update user profile'
+      error: 'Failed to update user profile',
     });
   }
 });
@@ -658,4 +665,3 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
-

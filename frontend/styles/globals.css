@@ -14,7 +14,9 @@ body {
     Droid Sans,
     Helvetica Neue,
     sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 /* Dark Mode Styles */
@@ -59,7 +61,11 @@ html.dark h1 {
   color: #f3f4f6;
 }
 
-h2, h3, h4, h5, h6 {
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: #333;
   transition: color 0.3s ease;
 }
@@ -151,7 +157,7 @@ html.dark p {
   background: #fff;
   outline: none;
   color: #111827;
-  transition: 
+  transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     background-color 0.3s ease,
@@ -289,7 +295,10 @@ html.dark .bio {
   font-size: 0.85rem;
   color: #374151;
   background: #f9fafb;
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 html.dark .chip {
@@ -317,7 +326,10 @@ html.dark .chip.muted {
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 600;
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .btn.primary {
@@ -372,7 +384,9 @@ html.dark .muted {
   z-index: 20;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 html.dark .nav-desktop {
@@ -409,7 +423,9 @@ html.dark .brand a {
   padding: 0.4rem 0.75rem;
   border-radius: 8px;
   color: #374151;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .nav-link.active {
@@ -456,7 +472,9 @@ html.dark .nav-link.active {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.5rem;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 html.dark .nav-mobile {
@@ -470,7 +488,10 @@ html.dark .nav-mobile {
   border-radius: 10px;
   color: #374151;
   border: 1px solid transparent;
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .tab-link.active {
@@ -527,7 +548,10 @@ html.dark .tab-link.active {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
   user-select: none;
   touch-action: none;
-  transition: transform 0.18s ease, background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    transform 0.18s ease,
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 html.dark .card {
@@ -585,7 +609,9 @@ html.dark .card-info {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   padding: 0.75rem;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 html.dark .chat-item {
@@ -676,7 +702,10 @@ html.dark .chat-body .last {
   border-radius: 16px;
   padding: 2rem;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 html.dark .auth-card {
@@ -1279,7 +1308,7 @@ html.dark .menu-item-text {
 
 .toggle-label:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 20px;
   width: 20px;
   left: 4px;
@@ -1313,7 +1342,9 @@ html.dark .menu-item-text {
   position: sticky;
   top: 0;
   z-index: 10;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .edit-header h2 {
@@ -1535,7 +1566,10 @@ html.dark .success-alert {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 html.dark .profile {
@@ -1685,7 +1719,7 @@ html.dark .profile-body .bio {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-8px);
-  transition: 
+  transition:
     opacity 0.2s ease,
     transform 0.2s ease,
     visibility 0.2s,
@@ -1720,7 +1754,7 @@ html.dark .dropdown-menu {
   font-weight: 500;
   color: #374151;
   text-align: left;
-  transition: 
+  transition:
     background-color 0.2s ease,
     color 0.2s ease;
   font-family: inherit;

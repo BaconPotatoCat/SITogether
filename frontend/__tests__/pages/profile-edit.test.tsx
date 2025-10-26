@@ -133,15 +133,17 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should save profile changes when Save Changes button is clicked', async () => {
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
-        json: () => Promise.resolve({
-          success: true,
-          data: { ...mockUserData, name: 'Updated Name' },
-        }),
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: { ...mockUserData, name: 'Updated Name' },
+          }),
       })
 
     global.fetch = mockFetch as unknown as typeof fetch
@@ -179,15 +181,17 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should display success message after successful save', async () => {
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
-        json: () => Promise.resolve({
-          success: true,
-          data: { ...mockUserData, name: 'Updated Name' },
-        }),
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: { ...mockUserData, name: 'Updated Name' },
+          }),
       })
 
     global.fetch = mockFetch as unknown as typeof fetch
@@ -235,15 +239,17 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should display error message when save fails', async () => {
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
-        json: () => Promise.resolve({
-          success: false,
-          error: 'Failed to update profile',
-        }),
+        json: () =>
+          Promise.resolve({
+            success: false,
+            error: 'Failed to update profile',
+          }),
       })
 
     global.fetch = mockFetch as unknown as typeof fetch
@@ -289,4 +295,3 @@ describe('Profile Edit Feature', () => {
     })
   })
 })
-

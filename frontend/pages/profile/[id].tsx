@@ -34,7 +34,7 @@ export default function ProfilePage() {
     age: 0,
     course: '',
     bio: '',
-    interests: ''
+    interests: '',
   })
   const [isSaving, setIsSaving] = useState(false)
 
@@ -45,11 +45,11 @@ export default function ProfilePage() {
 
       try {
         setIsLoading(true)
-        
+
         // Try to get user from database first
         const response = await fetch(`/api/users/${id}`)
         const result = await response.json()
-        
+
         if (result.success && result.data) {
           setProfile(result.data)
           if (isCurrentUser) {
@@ -58,7 +58,9 @@ export default function ProfilePage() {
               age: result.data.age,
               course: result.data.course || '',
               bio: result.data.bio || '',
-              interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : ''
+              interests: Array.isArray(result.data.interests)
+                ? result.data.interests.join(', ')
+                : '',
             })
           }
         } else {
@@ -78,7 +80,7 @@ export default function ProfilePage() {
                 avatarUrl: staticProfile.avatarUrl,
                 verified: true,
                 createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
               }
               setProfile(userProfile)
             }
@@ -106,7 +108,9 @@ export default function ProfilePage() {
     return (
       <main className="container">
         <p className="muted">Profile not found.</p>
-        <Link className="btn" href="/">Back</Link>
+        <Link className="btn" href="/">
+          Back
+        </Link>
       </main>
     )
   }
@@ -116,7 +120,7 @@ export default function ProfilePage() {
 
     try {
       setIsSaving(true)
-      
+
       const response = await fetch(`/api/users/${profile.id}`, {
         method: 'PUT',
         headers: {
@@ -127,8 +131,11 @@ export default function ProfilePage() {
           age: editForm.age,
           course: editForm.course,
           bio: editForm.bio,
-          interests: editForm.interests.split(',').map(i => i.trim()).filter(i => i)
-        })
+          interests: editForm.interests
+            .split(',')
+            .map((i) => i.trim())
+            .filter((i) => i),
+        }),
       })
 
       const result = await response.json()
@@ -157,7 +164,7 @@ export default function ProfilePage() {
         age: profile.age,
         course: profile.course || '',
         bio: profile.bio || '',
-        interests: profile.interests.join(', ')
+        interests: profile.interests.join(', '),
       })
     }
     setIsEditing(false)
@@ -171,10 +178,13 @@ export default function ProfilePage() {
       </Head>
       <main className="container">
         <article className="profile">
-          <img 
-            className="profile-avatar" 
-            src={profile.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687'} 
-            alt={`${profile.name} avatar`} 
+          <img
+            className="profile-avatar"
+            src={
+              profile.avatarUrl ||
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687'
+            }
+            alt={`${profile.name} avatar`}
           />
           <div className="profile-body">
             {isEditing ? (
@@ -184,7 +194,7 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={editForm.name}
-                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                     className="input"
                   />
                 </div>
@@ -193,7 +203,9 @@ export default function ProfilePage() {
                   <input
                     type="number"
                     value={editForm.age}
-                    onChange={(e) => setEditForm({...editForm, age: parseInt(e.target.value) || 0})}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, age: parseInt(e.target.value) || 0 })
+                    }
                     className="input"
                   />
                 </div>
@@ -202,7 +214,7 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={editForm.course}
-                    onChange={(e) => setEditForm({...editForm, course: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
                     className="input"
                   />
                 </div>
@@ -210,7 +222,7 @@ export default function ProfilePage() {
                   <label>Bio</label>
                   <textarea
                     value={editForm.bio}
-                    onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                     className="input"
                     rows={3}
                   />
@@ -220,7 +232,7 @@ export default function ProfilePage() {
                   <input
                     type="text"
                     value={editForm.interests}
-                    onChange={(e) => setEditForm({...editForm, interests: e.target.value})}
+                    onChange={(e) => setEditForm({ ...editForm, interests: e.target.value })}
                     className="input"
                     placeholder="Coding, Gaming, Tech"
                   />
@@ -229,18 +241,16 @@ export default function ProfilePage() {
                   <button className="btn ghost" onClick={handleCancel} disabled={isSaving}>
                     Cancel
                   </button>
-                  <button 
-                    className="btn primary" 
-                    onClick={handleSave} 
-                    disabled={isSaving}
-                  >
+                  <button className="btn primary" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? 'Saving...' : 'Save'}
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                <h1>{profile.name}, {profile.age}</h1>
+                <h1>
+                  {profile.name}, {profile.age}
+                </h1>
                 {profile.email && <p className="muted">{profile.email}</p>}
                 <p className="muted" style={{ marginTop: profile.email ? '0.25rem' : 0 }}>
                   {profile.course || 'No course specified'}
@@ -251,7 +261,9 @@ export default function ProfilePage() {
                 <div className="chips" style={{ marginTop: 12 }}>
                   {profile.interests && profile.interests.length > 0 ? (
                     profile.interests.map((interest, idx) => (
-                      <span key={idx} className="chip">{interest}</span>
+                      <span key={idx} className="chip">
+                        {interest}
+                      </span>
                     ))
                   ) : (
                     <span className="chip muted">No interests specified</span>
@@ -264,7 +276,9 @@ export default function ProfilePage() {
                     </button>
                   ) : (
                     <>
-                      <Link className="btn primary" href="/chat">Message</Link>
+                      <Link className="btn primary" href="/chat">
+                        Message
+                      </Link>
                       <Link className="btn ghost" href="/">
                         Back to Discover
                       </Link>

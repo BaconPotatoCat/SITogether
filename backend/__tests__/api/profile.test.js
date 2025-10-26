@@ -6,7 +6,7 @@ const mockPrisma = {
   user: {
     findUnique: jest.fn(),
     update: jest.fn(),
-  }
+  },
 };
 
 jest.mock('../../lib/prisma', () => mockPrisma);
@@ -24,7 +24,7 @@ const setupRoutes = () => {
   app.get('/api/users/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       const user = await prisma.user.findUnique({
         where: { id },
         select: {
@@ -40,25 +40,25 @@ const setupRoutes = () => {
           avatarUrl: true,
           verified: true,
           createdAt: true,
-          updatedAt: true
-        }
+          updatedAt: true,
+        },
       });
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          error: 'User not found'
+          error: 'User not found',
         });
       }
 
       res.json({
         success: true,
-        data: user
+        data: user,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch user from database'
+        error: 'Failed to fetch user from database',
       });
     }
   });
@@ -72,7 +72,7 @@ const setupRoutes = () => {
       if (!name || !age) {
         return res.status(400).json({
           success: false,
-          error: 'Name and age are required'
+          error: 'Name and age are required',
         });
       }
 
@@ -81,7 +81,7 @@ const setupRoutes = () => {
         age: parseInt(age),
         course: course || null,
         bio: bio || null,
-        interests: Array.isArray(interests) ? interests : []
+        interests: Array.isArray(interests) ? interests : [],
       };
 
       if (avatarUrl !== undefined) {
@@ -104,19 +104,19 @@ const setupRoutes = () => {
           avatarUrl: true,
           verified: true,
           createdAt: true,
-          updatedAt: true
-        }
+          updatedAt: true,
+        },
       });
 
       res.json({
         success: true,
         message: 'Profile updated successfully',
-        data: updatedUser
+        data: updatedUser,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: 'Failed to update user profile'
+        error: 'Failed to update user profile',
       });
     }
   });
@@ -143,33 +143,29 @@ describe('Profile API Endpoints', () => {
         avatarUrl: 'https://example.com/avatar.jpg',
         verified: true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       prisma.user.findUnique.mockResolvedValue(mockUser);
 
-      const response = await request(app)
-        .get('/api/users/user-123')
-        .expect(200);
+      const response = await request(app).get('/api/users/user-123').expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toMatchObject({
         id: 'user-123',
         name: 'Test User',
-        age: 25
+        age: 25,
       });
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-123' },
-        select: expect.any(Object)
+        select: expect.any(Object),
       });
     });
 
     it('should return 404 when user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
-      const response = await request(app)
-        .get('/api/users/nonexistent')
-        .expect(404);
+      const response = await request(app).get('/api/users/nonexistent').expect(404);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('User not found');
@@ -178,9 +174,7 @@ describe('Profile API Endpoints', () => {
     it('should return 500 on database error', async () => {
       prisma.user.findUnique.mockRejectedValue(new Error('Database error'));
 
-      const response = await request(app)
-        .get('/api/users/user-123')
-        .expect(500);
+      const response = await request(app).get('/api/users/user-123').expect(500);
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('Failed to fetch user from database');
@@ -202,7 +196,7 @@ describe('Profile API Endpoints', () => {
         avatarUrl: 'https://example.com/avatar.jpg',
         verified: true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       prisma.user.update.mockResolvedValue(mockUpdatedUser);
@@ -214,7 +208,7 @@ describe('Profile API Endpoints', () => {
           age: 26,
           course: 'Software Engineering',
           bio: 'Updated bio',
-          interests: ['Coding', 'Reading']
+          interests: ['Coding', 'Reading'],
         })
         .expect(200);
 
@@ -228,15 +222,16 @@ describe('Profile API Endpoints', () => {
           age: 26,
           course: 'Software Engineering',
           bio: 'Updated bio',
-          interests: ['Coding', 'Reading']
+          interests: ['Coding', 'Reading'],
         }),
-        select: expect.any(Object)
+        select: expect.any(Object),
       });
     });
 
     it('should update avatar URL when provided', async () => {
-      const base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      
+      const base64Image =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
       const mockUpdatedUser = {
         id: 'user-123',
         email: 'test@example.com',
@@ -250,7 +245,7 @@ describe('Profile API Endpoints', () => {
         avatarUrl: base64Image,
         verified: true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       prisma.user.update.mockResolvedValue(mockUpdatedUser);
@@ -263,7 +258,7 @@ describe('Profile API Endpoints', () => {
           course: 'Computer Science',
           bio: 'Software developer',
           interests: ['Coding'],
-          avatarUrl: base64Image
+          avatarUrl: base64Image,
         })
         .expect(200);
 
@@ -272,9 +267,9 @@ describe('Profile API Endpoints', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: expect.objectContaining({
-          avatarUrl: base64Image
+          avatarUrl: base64Image,
         }),
-        select: expect.any(Object)
+        select: expect.any(Object),
       });
     });
 
@@ -282,7 +277,7 @@ describe('Profile API Endpoints', () => {
       const response = await request(app)
         .put('/api/users/user-123')
         .send({
-          age: 25
+          age: 25,
         })
         .expect(400);
 
@@ -294,7 +289,7 @@ describe('Profile API Endpoints', () => {
       const response = await request(app)
         .put('/api/users/user-123')
         .send({
-          name: 'Test User'
+          name: 'Test User',
         })
         .expect(400);
 
@@ -316,7 +311,7 @@ describe('Profile API Endpoints', () => {
         avatarUrl: null,
         verified: true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       prisma.user.update.mockResolvedValue(mockUpdatedUser);
@@ -328,7 +323,7 @@ describe('Profile API Endpoints', () => {
           age: 25,
           course: '',
           bio: '',
-          interests: []
+          interests: [],
         })
         .expect(200);
 
@@ -344,7 +339,7 @@ describe('Profile API Endpoints', () => {
         .put('/api/users/user-123')
         .send({
           name: 'Test User',
-          age: 25
+          age: 25,
         })
         .expect(500);
 
@@ -366,7 +361,7 @@ describe('Profile API Endpoints', () => {
         avatarUrl: null,
         verified: true,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       prisma.user.update.mockResolvedValue(mockUpdatedUser);
@@ -375,18 +370,17 @@ describe('Profile API Endpoints', () => {
         .put('/api/users/user-123')
         .send({
           name: 'Test User',
-          age: '25' // String
+          age: '25', // String
         })
         .expect(200);
 
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-123' },
         data: expect.objectContaining({
-          age: 25 // Should be converted to number
+          age: 25, // Should be converted to number
         }),
-        select: expect.any(Object)
+        select: expect.any(Object),
       });
     });
   });
 });
-

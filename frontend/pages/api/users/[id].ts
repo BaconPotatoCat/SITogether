@@ -28,18 +28,18 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
         if (response.status === 404) {
           return res.status(404).json({
             success: false,
-            error: 'User not found'
+            error: 'User not found',
           })
         }
-        
+
         // Try to get error details from backend
         const errorText = await response.text()
         console.error(`Backend API error (${response.status}):`, errorText)
-        
+
         return res.status(response.status).json({
           success: false,
           error: `Backend API error: ${response.status}`,
-          details: errorText
+          details: errorText,
         })
       }
 
@@ -52,7 +52,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       if (!name || !age) {
         return res.status(400).json({
           success: false,
-          error: 'Name and age are required'
+          error: 'Name and age are required',
         })
       }
 
@@ -62,13 +62,17 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
         age: parseInt(age),
         course: course || null,
         bio: bio || null,
-        interests: Array.isArray(interests) ? interests : []
+        interests: Array.isArray(interests) ? interests : [],
       }
 
       // Only include avatarUrl if provided
       if (avatarUrl !== undefined) {
         updatePayload.avatarUrl = avatarUrl
-        console.log('Frontend API: Forwarding avatarUrl to backend (length:', avatarUrl?.length, ')')
+        console.log(
+          'Frontend API: Forwarding avatarUrl to backend (length:',
+          avatarUrl?.length,
+          ')'
+        )
       }
 
       // Call backend API to update user
@@ -77,7 +81,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatePayload)
+        body: JSON.stringify(updatePayload),
       })
 
       if (!response.ok) {
@@ -94,7 +98,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     console.error('API Error:', error)
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     })
   }
 }

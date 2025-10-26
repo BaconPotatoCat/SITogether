@@ -103,15 +103,17 @@ describe('Profile Avatar Upload Feature', () => {
   })
 
   it('should upload avatar when file is selected', async () => {
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
-        json: () => Promise.resolve({
-          success: true,
-          data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
-        }),
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
+          }),
       })
 
     global.fetch = mockFetch as unknown as typeof fetch
@@ -143,7 +145,10 @@ describe('Profile Avatar Upload Feature', () => {
     // Simulate FileReader onloadend
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
+        mockFileReader.onloadend.call(
+          mockFileReader as unknown as FileReader,
+          {} as ProgressEvent<FileReader>
+        )
       }
     })
 
@@ -158,6 +163,12 @@ describe('Profile Avatar Upload Feature', () => {
           body: expect.stringContaining('avatarUrl'),
         })
       )
+    })
+
+    // Wait for all state updates to complete
+    await waitFor(() => {
+      const button = screen.getByTitle('Change profile picture') as HTMLButtonElement
+      expect(button.disabled).toBe(false)
     })
   })
 
@@ -206,15 +217,17 @@ describe('Profile Avatar Upload Feature', () => {
   })
 
   it('should display success message after successful upload', async () => {
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
-        json: () => Promise.resolve({
-          success: true,
-          data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
-        }),
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
+          }),
       })
 
     global.fetch = mockFetch as unknown as typeof fetch
@@ -243,24 +256,37 @@ describe('Profile Avatar Upload Feature', () => {
 
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
+        mockFileReader.onloadend.call(
+          mockFileReader as unknown as FileReader,
+          {} as ProgressEvent<FileReader>
+        )
       }
     })
 
     await waitFor(() => {
       expect(screen.getByText('Profile picture updated successfully!')).toBeInTheDocument()
     })
+
+    // Wait for upload to complete
+    await waitFor(() => {
+      const button = screen.getByTitle('Change profile picture') as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+    })
   })
 
   it('should disable button while uploading', async () => {
     let resolveFetch: ((value: Response | PromiseLike<Response>) => void) | undefined
-    const mockFetch = jest.fn()
+    const mockFetch = jest
+      .fn()
       .mockResolvedValueOnce({
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveFetch = resolve
-      }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve
+          })
+      )
 
     global.fetch = mockFetch as unknown as typeof fetch
 
@@ -288,7 +314,10 @@ describe('Profile Avatar Upload Feature', () => {
 
     await waitFor(() => {
       if (mockFileReader.onloadend) {
-        mockFileReader.onloadend({} as ProgressEvent<FileReader>)
+        mockFileReader.onloadend.call(
+          mockFileReader as unknown as FileReader,
+          {} as ProgressEvent<FileReader>
+        )
       }
     })
 
@@ -300,9 +329,14 @@ describe('Profile Avatar Upload Feature', () => {
     // Clean up - resolve the pending promise
     if (resolveFetch) {
       resolveFetch({
-        json: () => Promise.resolve({ success: true, data: mockUserData })
-      })
+        json: () => Promise.resolve({ success: true, data: mockUserData }),
+      } as Response)
     }
+
+    // Wait for the upload to complete and button to be re-enabled
+    await waitFor(() => {
+      const button = screen.getByTitle('Change profile picture') as HTMLButtonElement
+      expect(button.disabled).toBe(false)
+    })
   })
 })
-

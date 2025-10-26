@@ -17,7 +17,9 @@ function Navigation() {
   }
 
   // Get user avatar URL or use default
-  const avatarUrl = session?.user?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
+  const avatarUrl =
+    session?.user?.avatarUrl ||
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
 
   return (
     <>
@@ -36,22 +38,36 @@ function Navigation() {
             {isAuthenticated ? (
               <div className="profile-dropdown">
                 <div className="nav-profile">
-                  <img 
-                    src={avatarUrl} 
-                    alt="Profile" 
-                    className="nav-avatar"
-                  />
+                  <img src={avatarUrl} alt="Profile" className="nav-avatar" />
                 </div>
                 <div className="dropdown-menu">
                   <Link href="/profile" className="dropdown-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                       <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                     View Profile
                   </Link>
                   <button className="dropdown-item logout" onClick={handleLogout}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                       <polyline points="16 17 21 12 16 7"></polyline>
                       <line x1="21" y1="12" x2="9" y2="12"></line>

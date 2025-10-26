@@ -36,7 +36,7 @@ export default function MyProfilePage() {
     age: 0,
     course: '',
     bio: '',
-    interests: ''
+    interests: '',
   })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,10 +59,10 @@ export default function MyProfilePage() {
       try {
         setIsLoading(true)
         setError(null)
-        
+
         const response = await fetch(`/api/users/${session.user.id}`)
         const result = await response.json()
-        
+
         if (result.success && result.data) {
           setProfile(result.data)
           setEditForm({
@@ -70,7 +70,7 @@ export default function MyProfilePage() {
             age: result.data.age,
             course: result.data.course || '',
             bio: result.data.bio || '',
-            interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : ''
+            interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : '',
           })
         } else {
           setError(result.error || 'Failed to fetch profile')
@@ -94,7 +94,7 @@ export default function MyProfilePage() {
     try {
       setIsSaving(true)
       setError(null)
-      
+
       const response = await fetch(`/api/users/${profile.id}`, {
         method: 'PUT',
         headers: {
@@ -105,8 +105,11 @@ export default function MyProfilePage() {
           age: editForm.age,
           course: editForm.course,
           bio: editForm.bio,
-          interests: editForm.interests.split(',').map(i => i.trim()).filter(i => i)
-        })
+          interests: editForm.interests
+            .split(',')
+            .map((i) => i.trim())
+            .filter((i) => i),
+        }),
       })
 
       const result = await response.json()
@@ -132,7 +135,7 @@ export default function MyProfilePage() {
         age: profile.age,
         course: profile.course || '',
         bio: profile.bio || '',
-        interests: Array.isArray(profile.interests) ? profile.interests.join(', ') : ''
+        interests: Array.isArray(profile.interests) ? profile.interests.join(', ') : '',
       })
     }
     setViewMode('menu')
@@ -190,8 +193,8 @@ export default function MyProfilePage() {
             course: profile.course,
             bio: profile.bio,
             interests: profile.interests,
-            avatarUrl: base64String
-          })
+            avatarUrl: base64String,
+          }),
         })
 
         const result = await response.json()
@@ -201,7 +204,7 @@ export default function MyProfilePage() {
           setProfile(result.data)
           setSuccessMessage('Profile picture updated successfully!')
           console.log('Profile updated successfully with new avatar')
-          
+
           // Clear success message after 3 seconds
           setTimeout(() => {
             setSuccessMessage(null)
@@ -236,7 +239,9 @@ export default function MyProfilePage() {
       <main className="container">
         <div className="error-message">
           <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{error}</p>
-          <Link className="btn" href="/">Back to Home</Link>
+          <Link className="btn" href="/">
+            Back to Home
+          </Link>
         </div>
       </main>
     )
@@ -246,7 +251,9 @@ export default function MyProfilePage() {
     return (
       <main className="container">
         <p className="muted">Profile not found.</p>
-        <Link className="btn" href="/">Back to Home</Link>
+        <Link className="btn" href="/">
+          Back to Home
+        </Link>
       </main>
     )
   }
@@ -260,37 +267,51 @@ export default function MyProfilePage() {
       <main className="profile-page-container">
         {viewMode === 'menu' ? (
           <div className="profile-menu-view">
-            {successMessage && (
-              <div className="success-alert">
-                {successMessage}
-              </div>
-            )}
-            
-            {error && (
-              <div className="error-alert">
-                {error}
-              </div>
-            )}
-            
+            {successMessage && <div className="success-alert">{successMessage}</div>}
+
+            {error && <div className="error-alert">{error}</div>}
+
             <div className="profile-header-section">
               <div className="profile-avatar-wrapper">
-                <img 
-                  className="profile-avatar-large" 
-                  src={profile?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'} 
-                  alt={`${profile?.name} avatar`} 
+                <img
+                  className="profile-avatar-large"
+                  src={
+                    profile?.avatarUrl ||
+                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
+                  }
+                  alt={`${profile?.name} avatar`}
                 />
-                <button 
-                  className="avatar-edit-btn" 
+                <button
+                  className="avatar-edit-btn"
                   onClick={handleAvatarClick}
                   disabled={isUploadingAvatar}
                   title="Change profile picture"
                 >
                   {isUploadingAvatar ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="spinner-icon">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="spinner-icon"
+                    >
                       <circle cx="12" cy="12" r="10"></circle>
                     </svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                       <circle cx="8.5" cy="8.5" r="1.5"></circle>
                       <polyline points="21 15 16 10 5 21"></polyline>
@@ -311,20 +332,48 @@ export default function MyProfilePage() {
             <div className="profile-menu-list">
               <button className="profile-menu-item" onClick={() => setViewMode('edit')}>
                 <div className="menu-item-icon" style={{ backgroundColor: '#eef2ff' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                     <circle cx="12" cy="7" r="4"></circle>
                   </svg>
                 </div>
                 <span className="menu-item-text">Edit Profile</span>
-                <svg className="menu-item-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  className="menu-item-arrow"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
               </button>
 
               <div className="profile-menu-item">
                 <div className="menu-item-icon" style={{ backgroundColor: '#eef2ff' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     {isDarkMode ? (
                       <>
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -346,9 +395,9 @@ export default function MyProfilePage() {
                 </div>
                 <span className="menu-item-text">Dark Mode</span>
                 <div className="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    id="darkmode-toggle" 
+                  <input
+                    type="checkbox"
+                    id="darkmode-toggle"
                     checked={isDarkMode}
                     onChange={toggleDarkMode}
                   />
@@ -358,14 +407,33 @@ export default function MyProfilePage() {
 
               <button className="profile-menu-item" onClick={handleLogout}>
                 <div className="menu-item-icon" style={{ backgroundColor: '#eef2ff' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                     <polyline points="16 17 21 12 16 7"></polyline>
                     <line x1="21" y1="12" x2="9" y2="12"></line>
                   </svg>
                 </div>
                 <span className="menu-item-text">Logout</span>
-                <svg className="menu-item-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  className="menu-item-arrow"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
               </button>
@@ -375,7 +443,16 @@ export default function MyProfilePage() {
           <div className="profile-edit-view">
             <div className="edit-header">
               <button className="back-btn" onClick={handleCancel}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
               </button>
@@ -383,11 +460,7 @@ export default function MyProfilePage() {
               <div style={{ width: '24px' }}></div>
             </div>
 
-            {error && (
-              <div className="error-alert">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-alert">{error}</div>}
 
             <div className="edit-form-container">
               <div className="form-group">
@@ -395,7 +468,7 @@ export default function MyProfilePage() {
                 <input
                   type="text"
                   value={editForm.name}
-                  onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                   className="input"
                   required
                 />
@@ -405,7 +478,7 @@ export default function MyProfilePage() {
                 <input
                   type="number"
                   value={editForm.age}
-                  onChange={(e) => setEditForm({...editForm, age: parseInt(e.target.value) || 0})}
+                  onChange={(e) => setEditForm({ ...editForm, age: parseInt(e.target.value) || 0 })}
                   className="input"
                   min="18"
                   max="100"
@@ -417,7 +490,7 @@ export default function MyProfilePage() {
                 <input
                   type="text"
                   value={editForm.course}
-                  onChange={(e) => setEditForm({...editForm, course: e.target.value})}
+                  onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
                   className="input"
                   placeholder="e.g., Computer Science"
                 />
@@ -426,7 +499,7 @@ export default function MyProfilePage() {
                 <label>Bio</label>
                 <textarea
                   value={editForm.bio}
-                  onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
                   className="input"
                   rows={3}
                   placeholder="Tell us about yourself..."
@@ -437,14 +510,14 @@ export default function MyProfilePage() {
                 <input
                   type="text"
                   value={editForm.interests}
-                  onChange={(e) => setEditForm({...editForm, interests: e.target.value})}
+                  onChange={(e) => setEditForm({ ...editForm, interests: e.target.value })}
                   className="input"
                   placeholder="Coding, Gaming, Tech"
                 />
               </div>
-              <button 
-                className="btn primary save-btn" 
-                onClick={handleSave} 
+              <button
+                className="btn primary save-btn"
+                onClick={handleSave}
                 disabled={isSaving || !editForm.name || !editForm.age}
               >
                 {isSaving ? 'Saving...' : 'Save Changes'}
@@ -456,4 +529,3 @@ export default function MyProfilePage() {
     </>
   )
 }
-

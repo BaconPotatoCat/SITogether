@@ -39,22 +39,19 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
       const newValue = !prev
       // Save to localStorage
       localStorage.setItem('darkMode', String(newValue))
-      
+
       // Toggle dark class on html element
       if (newValue) {
         document.documentElement.classList.add('dark')
       } else {
         document.documentElement.classList.remove('dark')
       }
-      
+
       return newValue
     })
   }
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>{children}</ThemeContext.Provider>
   )
 }
-
