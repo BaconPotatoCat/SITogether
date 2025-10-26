@@ -27,6 +27,13 @@ model User {
   updatedAt           DateTime            @updatedAt @map("updated_at")
   verificationTokens  VerificationToken[]
 
+  // Relations
+  points     UserPoints?
+  givenLikes UserLikes[] @relation("UserLikes")
+  receivedLikes UserLikes[] @relation("UserReceivedLikes")
+  givenPasses UserPasses[] @relation("UserPasses")
+  receivedPasses UserPasses[] @relation("UserReceivedPasses")
+
   @@map("users")
 }
 
@@ -39,4 +46,50 @@ model VerificationToken {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("verification_tokens")
+}
+
+model UserPoints {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @db.Uuid
+  totalPoints          Int      @default(0)
+  dailyCheckinDate     DateTime?
+  dailyLikeClaimedDate DateTime?
+  premiumExpiryDate    DateTime?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_points")
+}
+
+model UserLikes {
+  id        String   @id @default(uuid()) @db.Uuid
+  likerId   String   @db.Uuid
+  likedId   String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  liker   User @relation("UserLikes", fields: [likerId], references: [id], onDelete: Cascade)
+  liked   User @relation("UserReceivedLikes", fields: [likedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate likes
+  @@unique([likerId, likedId])
+  @@map("user_likes")
+}
+
+model UserPasses {
+  id        String   @id @default(uuid()) @db.Uuid
+  passerId  String   @db.Uuid
+  passedId  String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  passer  User @relation("UserPasses", fields: [passerId], references: [id], onDelete: Cascade)
+  passed  User @relation("UserReceivedPasses", fields: [passedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate passes
+  @@unique([passerId, passedId])
+  @@map("user_passes")
 }

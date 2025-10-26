@@ -2,6 +2,7 @@ const request = require('supertest');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { authenticateToken } = require('../../middleware/auth');
 
 // Mock Prisma client
 const mockPrismaClient = {
@@ -148,6 +149,52 @@ describe('Auth API Endpoints', () => {
         res.status(500).json({
           success: false,
           error: 'Login failed',
+        });
+      }
+    });
+
+    app.post('/api/auth/logout', (req, res) => {
+      res.clearCookie('token');
+      res.json({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    });
+
+    app.get('/api/auth/session', authenticateToken, async (req, res) => {
+      try {
+        const user = await mockPrismaClient.user.findUnique({
+          where: { id: req.user.userId },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            age: true,
+            gender: true,
+            role: true,
+            course: true,
+            bio: true,
+            interests: true,
+            avatarUrl: true,
+            verified: true,
+          },
+        });
+
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            error: 'User not found',
+          });
+        }
+
+        res.json({
+          success: true,
+          user: user,
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to retrieve session',
         });
       }
     });
@@ -306,6 +353,66 @@ describe('Auth API Endpoints', () => {
       expect(response.status).toBe(403);
       expect(response.body.requiresVerification).toBe(true);
       expect(response.body.error).toContain('not verified');
+    });
+  });
+
+  describe('POST /api/auth/logout', () => {
+    it('should successfully logout user', async () => {
+      const response = await request(app).post('/api/auth/logout');
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Logged out successfully');
+    });
+  });
+
+  describe('GET /api/auth/session', () => {
+    it('should return user session data when authenticated', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+        role: 'User',
+        course: 'CS',
+        bio: 'Test bio',
+        interests: ['coding'],
+        avatarUrl: null,
+        verified: true,
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+
+      const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
+
+      const response = await request(app)
+        .get('/api/auth/session')
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.user).toEqual(mockUser);
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      const response = await request(app).get('/api/auth/session');
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain('Authentication required');
+    });
+
+    it('should return 404 if user not found', async () => {
+      mockPrismaClient.user.findUnique.mockResolvedValue(null);
+
+      const token = jwt.sign({ userId: 'nonexistent-user' }, process.env.JWT_SECRET);
+
+      const response = await request(app)
+        .get('/api/auth/session')
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('User not found');
     });
   });
 });
