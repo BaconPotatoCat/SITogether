@@ -24,8 +24,9 @@ app.use(
 );
 app.use(cookieParser());
 app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to 10MB for image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Basic route
 app.get('/', (req, res) => {
@@ -173,6 +174,134 @@ app.get('/api/users', authenticateToken, async (req, res) => {
   }
 });
 
+// Get user by ID
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: id,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        bio: true,
+        interests: true,
+        avatarUrl: true,
+        verified: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user from database',
+    });
+  }
+});
+
+// Update user by ID (Protected - requires authentication and authorization)
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, age, course, bio, interests, avatarUrl } = req.body;
+
+    // Authorization check: Users can only update their own profile
+    if (req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only update your own profile.',
+      });
+    }
+
+    // Validate required fields
+    if (!name || !age) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and age are required',
+      });
+    }
+
+    // Validate age range
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 18 || ageNum > 65) {
+      return res.status(400).json({
+        success: false,
+        error: 'Age must be a positive number between 18 and 65',
+      });
+    }
+
+    // Prepare update data
+    const updateData = {
+      name,
+      age: ageNum,
+      course: course || null,
+      bio: bio || null,
+      interests: Array.isArray(interests) ? interests : [],
+    };
+
+    // Only update avatarUrl if provided
+    if (avatarUrl !== undefined) {
+      updateData.avatarUrl = avatarUrl;
+    }
+
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: id,
+      },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        bio: true,
+        interests: true,
+        avatarUrl: true,
+        verified: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user profile',
+    });
+  }
+});
+
 // Authentication routes
 // Register endpoint
 app.post('/api/auth/register', async (req, res) => {
@@ -193,6 +322,15 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Gender must be one of: Male, Female, or Other',
+      });
+    }
+
+    // Validate age range
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 18 || ageNum > 65) {
+      return res.status(400).json({
+        success: false,
+        error: 'Age must be a positive number between 18 and 65',
       });
     }
 
@@ -232,7 +370,7 @@ app.post('/api/auth/register', async (req, res) => {
         email,
         password: hashedPassword,
         name,
-        age: parseInt(age),
+        age: ageNum,
         gender,
         role: 'User',
         course,
@@ -481,12 +619,6 @@ app.post('/api/auth/login', async (req, res) => {
         createdAt: true,
         updatedAt: true,
       },
-    });
-
-    console.log('User found in database:', {
-      email: user?.email,
-      verified: user?.verified,
-      verifiedType: typeof user?.verified,
     });
 
     if (!user) {
@@ -1300,7 +1432,7 @@ app.post('/api/passes', authenticateToken, async (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, res) => {
+app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
@@ -1308,7 +1440,7 @@ app.use((err, res) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST be last
 app.use('*', (req, res) => {
   res.status(404).json({
     message: 'Route not found',
