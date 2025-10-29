@@ -8,10 +8,12 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
+- **Password Reset**: Secure email-based password reset with time-limited tokens
+- **Email Verification**: Automated email verification system with secure tokens
+- **Unified Token System**: Extensible token architecture for verification, password reset, and future features
 - **Premium System**: Points-based premium features with daily tasks and unlocks
 - **Social Features**: Like/unlike users, pass functionality, and connection matching
 - **Advanced Filtering**: Premium filtering by age, gender, course, and interests
-- **Email Verification**: Automated email verification system with secure tokens
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development
@@ -81,15 +83,16 @@ cp frontend/env.example frontend/.env
 
 **Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
 
-### Authentication
+### Authentication & Security
 
 The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js-style session management system:
 
+#### Session Management
 - **Login**: Users must log in to access protected pages and APIs
 - **Session Duration**: Tokens are valid for 1 hour
 - **Auto-refresh**: Session validity is checked every 5 minutes
 - **Logout**: Clears the authentication token and redirects to login
-- **Protected Routes**: All pages except `/auth` require authentication
+- **Protected Routes**: All pages except `/auth`, `/verify`, and `/reset-password` require authentication
 - **Protected APIs**: `/api/users` and other endpoints require valid tokens
 
 #### Using Sessions in Components
@@ -208,8 +211,13 @@ npm run security:audit
 - ✅ Authentication middleware (JWT validation, token expiry)
 - ✅ Registration API (validation, duplicate users, password hashing)
 - ✅ Login API (credentials validation, account verification)
+- ✅ Email verification (token generation, expiration, cleanup)
+- ✅ Password reset (forgot password, token validation, password update)
+- ✅ Unified token system (EMAIL_VERIFICATION, PASSWORD_RESET types)
 - ✅ Users API (authorization, filtering verified users)
-- ✅ Security checks (SQL injection, XSS prevention)
+- ✅ Points system (daily rewards, premium unlocks)
+- ✅ Social features (likes, passes, matching)
+- ✅ Security checks (SQL injection, XSS prevention, email enumeration prevention)
 
 **Frontend:**
 - ✅ Custom hooks (useToast, useSession)
