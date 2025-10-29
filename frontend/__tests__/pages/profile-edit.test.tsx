@@ -1,14 +1,9 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { useRouter } from 'next/router'
 import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../hooks/useToast'
-
-jest.mock('next/router', () => ({
-  useRouter: jest.fn(),
-}))
 
 jest.mock('../../contexts/AuthContext', () => ({
   useSession: jest.fn(),
@@ -34,7 +29,6 @@ jest.mock('../../components/LoadingSpinner', () => {
   }
 })
 
-const mockPush = jest.fn()
 const mockSignOut = jest.fn()
 const mockRefreshSession = jest.fn()
 const mockShowToast = jest.fn()
@@ -57,11 +51,6 @@ const mockUserData = {
 describe('Profile Edit Feature', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    ;(useRouter as jest.Mock).mockReturnValue({
-      push: mockPush,
-      isReady: true,
-      query: {},
-    })
     ;(useTheme as jest.Mock).mockReturnValue({
       isDarkMode: false,
       toggleDarkMode: jest.fn(),
@@ -73,11 +62,7 @@ describe('Profile Edit Feature', () => {
     })
     ;(useSession as jest.Mock).mockReturnValue({
       session: {
-        user: {
-          id: 'user-123',
-          email: 'test@example.com',
-          name: 'Test User',
-        },
+        user: mockUserData,
       },
       status: 'authenticated',
       signOut: mockSignOut,
@@ -207,26 +192,40 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should display success message after successful save', async () => {
-    const mockFetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ success: true, data: mockUserData }),
+    const updatedUserData = { ...mockUserData, name: 'Updated Name' }
+    let currentSession = { user: mockUserData }
+
+    // Mock refreshSession to update the session
+    const mockRefreshSessionLocal = jest.fn().mockImplementation(() => {
+      currentSession = { user: updatedUserData }
+      ;(useSession as jest.Mock).mockReturnValue({
+        session: currentSession,
+        status: 'authenticated',
+        signOut: mockSignOut,
+        refreshSession: mockRefreshSessionLocal,
       })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            success: true,
-            data: { ...mockUserData, name: 'Updated Name' },
-          }),
-      })
+    })
+
+    ;(useSession as jest.Mock).mockReturnValue({
+      session: currentSession,
+      status: 'authenticated',
+      signOut: mockSignOut,
+      refreshSession: mockRefreshSessionLocal,
+    })
+
+    const mockFetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: updatedUserData,
+        }),
+    })
 
     global.fetch = mockFetch as unknown as typeof fetch
 
-    render(<MyProfilePage />)
+    const { rerender } = render(<MyProfilePage />)
 
     await waitFor(() => {
       expect(screen.getByText('Edit Profile')).toBeInTheDocument()
@@ -241,8 +240,14 @@ describe('Profile Edit Feature', () => {
     fireEvent.click(screen.getByText('Save Changes'))
 
     await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith('Profile updated successfully!', 'success')
+    })
+
+    // Rerender with updated session
+    rerender(<MyProfilePage />)
+
+    await waitFor(() => {
       expect(screen.getByText('Updated Name')).toBeInTheDocument()
-      expect(screen.getByText('Edit Profile')).toBeInTheDocument()
     })
   })
 
@@ -269,22 +274,15 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should display error message when save fails', async () => {
-    const mockFetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ success: true, data: mockUserData }),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () =>
-          Promise.resolve({
-            success: false,
-            error: 'Failed to update profile',
-          }),
-      })
+    const mockFetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 500,
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: 'Failed to update profile',
+        }),
+    })
 
     global.fetch = mockFetch as unknown as typeof fetch
 

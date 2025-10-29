@@ -1,15 +1,9 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { useRouter } from 'next/router'
 import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../hooks/useToast'
-
-// Mock next/router
-jest.mock('next/router', () => ({
-  useRouter: jest.fn(),
-}))
 
 // Mock AuthContext
 jest.mock('../../contexts/AuthContext', () => ({
@@ -40,7 +34,6 @@ jest.mock('../../components/LoadingSpinner', () => {
   }
 })
 
-const mockPush = jest.fn()
 const mockSignOut = jest.fn()
 const mockRefreshSession = jest.fn()
 const mockToggleDarkMode = jest.fn()
@@ -50,11 +43,6 @@ const mockRemoveToast = jest.fn()
 describe('MyProfilePage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    ;(useRouter as jest.Mock).mockReturnValue({
-      push: mockPush,
-      isReady: true,
-      query: {},
-    })
     ;(useTheme as jest.Mock).mockReturnValue({
       isDarkMode: false,
       toggleDarkMode: mockToggleDarkMode,
@@ -67,7 +55,7 @@ describe('MyProfilePage', () => {
   })
 
   describe('Authentication', () => {
-    it('should redirect to login if user is not authenticated', () => {
+    it('should return null when user is not authenticated', () => {
       ;(useSession as jest.Mock).mockReturnValue({
         session: null,
         status: 'unauthenticated',
@@ -75,9 +63,10 @@ describe('MyProfilePage', () => {
         refreshSession: mockRefreshSession,
       })
 
-      render(<MyProfilePage />)
+      const { container } = render(<MyProfilePage />)
 
-      expect(mockPush).toHaveBeenCalledWith('/auth')
+      // Component should render nothing (middleware will handle redirect)
+      expect(container.firstChild).toBeNull()
     })
 
     it('should show loading spinner while checking authentication', () => {
@@ -103,6 +92,14 @@ describe('MyProfilePage', () => {
             id: 'user-123',
             email: 'test@example.com',
             name: 'Test User',
+            age: 25,
+            gender: 'Male',
+            role: 'User',
+            course: 'Computer Science',
+            bio: 'Software developer',
+            interests: ['Coding', 'Gaming'],
+            avatarUrl: 'https://example.com/avatar.jpg',
+            verified: true,
           },
         },
         status: 'authenticated',
@@ -117,19 +114,7 @@ describe('MyProfilePage', () => {
           json: () =>
             Promise.resolve({
               success: true,
-              data: {
-                id: 'user-123',
-                email: 'test@example.com',
-                name: 'Test User',
-                age: 25,
-                gender: 'Male',
-                role: 'User',
-                course: 'Computer Science',
-                bio: 'Software developer',
-                interests: ['Coding', 'Gaming'],
-                avatarUrl: 'https://example.com/avatar.jpg',
-                verified: true,
-              },
+              data: {},
             }),
         })
       ) as unknown as jest.Mock
@@ -259,43 +244,6 @@ describe('MyProfilePage', () => {
       fireEvent.click(logoutButton)
 
       expect(mockSignOut).toHaveBeenCalled()
-    })
-  })
-
-  describe('Error Handling', () => {
-    beforeEach(() => {
-      ;(useSession as jest.Mock).mockReturnValue({
-        session: {
-          user: {
-            id: 'user-123',
-            email: 'test@example.com',
-            name: 'Test User',
-          },
-        },
-        status: 'authenticated',
-        signOut: mockSignOut,
-        refreshSession: mockRefreshSession,
-      })
-    })
-
-    it('should display error message when profile fetch fails', async () => {
-      global.fetch = jest.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () =>
-            Promise.resolve({
-              success: false,
-              error: 'Failed to fetch profile',
-            }),
-        })
-      ) as unknown as jest.Mock
-
-      render(<MyProfilePage />)
-
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith('Failed to fetch profile', 'error')
-      })
     })
   })
 })

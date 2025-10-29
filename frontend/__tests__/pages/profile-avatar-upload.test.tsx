@@ -219,7 +219,7 @@ describe('Profile Avatar Upload Feature', () => {
     })
   })
 
-  it('should show error for files larger than 5MB', async () => {
+  it('should show error for files larger than 10MB', async () => {
     render(<MyProfilePage />)
 
     await waitFor(() => {
@@ -228,9 +228,9 @@ describe('Profile Avatar Upload Feature', () => {
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
 
-    // Create a mock file larger than 5MB
-    const largeFile = new File(['x'.repeat(6 * 1024 * 1024)], 'large.png', { type: 'image/png' })
-    Object.defineProperty(largeFile, 'size', { value: 6 * 1024 * 1024 })
+    // Create a mock file larger than 10MB
+    const largeFile = new File(['x'.repeat(11 * 1024 * 1024)], 'large.png', { type: 'image/png' })
+    Object.defineProperty(largeFile, 'size', { value: 11 * 1024 * 1024 })
     Object.defineProperty(fileInput, 'files', {
       value: [largeFile],
     })
@@ -238,7 +238,7 @@ describe('Profile Avatar Upload Feature', () => {
     fireEvent.change(fileInput)
 
     await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith('Image size must be less than 5MB', 'error')
+      expect(mockShowToast).toHaveBeenCalledWith('Image size must be less than 10MB', 'error')
     })
   })
 

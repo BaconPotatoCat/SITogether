@@ -1,6 +1,4 @@
 import Head from 'next/head'
-import { useRouter } from 'next/router'
-import Link from 'next/link'
 import React, { useState, useEffect } from 'react'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -9,31 +7,12 @@ import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 import { fetchWithAuth } from '../../utils/api'
 
-interface User {
-  id: string
-  email: string
-  name: string
-  age: number
-  gender: string
-  role: string
-  course: string | null
-  bio: string | null
-  interests: string[]
-  avatarUrl: string | null
-  verified?: boolean
-  createdAt: string
-  updatedAt: string
-}
-
 type ViewMode = 'menu' | 'edit'
 
 export default function MyProfilePage() {
-  const router = useRouter()
   const { session, status, signOut, refreshSession } = useSession()
   const { isDarkMode, toggleDarkMode } = useTheme()
   const { toasts, showToast, removeToast } = useToast()
-  const [profile, setProfile] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('menu')
   const [editForm, setEditForm] = useState({
     name: '',
@@ -46,52 +25,21 @@ export default function MyProfilePage() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  // Redirect to login if not authenticated
+  // Initialize edit form when session loads
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth')
+    if (session?.user) {
+      setEditForm({
+        name: session.user.name,
+        age: session.user.age,
+        course: session.user.course || '',
+        bio: session.user.bio || '',
+        interests: Array.isArray(session.user.interests) ? session.user.interests.join(', ') : '',
+      })
     }
-  }, [status, router])
-
-  // Fetch current user's profile
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!session?.user?.id) return
-
-      try {
-        setIsLoading(true)
-
-        const response = await fetchWithAuth(`/api/users/${session.user.id}`)
-        const result = await response.json()
-
-        if (result.success && result.data) {
-          setProfile(result.data)
-          setEditForm({
-            name: result.data.name,
-            age: result.data.age,
-            course: result.data.course || '',
-            bio: result.data.bio || '',
-            interests: Array.isArray(result.data.interests) ? result.data.interests.join(', ') : '',
-          })
-        } else {
-          showToast(result.error || 'Failed to fetch profile', 'error')
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error)
-        showToast('An error occurred while fetching your profile', 'error')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (status === 'authenticated') {
-      fetchProfile()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, status])
+  }, [session?.user])
 
   const handleSave = async () => {
-    if (!profile) return
+    if (!session?.user) return
 
     // Validate age
     if (!editForm.age || editForm.age < 18 || editForm.age > 65) {
@@ -102,7 +50,7 @@ export default function MyProfilePage() {
     try {
       setIsSaving(true)
 
-      const response = await fetchWithAuth(`/api/users/${profile.id}`, {
+      const response = await fetchWithAuth(`/api/users/${session.user.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           name: editForm.name,
@@ -119,7 +67,6 @@ export default function MyProfilePage() {
       const result = await response.json()
 
       if (result.success) {
-        setProfile(result.data)
         setViewMode('menu')
         showToast('Profile updated successfully!', 'success')
         // Refresh session to update user data in AuthContext
@@ -136,13 +83,13 @@ export default function MyProfilePage() {
   }
 
   const handleCancel = () => {
-    if (profile) {
+    if (session?.user) {
       setEditForm({
-        name: profile.name,
-        age: profile.age,
-        course: profile.course || '',
-        bio: profile.bio || '',
-        interests: Array.isArray(profile.interests) ? profile.interests.join(', ') : '',
+        name: session.user.name,
+        age: session.user.age,
+        course: session.user.course || '',
+        bio: session.user.bio || '',
+        interests: Array.isArray(session.user.interests) ? session.user.interests.join(', ') : '',
       })
     }
     setViewMode('menu')
@@ -166,9 +113,9 @@ export default function MyProfilePage() {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Image size must be less than 5MB', 'error')
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image size must be less than 10MB', 'error')
       return
     }
 
@@ -184,15 +131,15 @@ export default function MyProfilePage() {
       })
 
       // Update profile with new avatar
-      if (profile) {
-        const response = await fetchWithAuth(`/api/users/${profile.id}`, {
+      if (session?.user) {
+        const response = await fetchWithAuth(`/api/users/${session.user.id}`, {
           method: 'PUT',
           body: JSON.stringify({
-            name: profile.name,
-            age: profile.age,
-            course: profile.course,
-            bio: profile.bio,
-            interests: profile.interests,
+            name: session.user.name,
+            age: session.user.age,
+            course: session.user.course,
+            bio: session.user.bio,
+            interests: session.user.interests,
             avatarUrl: base64String,
           }),
         })
@@ -200,7 +147,6 @@ export default function MyProfilePage() {
         const result = await response.json()
 
         if (result.success) {
-          setProfile(result.data)
           showToast('Profile picture updated successfully!', 'success')
           // Refresh session to update avatar in AuthContext
           await refreshSession()
@@ -221,23 +167,12 @@ export default function MyProfilePage() {
     }
   }
 
-  if (status === 'loading' || isLoading) {
+  if (status === 'loading') {
     return <LoadingSpinner fullScreen message="Loading your profile..." />
   }
 
-  if (status === 'unauthenticated') {
-    return null // Will redirect in useEffect
-  }
-
-  if (!profile) {
-    return (
-      <main className="container">
-        <p className="muted">Profile not found.</p>
-        <Link className="btn" href="/">
-          Back to Home
-        </Link>
-      </main>
-    )
+  if (status === 'unauthenticated' || !session?.user) {
+    return null // Will be redirected by middleware
   }
 
   return (
@@ -254,10 +189,10 @@ export default function MyProfilePage() {
                 <img
                   className="profile-avatar-large"
                   src={
-                    profile?.avatarUrl ||
+                    session.user.avatarUrl ||
                     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
                   }
-                  alt={`${profile?.name} avatar`}
+                  alt={`${session.user.name} avatar`}
                 />
                 <button
                   className="avatar-edit-btn"
@@ -304,7 +239,7 @@ export default function MyProfilePage() {
                   style={{ display: 'none' }}
                 />
               </div>
-              <h2 className="profile-name">{profile?.name}</h2>
+              <h2 className="profile-name">{session.user.name}</h2>
             </div>
 
             <div className="profile-menu-list">
