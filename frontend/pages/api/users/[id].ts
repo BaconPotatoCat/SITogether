@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { fetchWithAuthSSR } from '../../../utils/api'
 
 interface UpdateUserPayload {
   name: string
@@ -79,19 +80,8 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       }
 
       // Call backend API to update user (with authentication)
-      const token = req.cookies?.token
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      }
-
-      // Forward authentication token if present
-      if (token) {
-        headers['Cookie'] = `token=${token}`
-      }
-
-      const response = await fetch(`${backendUrl}/api/users/${id}`, {
+      const response = await fetchWithAuthSSR(req, `${backendUrl}/api/users/${id}`, {
         method: 'PUT',
-        headers,
         body: JSON.stringify(updatePayload),
       })
 

@@ -36,6 +36,7 @@ jest.mock('../../components/LoadingSpinner', () => {
 
 const mockPush = jest.fn()
 const mockSignOut = jest.fn()
+const mockRefreshSession = jest.fn()
 const mockShowToast = jest.fn()
 const mockRemoveToast = jest.fn()
 
@@ -80,6 +81,7 @@ describe('Profile Edit Feature', () => {
       },
       status: 'authenticated',
       signOut: mockSignOut,
+      refreshSession: mockRefreshSession,
     })
 
     global.fetch = jest.fn(() =>

@@ -42,6 +42,7 @@ jest.mock('../../components/LoadingSpinner', () => {
 
 const mockPush = jest.fn()
 const mockSignOut = jest.fn()
+const mockRefreshSession = jest.fn()
 const mockToggleDarkMode = jest.fn()
 const mockShowToast = jest.fn()
 const mockRemoveToast = jest.fn()
@@ -71,6 +72,7 @@ describe('MyProfilePage', () => {
         session: null,
         status: 'unauthenticated',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
 
       render(<MyProfilePage />)
@@ -83,6 +85,7 @@ describe('MyProfilePage', () => {
         session: null,
         status: 'loading',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
 
       render(<MyProfilePage />)
@@ -104,6 +107,7 @@ describe('MyProfilePage', () => {
         },
         status: 'authenticated',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
 
       global.fetch = jest.fn(() =>
@@ -176,6 +180,7 @@ describe('MyProfilePage', () => {
         },
         status: 'authenticated',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
 
       global.fetch = jest.fn(() =>
@@ -222,6 +227,7 @@ describe('MyProfilePage', () => {
         },
         status: 'authenticated',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
 
       global.fetch = jest.fn(() =>
@@ -268,6 +274,7 @@ describe('MyProfilePage', () => {
         },
         status: 'authenticated',
         signOut: mockSignOut,
+        refreshSession: mockRefreshSession,
       })
     })
 

@@ -29,7 +29,7 @@ type ViewMode = 'menu' | 'edit'
 
 export default function MyProfilePage() {
   const router = useRouter()
-  const { session, status, signOut } = useSession()
+  const { session, status, signOut, refreshSession } = useSession()
   const { isDarkMode, toggleDarkMode } = useTheme()
   const { toasts, showToast, removeToast } = useToast()
   const [profile, setProfile] = useState<User | null>(null)
@@ -87,7 +87,8 @@ export default function MyProfilePage() {
     if (status === 'authenticated') {
       fetchProfile()
     }
-  }, [session?.user?.id, status, showToast])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, status])
 
   const handleSave = async () => {
     if (!profile) return
@@ -121,6 +122,8 @@ export default function MyProfilePage() {
         setProfile(result.data)
         setViewMode('menu')
         showToast('Profile updated successfully!', 'success')
+        // Refresh session to update user data in AuthContext
+        await refreshSession()
       } else {
         showToast(result.error || 'Failed to update profile', 'error')
       }
@@ -199,6 +202,8 @@ export default function MyProfilePage() {
         if (result.success) {
           setProfile(result.data)
           showToast('Profile picture updated successfully!', 'success')
+          // Refresh session to update avatar in AuthContext
+          await refreshSession()
         } else {
           showToast(result.error || 'Failed to update profile picture', 'error')
           console.error('Failed to update profile:', result.error)

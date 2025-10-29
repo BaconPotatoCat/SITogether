@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useSession } from '../../contexts/AuthContext'
+import { fetchWithAuth } from '../../utils/api'
 
 interface User {
   id: string
@@ -42,7 +43,7 @@ export default function ProfilePage() {
         setIsLoading(true)
 
         // Get user from database
-        const response = await fetch(`/api/users/${id}`)
+        const response = await fetchWithAuth(`/api/users/${id}`)
         const result = await response.json()
 
         if (result.success && result.data) {
@@ -104,11 +105,11 @@ export default function ProfilePage() {
           >
             The profile you&apos;re looking for doesn&apos;t exist or may have been removed.
           </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <Link className="btn primary" href="/">
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <Link className="btn primary" href="/" style={{ textAlign: 'center' }}>
               Back to Discover
             </Link>
-            <Link className="btn ghost" href="/profile">
+            <Link className="btn ghost" href="/profile" style={{ textAlign: 'center' }}>
               My Profile
             </Link>
           </div>
@@ -129,7 +130,7 @@ export default function ProfilePage() {
             className="profile-avatar"
             src={
               profile.avatarUrl ||
-              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687'
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&size=400&background=6366f1&color=ffffff&bold=true`
             }
             alt={`${profile.name} avatar`}
           />
@@ -153,10 +154,10 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{ marginTop: 16, display: 'flex', gap: '0.5rem' }}>
-              <Link className="btn primary" href="/chat">
+              <Link className="btn primary" href="/chat" style={{ textAlign: 'center' }}>
                 Message
               </Link>
-              <Link className="btn ghost" href="/">
+              <Link className="btn ghost" href="/" style={{ textAlign: 'center' }}>
                 Back to Discover
               </Link>
             </div>
