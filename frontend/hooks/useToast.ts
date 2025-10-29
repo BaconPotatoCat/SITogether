@@ -6,11 +6,13 @@ export interface Toast {
   type: 'success' | 'error' | 'warning'
 }
 
+let toastCounter = 0
+
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'error') => {
-    const id = Date.now()
+    const id = Date.now() + toastCounter++
     setToasts((prev) => [...prev, { id, message, type }])
 
     // Auto remove toast after 5 seconds

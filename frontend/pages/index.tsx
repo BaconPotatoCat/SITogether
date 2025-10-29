@@ -411,6 +411,19 @@ export default function Home() {
                             </span>
                           ))}
                         </div>
+                        {/* View Profile Button */}
+                        <button
+                          className="card-view-profile"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.location.href = `/profile/${topCard.id}`
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          title="View full profile"
+                        >
+                          ▼
+                        </button>
                       </div>
                     </article>
                   )}
