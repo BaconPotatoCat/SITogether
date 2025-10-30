@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
 import { fetchWithAuth } from '../utils/api'
+import IntroMessageModal from '../components/IntroMessageModal'
 
 interface Profile {
   id: string
@@ -60,6 +61,10 @@ export default function Home() {
   const topCard = deck[0]
   const restCards = deck.slice(1)
 
+  // Intro message modal state
+  const [isIntroOpen, setIsIntroOpen] = useState(false)
+  const [pendingLikeUserId, setPendingLikeUserId] = useState<string | null>(null)
+
   const resetDrag = () => setDrag({ x: 0, y: 0, active: false })
 
   const handleSwipeAction = async (
@@ -111,7 +116,19 @@ export default function Home() {
     }
   }
 
-  const onLike = () => handleSwipeAction('/api/likes', { likedId: topCard.id }, 500, 'like')
+  const onLike = () => {
+    if (!topCard) return
+    setPendingLikeUserId(topCard.id)
+    setIsIntroOpen(true)
+  }
+
+  const submitIntro = (message: string | null) => {
+    if (!pendingLikeUserId) return setIsIntroOpen(false)
+    const body = message ? { likedId: pendingLikeUserId, introMessage: message } : { likedId: pendingLikeUserId }
+    handleSwipeAction('/api/likes', body, 500, 'like')
+    setIsIntroOpen(false)
+    setPendingLikeUserId(null)
+  }
   const onPass = () => handleSwipeAction('/api/passes', { passedId: topCard.id }, -500, 'pass')
 
   const pointerDown = (clientX: number, clientY: number) => {
@@ -221,6 +238,14 @@ export default function Home() {
       </Head>
 
       <main className="container">
+        <IntroMessageModal
+          isOpen={isIntroOpen}
+          onCancel={() => {
+            setIsIntroOpen(false)
+            setPendingLikeUserId(null)
+          }}
+          onSubmit={submitIntro}
+        />
         {/* Temporary Health Check Section */}
         <section
           style={{

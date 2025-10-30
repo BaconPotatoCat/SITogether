@@ -1149,7 +1149,7 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
 app.post('/api/likes', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
-    const { likedId } = req.body;
+    const { likedId, introMessage } = req.body;
 
     console.log(`Like attempt: likerId=${likerId}, likedId=${likedId}`);
 
@@ -1207,6 +1207,54 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
+    // Check if there is already a reciprocal like (match)
+    const reciprocalLike = await prisma.userLikes.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likedId,
+          likedId: likerId,
+        },
+      },
+    });
+
+    const isMatch = !!reciprocalLike;
+
+    // Ensure a conversation exists between the pair (ordered for uniqueness)
+    const userAId = likerId < likedId ? likerId : likedId;
+    const userBId = likerId < likedId ? likedId : likerId;
+
+    let conversation = await prisma.conversation.findUnique({
+      where: { userAId_userBId: { userAId, userBId } },
+    });
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          isLocked: !isMatch, // unlock immediately if already matched
+        },
+      });
+    } else if (isMatch && conversation.isLocked) {
+      // Unlock on match
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { isLocked: false },
+      });
+    }
+
+    // If intro message provided, store it as the first message (allowed even if locked)
+    let createdIntroMessage = null;
+    if (introMessage && typeof introMessage === 'string' && introMessage.trim().length > 0) {
+      createdIntroMessage = await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: likerId,
+          content: introMessage.trim(),
+        },
+      });
+    }
+
     // Get updated points data (no need to update flags anymore)
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId: likerId },
@@ -1221,6 +1269,9 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       success: true,
       message: 'User liked successfully',
       like: like,
+      matched: isMatch,
+      conversation: { id: conversation.id, isLocked: conversation.isLocked },
+      introMessage: createdIntroMessage ? { id: createdIntroMessage.id } : null,
       points: userPoints,
     });
   } catch (error) {
@@ -1304,6 +1355,119 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
       error: 'Failed to unlike user',
       message: error.message,
     });
+  }
+});
+
+// Conversations API
+// List conversations for current user
+app.get('/api/conversations', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        OR: [{ userAId: userId }, { userBId: userId }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    const result = await Promise.all(
+      conversations.map(async (c) => {
+        const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
+        const otherUser = await prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: { id: true, name: true, avatarUrl: true },
+        });
+        return {
+          id: c.id,
+          isLocked: c.isLocked,
+          lastMessage: c.messages[0] || null,
+          otherUser,
+        };
+      })
+    );
+
+    res.json({ success: true, conversations: result });
+  } catch (error) {
+    console.error('List conversations error:', error);
+    res.status(500).json({ success: false, error: 'Failed to list conversations', message: error.message });
+  }
+});
+
+// Get messages in a conversation
+app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation) return res.status(404).json({ success: false, error: 'Conversation not found' });
+
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Include lightweight participant details to render avatars in chat UI
+    const [userA, userB] = await Promise.all([
+      prisma.user.findUnique({ where: { id: conversation.userAId }, select: { id: true, name: true, avatarUrl: true } }),
+      prisma.user.findUnique({ where: { id: conversation.userBId }, select: { id: true, name: true, avatarUrl: true } }),
+    ]);
+    const me = userA && userA.id === userId ? userA : userB;
+    const other = userA && userA.id === userId ? userB : userA;
+
+    res.json({ success: true, isLocked: conversation.isLocked, messages, participants: { me, other }, currentUserId: userId });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get messages', message: error.message });
+  }
+});
+
+// Send a message in a conversation (blocked if locked)
+app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+    const { content } = req.body;
+
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'content is required' });
+    }
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation) return res.status(404).json({ success: false, error: 'Conversation not found' });
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    if (conversation.isLocked) {
+      return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId: id,
+        senderId: userId,
+        content: content.trim(),
+      },
+    });
+
+    // touch conversation updatedAt
+    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send message', message: error.message });
   }
 });
 
