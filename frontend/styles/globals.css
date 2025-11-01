@@ -466,13 +466,12 @@ html.dark .nav-link.active {
   bottom: 0;
   left: 0;
   right: 0;
-  display: none;
   z-index: 20;
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
   padding: 0.5rem 1rem;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
   gap: 0.5rem;
   transition:
     background-color 0.3s ease,
@@ -593,6 +592,7 @@ html.dark .card {
 .card-info {
   padding: 1rem 1rem 1.25rem 1rem;
   transition: background-color 0.3s ease;
+  overflow: visible;
 }
 
 html.dark .card-info {
@@ -2577,6 +2577,53 @@ html.dark .success-alert {
   color: #86efac;
 }
 
+/* Liked Profiles Page */
+.liked-profile-item {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.3s ease;
+}
+
+.liked-profile-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border-color: #6366f1;
+}
+
+html.dark .liked-profile-item {
+  background: #1f2937;
+  border-color: #374151;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+html.dark .liked-profile-item:hover {
+  background: #374151;
+  border-color: #6366f1;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.liked-profile-action {
+  color: #6366f1;
+  transition: color 0.3s ease;
+}
+
+html.dark .liked-profile-action {
+  color: #818cf8;
+}
+
+.profile-modal-content {
+  background: #ffffff;
+  transition: background-color 0.3s ease;
+}
+
+html.dark .profile-modal-content {
+  background: #1f2937;
+}
+
 /* Mobile Responsive */
 @media (max-width: 720px) {
   .profile-page-container {
@@ -2649,10 +2696,17 @@ html.dark .profile {
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
 }
 
+html.dark .profile-avatar {
+  background: #111827;
+}
+
 .profile-avatar {
   width: 100%;
-  height: 320px;
-  object-fit: cover;
+  height: auto;
+  max-height: 600px;
+  object-fit: contain;
+  display: block;
+  background: #f9fafb;
 }
 
 .profile-body {
@@ -2910,34 +2964,50 @@ html.dark .dropdown-item:hover {
 .card-view-profile {
   display: block;
   width: 100%;
-  padding: 12px;
+  padding: 12px 16px;
   margin-top: 16px;
-  background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  font-size: 20px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #666;
+  color: #374151;
+  text-align: center;
+  font-family: inherit;
+  line-height: 1.5;
+  box-sizing: border-box;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .card-view-profile:hover {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.2);
-  transform: translateY(2px);
+  background: #f3f4f6;
+  border-color: #6366f1;
+  color: #6366f1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .card-view-profile:active {
   transform: translateY(0);
-  background: rgba(0, 0, 0, 0.1);
+  background: #e5e7eb;
 }
 
 html.dark .card-view-profile {
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #ccc;
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
 }
 
 html.dark .card-view-profile:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: #4b5563;
+  border-color: #818cf8;
+  color: #a5b4fc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .card-view-profile:active {
+  background: #4b5563;
 }

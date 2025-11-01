@@ -1,13 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
+  console.log('[pending-intro] Route hit:', req.method, req.url)
+  
+  if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
-  // Handle POST request - like a user
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes`
+    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes/pending-intro`
+    console.log('[pending-intro] Backend URL:', backendUrl)
 
     // Get token from cookie
     const token = req.cookies.token
@@ -22,9 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const response = await fetch(backendUrl, {
-      method: 'POST',
+      method: 'GET',
       headers,
-      body: JSON.stringify(req.body),
       credentials: 'include',
     })
 
@@ -36,11 +37,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(response.status).json(data)
     }
   } catch (error) {
-    console.error('Failed to like user:', error)
+    console.error('Failed to get pending intro likes:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to like user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Failed to get pending intro likes: ${error instanceof Error ? error.message : 'Unknown error'}`,
       message: 'Backend container may not be running or accessible',
     })
   }
 }
+

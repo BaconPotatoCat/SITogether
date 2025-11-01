@@ -4,9 +4,17 @@ interface IntroMessageModalProps {
   isOpen: boolean
   onCancel: () => void
   onSubmit: (message: string | null) => void
+  required?: boolean
+  submitButtonText?: string
 }
 
-export default function IntroMessageModal({ isOpen, onCancel, onSubmit }: IntroMessageModalProps) {
+export default function IntroMessageModal({
+  isOpen,
+  onCancel,
+  onSubmit,
+  required = false,
+  submitButtonText = 'Send like',
+}: IntroMessageModalProps) {
   const [message, setMessage] = useState('')
 
   if (!isOpen) return null
@@ -34,15 +42,23 @@ export default function IntroMessageModal({ isOpen, onCancel, onSubmit }: IntroM
           boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
         }}
       >
-        <h3 style={{ marginTop: 0, marginBottom: 8 }}>Add an intro message (optional)</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 8 }}>
+          {required ? 'Send an introduction' : 'Add an intro message (optional)'}
+        </h3>
         <p style={{ marginTop: 0, marginBottom: 12, color: '#555' }}>
           Say hi and share why you want to connect.
         </p>
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            // Prevent extremely long input
+            if (e.target.value.length <= 5000) {
+              setMessage(e.target.value)
+            }
+          }}
           rows={5}
           placeholder="Write a friendly opener…"
+          maxLength={5000}
           style={{
             width: '100%',
             resize: 'vertical',
@@ -59,9 +75,15 @@ export default function IntroMessageModal({ isOpen, onCancel, onSubmit }: IntroM
           </button>
           <button
             className="btn"
-            onClick={() => onSubmit(message.trim().length > 0 ? message.trim() : null)}
+            onClick={() => {
+              if (required && message.trim().length === 0) {
+                return
+              }
+              onSubmit(message.trim().length > 0 ? message.trim() : null)
+            }}
+            disabled={required && message.trim().length === 0}
           >
-            Send like
+            {submitButtonText}
           </button>
         </div>
       </div>

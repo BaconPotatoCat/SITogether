@@ -78,6 +78,15 @@ export default function ConversationPage() {
   const onSend = async (e: FormEvent) => {
     e.preventDefault()
     if (!text.trim() || sending || !id || typeof id !== 'string') return
+    
+    // Client-side validation
+    const { validateMessageContent } = await import('../../utils/messageValidation')
+    const validation = validateMessageContent(text)
+    if (!validation.isValid) {
+      alert(validation.error || 'Invalid message')
+      return
+    }
+    
     setSending(true)
     try {
       const res = await fetch(`/api/conversations/${id}/messages`, {
@@ -89,6 +98,11 @@ export default function ConversationPage() {
       if (res.status === 423) {
         // locked
         setIsLocked(true)
+        return
+      }
+      if (res.status === 400) {
+        // Validation error from backend
+        alert(data.error || 'Invalid message')
         return
       }
       if (data.success) {
@@ -145,10 +159,16 @@ export default function ConversationPage() {
               <input
                 type="text"
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  // Prevent extremely long input
+                  if (e.target.value.length <= 5000) {
+                    setText(e.target.value)
+                  }
+                }}
                 placeholder={isLocked ? 'Chat is locked' : 'Type a message'}
                 disabled={isLocked}
                 style={{ flex: 1, padding: 10, borderRadius: 6, border: '1px solid #ddd' }}
+                maxLength={5000}
               />
               <button className="btn" type="submit" disabled={isLocked || sending || !text.trim()}>
                 Send
