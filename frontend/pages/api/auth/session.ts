@@ -14,7 +14,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Verify token with backend
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/session`
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
+      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
+      'http://localhost:5000'
+    const backendUrl = `${baseUrl}/api/auth/session`
 
     const response = await fetch(backendUrl, {
       method: 'GET',

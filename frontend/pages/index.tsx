@@ -26,6 +26,10 @@ export default function Home() {
   const [healthCheckResult, setHealthCheckResult] = useState<string | null>(null)
   const [isCheckingHealth, setIsCheckingHealth] = useState(false)
 
+  // Password reset state
+  const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null)
+  const [isRequestingReset, setIsRequestingReset] = useState(false)
+
   // Refs for dynamic geometry
   const deckRef = useRef<HTMLDivElement | null>(null)
   const nextRef = useRef<HTMLElement | null>(null)
@@ -181,6 +185,33 @@ export default function Home() {
     }
   }
 
+  // Request password reset function
+  const requestPasswordReset = async () => {
+    setIsRequestingReset(true)
+    setResetPasswordResult(null)
+
+    try {
+      const response = await fetch('/api/auth/reset-password-request', {
+        method: 'POST',
+        credentials: 'include',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setResetPasswordResult(`✅ ${result.message || 'Password reset link sent successfully!'}`)
+      } else {
+        setResetPasswordResult(`❌ ${result.error || 'Failed to send password reset link'}`)
+      }
+    } catch (error) {
+      setResetPasswordResult(
+        `❌ Failed to request password reset: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
+    } finally {
+      setIsRequestingReset(false)
+    }
+  }
+
   return (
     <>
       <Head>
@@ -204,22 +235,39 @@ export default function Home() {
           <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#333' }}>
             🔧 Backend Health Check (Temporary)
           </h2>
-          <button
-            onClick={checkBackendHealth}
-            disabled={isCheckingHealth}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: isCheckingHealth ? '#6c757d' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              marginBottom: '15px',
-            }}
-          >
-            {isCheckingHealth ? '🔄 Checking...' : '🏥 Check Backend Health'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
+            <button
+              onClick={checkBackendHealth}
+              disabled={isCheckingHealth}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: isCheckingHealth ? '#6c757d' : '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              {isCheckingHealth ? '🔄 Checking...' : '🏥 Check Backend Health'}
+            </button>
+
+            <button
+              onClick={requestPasswordReset}
+              disabled={isRequestingReset}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: isRequestingReset ? '#6c757d' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isRequestingReset ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+              }}
+            >
+              {isRequestingReset ? '🔄 Sending...' : '🔑 Request Password Reset'}
+            </button>
+          </div>
 
           {healthCheckResult && (
             <div
@@ -235,6 +283,24 @@ export default function Home() {
               }}
             >
               {healthCheckResult}
+            </div>
+          )}
+
+          {resetPasswordResult && (
+            <div
+              style={{
+                padding: '15px',
+                backgroundColor: resetPasswordResult.includes('✅') ? '#d4edda' : '#f8d7da',
+                border: `1px solid ${resetPasswordResult.includes('✅') ? '#c3e6cb' : '#f5c6cb'}`,
+                borderRadius: '4px',
+                color: resetPasswordResult.includes('✅') ? '#155724' : '#721c24',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                whiteSpace: 'pre-line',
+                marginTop: '15px',
+              }}
+            >
+              {resetPasswordResult}
             </div>
           )}
         </section>

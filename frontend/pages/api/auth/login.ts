@@ -6,7 +6,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/login`
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
+      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
+      'http://localhost:5000'
+    const backendUrl = `${baseUrl}/api/auth/login`
 
     const response = await fetch(backendUrl, {
       method: 'POST',

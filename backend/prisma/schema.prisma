@@ -27,6 +27,26 @@ model User {
   verificationTokenExpires DateTime? @map("verification_token_expires")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+  banned     Boolean  @default(false)
+  bannedAt   DateTime? @map("banned_at")
+  reports    Report[] @relation("ReportedUser")
+  resetToken         String?   @map("reset_token")
+  resetTokenExpires DateTime? @map("reset_token_expires")
 
   @@map("users")
+}
+
+model Report {
+  id          String   @id @default(uuid()) @db.Uuid
+  reportedId  String   @map("reported_id") @db.Uuid
+  reportedBy  String   @map("reported_by")
+  reason      String
+  description String?
+  status      String   @default("Pending") // Pending, Reviewed, Resolved
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reportedUser User @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
 }

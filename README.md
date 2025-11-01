@@ -8,7 +8,7 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
-- **Email Verification**: Automated email verification system with secure tokens
+- **Account Verification**: Email verification system for user accounts
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development

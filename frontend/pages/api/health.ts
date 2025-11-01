@@ -6,9 +6,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Make request from frontend container to backend container
-    // Using the environment variable for backend URL
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/health`
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
+      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
+      'http://localhost:5000'
+    const backendUrl = `${baseUrl}/health`
 
     const response = await fetch(backendUrl, {
       method: 'GET',

@@ -5,36 +5,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const { email } = req.body
-
-  if (!email) {
-    return res.status(400).json({
-      success: false,
-      error: 'Email is required',
-    })
-  }
-
   try {
+    const { token, password } = req.body
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and password are required',
+      })
+    }
+
+    // Select backend URL based on environment
     const baseUrl =
       process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
       process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
       'http://localhost:5000'
-    const response = await fetch(`${baseUrl}/api/auth/resend-verification`, {
+    const backendUrl = `${baseUrl}/api/auth/reset-password`
+
+    // Forward request to backend
+    const response = await fetch(backendUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token,
+        password,
+      }),
     })
 
     const data = await response.json()
 
-    // Forward the response from backend
+    // Forward response from backend
     return res.status(response.status).json(data)
   } catch (error) {
-    console.error('Resend verification proxy error:', error)
+    console.error('Reset password error:', error)
     return res.status(500).json({
       success: false,
-      error: 'Failed to resend verification email',
+      error: 'Failed to reset password',
       message: error instanceof Error ? error.message : 'Unknown error',
     })
   }
 }
+

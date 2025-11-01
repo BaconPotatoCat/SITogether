@@ -1,4 +1,43 @@
-const jwt = require('jsonwebtoken');
+// Mock JWT
+jest.mock('jsonwebtoken', () => ({
+  verify: jest.fn((token, _secret) => {
+    if (token === 'valid-token') {
+      return { userId: 'test-user-id' };
+    }
+    if (token === 'cookie-token') {
+      return { userId: 'cookie-user' };
+    }
+    if (token === 'header-token') {
+      return { userId: 'header-user' };
+    }
+    if (token === 'expired-token') {
+      const error = new Error('Token expired');
+      error.name = 'TokenExpiredError';
+      throw error;
+    }
+    const error = new Error('Invalid token');
+    error.name = 'JsonWebTokenError';
+    throw error;
+  }),
+  sign: jest.fn((_payload, _secret, _options) => {
+    if (_options?.expiresIn === '-1h') {
+      return 'expired-token';
+    }
+    return 'valid-token';
+  }),
+}));
+
+// Mock Prisma client
+jest.mock('../../lib/prisma', () => {
+  const mockPrisma = {
+    user: {
+      findUnique: jest.fn(),
+    },
+  };
+  return mockPrisma;
+});
+
+const mockPrismaClient = require('../../lib/prisma');
 const { authenticateToken } = require('../../middleware/auth');
 
 describe('Authentication Middleware', () => {
@@ -21,11 +60,11 @@ describe('Authentication Middleware', () => {
   });
 
   describe('authenticateToken', () => {
-    it('should call next() with valid token in cookie', () => {
-      const token = jwt.sign({ userId: 'test-user-id' }, process.env.JWT_SECRET);
-      req.cookies.token = token;
+    it('should call next() with valid token in cookie', async () => {
+      req.cookies.token = 'valid-token';
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'test-user-id', banned: false });
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
 
       expect(next).toHaveBeenCalled();
       expect(req.user).toBeDefined();
@@ -33,19 +72,19 @@ describe('Authentication Middleware', () => {
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    it('should call next() with valid token in authorization header', () => {
-      const token = jwt.sign({ userId: 'test-user-id' }, process.env.JWT_SECRET);
-      req.headers.authorization = `Bearer ${token}`;
+    it('should call next() with valid token in authorization header', async () => {
+      req.headers.authorization = 'Bearer valid-token';
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'test-user-id', banned: false });
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
 
       expect(next).toHaveBeenCalled();
       expect(req.user).toBeDefined();
       expect(req.user.userId).toBe('test-user-id');
     });
 
-    it('should return 401 when no token is provided', () => {
-      authenticateToken(req, res, next);
+    it('should return 401 when no token is provided', async () => {
+      await authenticateToken(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
@@ -55,10 +94,10 @@ describe('Authentication Middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should return 403 when token is invalid', () => {
+    it('should return 403 when token is invalid', async () => {
       req.cookies.token = 'invalid-token';
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
@@ -68,13 +107,10 @@ describe('Authentication Middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('should return 401 when token is expired', () => {
-      const expiredToken = jwt.sign({ userId: 'test-user-id' }, process.env.JWT_SECRET, {
-        expiresIn: '-1h',
-      });
-      req.cookies.token = expiredToken;
+    it('should return 401 when token is expired', async () => {
+      req.cookies.token = 'expired-token';
 
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
@@ -83,14 +119,12 @@ describe('Authentication Middleware', () => {
       });
     });
 
-    it('should prefer cookie over authorization header', () => {
-      const cookieToken = jwt.sign({ userId: 'cookie-user' }, process.env.JWT_SECRET);
-      const headerToken = jwt.sign({ userId: 'header-user' }, process.env.JWT_SECRET);
+    it('should prefer cookie over authorization header', async () => {
+      req.cookies.token = 'cookie-token';
+      req.headers.authorization = 'Bearer header-token';
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'cookie-user', banned: false });
 
-      req.cookies.token = cookieToken;
-      req.headers.authorization = `Bearer ${headerToken}`;
-
-      authenticateToken(req, res, next);
+      await authenticateToken(req, res, next);
 
       expect(next).toHaveBeenCalled();
       expect(req.user.userId).toBe('cookie-user');
