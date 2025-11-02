@@ -5,9 +5,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
-  // Handle POST request - like a user
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes`
+    const { userId } = req.query
+    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes/${userId}/intro`
 
     // Get token from cookie
     const token = req.cookies.token
@@ -36,10 +36,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(response.status).json(data)
     }
   } catch (error) {
-    console.error('Failed to like user:', error)
+    console.error('Failed to send intro message:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to like user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Failed to send intro message: ${error instanceof Error ? error.message : 'Unknown error'}`,
       message: 'Backend container may not be running or accessible',
     })
   }
