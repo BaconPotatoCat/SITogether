@@ -54,7 +54,10 @@ describe('Introduction Message API Endpoints', () => {
         const { introMessage } = req.body;
 
         // Validate user ID format
-        const { validateUserId, validateAndSanitizeMessage } = require('../../utils/messageValidation');
+        const {
+          validateUserId,
+          validateAndSanitizeMessage,
+        } = require('../../utils/messageValidation');
         if (!validateUserId(likedId)) {
           return res.status(400).json({
             success: false,
@@ -373,4 +376,3 @@ describe('Introduction Message API Endpoints', () => {
     });
   });
 });
-

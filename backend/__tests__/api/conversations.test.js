@@ -49,7 +49,10 @@ describe('Conversations API Endpoints', () => {
         const { content } = req.body;
 
         // Validate conversation ID format
-        const { validateConversationId, validateAndSanitizeMessage } = require('../../utils/messageValidation');
+        const {
+          validateConversationId,
+          validateAndSanitizeMessage,
+        } = require('../../utils/messageValidation');
         if (!validateConversationId(id)) {
           return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
         }
@@ -61,7 +64,8 @@ describe('Conversations API Endpoints', () => {
         }
 
         const conversation = await mockPrismaClient.conversation.findUnique({ where: { id } });
-        if (!conversation) return res.status(404).json({ success: false, error: 'Conversation not found' });
+        if (!conversation)
+          return res.status(404).json({ success: false, error: 'Conversation not found' });
         if (conversation.userAId !== userId && conversation.userBId !== userId) {
           return res.status(403).json({ success: false, error: 'Forbidden' });
         }
@@ -77,12 +81,17 @@ describe('Conversations API Endpoints', () => {
           },
         });
 
-        await mockPrismaClient.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+        await mockPrismaClient.conversation.update({
+          where: { id },
+          data: { updatedAt: new Date() },
+        });
 
         res.status(201).json({ success: true, message });
       } catch (error) {
         console.error('Send message error:', error);
-        res.status(500).json({ success: false, error: 'Failed to send message', message: error.message });
+        res
+          .status(500)
+          .json({ success: false, error: 'Failed to send message', message: error.message });
       }
     });
 
@@ -323,4 +332,3 @@ describe('Conversations API Endpoints', () => {
     });
   });
 });
-

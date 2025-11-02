@@ -15,7 +15,7 @@ const MIN_MESSAGE_LENGTH = 1;
  */
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
-  
+
   const map = {
     '&': '&amp;',
     '<': '&lt;',
@@ -23,7 +23,7 @@ function escapeHtml(str) {
     '"': '&quot;',
     "'": '&#039;',
   };
-  
+
   return str.replace(/[&<>"']/g, (m) => map[m]);
 }
 
@@ -34,31 +34,31 @@ function escapeHtml(str) {
  */
 function removeDangerousPatterns(str) {
   if (typeof str !== 'string') return '';
-  
+
   // Remove javascript: protocol
   let cleaned = str.replace(/javascript:/gi, '');
-  
+
   // Remove data: URLs (can be used for XSS)
   cleaned = cleaned.replace(/data:(?:image|text|application)\/[^;]*;base64,/gi, '');
-  
+
   // Remove on* event handlers (onclick, onerror, etc.)
   cleaned = cleaned.replace(/\bon\w+\s*=/gi, '');
-  
-  // Remove script tags
-  cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  
-  // Remove iframe tags
-  cleaned = cleaned.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
-  
-  // Remove style tags
-  cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-  
-  // Remove object/embed tags
-  cleaned = cleaned.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
-  cleaned = cleaned.replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '');
+
+  // Remove script tags (simplified regex to avoid catastrophic backtracking)
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+  // Remove iframe tags (simplified regex to avoid catastrophic backtracking)
+  cleaned = cleaned.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+
+  // Remove style tags (simplified regex to avoid catastrophic backtracking)
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  // Remove object/embed tags (simplified regex to avoid catastrophic backtracking)
+  cleaned = cleaned.replace(/<object[\s\S]*?<\/object>/gi, '');
+  cleaned = cleaned.replace(/<embed[\s\S]*?<\/embed>/gi, '');
   // Also match self-closing embed tags
   cleaned = cleaned.replace(/<embed\b[^>]*\/?>/gi, '');
-  
+
   return cleaned;
 }
 
@@ -69,11 +69,11 @@ function removeDangerousPatterns(str) {
  */
 function normalizeUnicode(str) {
   if (typeof str !== 'string') return '';
-  
+
   // Remove zero-width characters that can be used for obfuscation
   const zeroWidthChars = /[\u200B-\u200D\uFEFF\u00AD]/g;
   let normalized = str.replace(zeroWidthChars, '');
-  
+
   // Normalize Unicode to NFC form
   try {
     normalized = normalized.normalize('NFC');
@@ -81,7 +81,7 @@ function normalizeUnicode(str) {
     // If normalization fails, return original (trimmed)
     return normalized.trim();
   }
-  
+
   return normalized;
 }
 
@@ -150,7 +150,7 @@ function validateAndSanitizeMessage(content) {
   // Escape HTML to prevent XSS (this should be done when displaying, not storing)
   // For storage, we keep the text as-is but validated
   // The HTML escaping should happen in the frontend when rendering
-  
+
   return {
     isValid: true,
     sanitized: sanitized,
@@ -165,7 +165,7 @@ function validateAndSanitizeMessage(content) {
  */
 function validateConversationId(id) {
   if (!id || typeof id !== 'string') return false;
-  
+
   // UUID v4 pattern
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidPattern.test(id);
@@ -178,7 +178,7 @@ function validateConversationId(id) {
  */
 function validateUserId(id) {
   if (!id || typeof id !== 'string') return false;
-  
+
   // UUID v4 pattern
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidPattern.test(id);
@@ -192,4 +192,3 @@ module.exports = {
   MIN_MESSAGE_LENGTH,
   escapeHtml, // Export for frontend use if needed
 };
-

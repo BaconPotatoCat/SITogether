@@ -1229,7 +1229,7 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
 
     // Check which likes have intro messages
     const likesWithoutIntro = [];
-    
+
     for (const like of likes) {
       const likedId = like.likedId;
       // Find conversation between the two users
@@ -1381,7 +1381,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       // Validate and sanitize intro message
       const { validateAndSanitizeMessage } = require('./utils/messageValidation');
       const validation = validateAndSanitizeMessage(introMessage);
-      
+
       if (validation.isValid) {
         createdIntroMessage = await prisma.message.create({
           data: {
@@ -1646,7 +1646,9 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
     res.json({ success: true, conversations: result });
   } catch (error) {
     console.error('List conversations error:', error);
-    res.status(500).json({ success: false, error: 'Failed to list conversations', message: error.message });
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to list conversations', message: error.message });
   }
 });
 
@@ -1657,7 +1659,8 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     const { id } = req.params;
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
-    if (!conversation) return res.status(404).json({ success: false, error: 'Conversation not found' });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
 
     if (conversation.userAId !== userId && conversation.userBId !== userId) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
@@ -1670,16 +1673,30 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
 
     // Include lightweight participant details to render avatars in chat UI
     const [userA, userB] = await Promise.all([
-      prisma.user.findUnique({ where: { id: conversation.userAId }, select: { id: true, name: true, avatarUrl: true } }),
-      prisma.user.findUnique({ where: { id: conversation.userBId }, select: { id: true, name: true, avatarUrl: true } }),
+      prisma.user.findUnique({
+        where: { id: conversation.userAId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: conversation.userBId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
     ]);
     const me = userA && userA.id === userId ? userA : userB;
     const other = userA && userA.id === userId ? userB : userA;
 
-    res.json({ success: true, isLocked: conversation.isLocked, messages, participants: { me, other }, currentUserId: userId });
+    res.json({
+      success: true,
+      isLocked: conversation.isLocked,
+      messages,
+      participants: { me, other },
+      currentUserId: userId,
+    });
   } catch (error) {
     console.error('Get messages error:', error);
-    res.status(500).json({ success: false, error: 'Failed to get messages', message: error.message });
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to get messages', message: error.message });
   }
 });
 
@@ -1691,7 +1708,10 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     const { content } = req.body;
 
     // Validate conversation ID format
-    const { validateConversationId, validateAndSanitizeMessage } = require('./utils/messageValidation');
+    const {
+      validateConversationId,
+      validateAndSanitizeMessage,
+    } = require('./utils/messageValidation');
     if (!validateConversationId(id)) {
       return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
     }
@@ -1703,7 +1723,8 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     }
 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
-    if (!conversation) return res.status(404).json({ success: false, error: 'Conversation not found' });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
     if (conversation.userAId !== userId && conversation.userBId !== userId) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
@@ -1725,7 +1746,9 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     res.status(201).json({ success: true, message });
   } catch (error) {
     console.error('Send message error:', error);
-    res.status(500).json({ success: false, error: 'Failed to send message', message: error.message });
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to send message', message: error.message });
   }
 });
 

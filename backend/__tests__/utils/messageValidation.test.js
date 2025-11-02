@@ -82,7 +82,9 @@ describe('Message Validation Utility', () => {
         const longMessage = 'a'.repeat(MAX_MESSAGE_LENGTH + 1);
         const result = validateAndSanitizeMessage(longMessage);
         expect(result.isValid).toBe(false);
-        expect(result.error).toBe(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`);
+        expect(result.error).toBe(
+          `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`
+        );
       });
     });
 
@@ -143,7 +145,8 @@ describe('Message Validation Utility', () => {
       });
 
       it('should handle multiple XSS attempts', () => {
-        const malicious = '<script>alert(1)</script>Hello<iframe src="evil.com"></iframe><style>body{}</style>';
+        const malicious =
+          '<script>alert(1)</script>Hello<iframe src="evil.com"></iframe><style>body{}</style>';
         const result = validateAndSanitizeMessage(malicious);
         expect(result.isValid).toBe(true);
         expect(result.sanitized).toBe('Hello');
@@ -288,4 +291,3 @@ describe('Message Validation Utility', () => {
     });
   });
 });
-
