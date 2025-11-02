@@ -1,6 +1,7 @@
 import Head from 'next/head'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
+import { sanitizeForDisplay } from '../utils/messageValidation'
 
 interface ConversationItem {
   id: string
@@ -61,7 +62,14 @@ export default function Chat() {
                       {c.lastMessage ? new Date(c.lastMessage.createdAt).toLocaleString() : ''}
                     </span>
                   </div>
-                  <p className="last">{c.lastMessage ? c.lastMessage.content : 'Say hello!'}</p>
+                  <p
+                    className="last"
+                    dangerouslySetInnerHTML={{
+                      __html: c.lastMessage
+                        ? sanitizeForDisplay(c.lastMessage.content)
+                        : 'Say hello!',
+                    }}
+                  />
                 </div>
               </article>
             ))}

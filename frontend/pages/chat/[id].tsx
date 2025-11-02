@@ -1,6 +1,7 @@
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { FormEvent, useEffect, useRef, useState } from 'react'
+import { sanitizeForDisplay } from '../../utils/messageValidation'
 
 interface Message {
   id: string
@@ -169,7 +170,12 @@ export default function ConversationPage() {
                     )}
                     <div className="chat-bubble-wrap">
                       <div className="chat-meta">{new Date(m.createdAt).toLocaleString()}</div>
-                      <div className={`chat-bubble ${isMine ? 'mine' : ''}`}>{m.content}</div>
+                      <div
+                        className={`chat-bubble ${isMine ? 'mine' : ''}`}
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeForDisplay(m.content),
+                        }}
+                      />
                     </div>
                   </div>
                 )
