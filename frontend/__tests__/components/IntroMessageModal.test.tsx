@@ -12,24 +12,12 @@ describe('IntroMessageModal', () => {
   })
 
   it('should not render when isOpen is false', () => {
-    render(
-      <IntroMessageModal
-        isOpen={false}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={false} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     expect(screen.queryByText('Send an introduction')).not.toBeInTheDocument()
   })
 
   it('should render when isOpen is true', () => {
-    render(
-      <IntroMessageModal
-        isOpen={true}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={true} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     expect(screen.getByText('Add an intro message (optional)')).toBeInTheDocument()
   })
 
@@ -58,26 +46,14 @@ describe('IntroMessageModal', () => {
   })
 
   it('should call onCancel when cancel button is clicked', () => {
-    render(
-      <IntroMessageModal
-        isOpen={true}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={true} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     const cancelButton = screen.getByText('Cancel')
     fireEvent.click(cancelButton)
     expect(mockOnCancel).toHaveBeenCalledTimes(1)
   })
 
   it('should call onSubmit with message when submit button is clicked', () => {
-    render(
-      <IntroMessageModal
-        isOpen={true}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={true} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     const textarea = screen.getByPlaceholderText('Write a friendly opener…')
     const submitButton = screen.getByText('Send like')
 
@@ -113,7 +89,7 @@ describe('IntroMessageModal', () => {
     )
     const submitButton = screen.getByText('Send Introduction')
     expect(submitButton).toBeDisabled()
-    
+
     fireEvent.click(submitButton)
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
@@ -131,30 +107,18 @@ describe('IntroMessageModal', () => {
   })
 
   it('should limit input to 5000 characters', () => {
-    render(
-      <IntroMessageModal
-        isOpen={true}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={true} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     const textarea = screen.getByPlaceholderText('Write a friendly opener…') as HTMLTextAreaElement
-    
+
     const longText = 'a'.repeat(5001)
     fireEvent.change(textarea, { target: { value: longText } })
-    
+
     // Should be limited to 5000 characters
     expect(textarea.value.length).toBeLessThanOrEqual(5000)
   })
 
   it('should trim whitespace when submitting', () => {
-    render(
-      <IntroMessageModal
-        isOpen={true}
-        onCancel={mockOnCancel}
-        onSubmit={mockOnSubmit}
-      />
-    )
+    render(<IntroMessageModal isOpen={true} onCancel={mockOnCancel} onSubmit={mockOnSubmit} />)
     const textarea = screen.getByPlaceholderText('Write a friendly opener…')
     const submitButton = screen.getByText('Send like')
 
@@ -164,4 +128,3 @@ describe('IntroMessageModal', () => {
     expect(mockOnSubmit).toHaveBeenCalledWith('Hello!')
   })
 })
-
