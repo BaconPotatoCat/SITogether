@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { fetchWithAuthSSR } from '../../../utils/api'
 
+// Disable body parsing for this route to handle large payloads (10MB+)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+}
+
 interface UpdateUserPayload {
   name: string
   age: number
@@ -20,7 +29,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       console.error('NEXT_PUBLIC_BACKEND_INTERNALURL environment variable is not set')
       return res.status(500).json({
         success: false,
-        error: 'Server configuration error',
+        error: 'An error occurred. Please try again later.',
       })
     }
 
@@ -41,14 +50,14 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
           })
         }
 
-        // Try to get error details from backend
+        // Log detailed error for debugging
         const errorText = await response.text()
         console.error(`Backend API error (${response.status}):`, errorText)
 
-        return res.status(response.status).json({
+        // Return generic error message to user
+        return res.status(500).json({
           success: false,
-          error: `Backend API error: ${response.status}`,
-          details: errorText,
+          error: 'An error occurred while processing your request',
         })
       }
 
@@ -61,7 +70,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       if (!name || !age) {
         return res.status(400).json({
           success: false,
-          error: 'Name and age are required',
+          error: 'Invalid request. Please check your input.',
         })
       }
 
@@ -86,8 +95,11 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       })
 
       if (!response.ok) {
+        // Log detailed error for debugging
         const errorText = await response.text()
-        throw new Error(`Backend API error: ${response.status} - ${errorText}`)
+        console.error(`Backend API error (${response.status}):`, errorText)
+        // Throw generic error
+        throw new Error('Backend API request failed')
       }
 
       const result = await response.json()

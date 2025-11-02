@@ -28,6 +28,20 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Error handler for JSON parsing errors (must be after json/urlencoded middleware)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    // Log detailed error for debugging
+    console.error('JSON parsing error:', err.message);
+    // Return generic error message to user
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid request. Please try again.',
+    });
+  }
+  next(err);
+});
+
 // Basic route
 app.get('/', (req, res) => {
   res.json({
