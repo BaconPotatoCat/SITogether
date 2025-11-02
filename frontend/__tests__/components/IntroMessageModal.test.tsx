@@ -85,6 +85,7 @@ describe('IntroMessageModal', () => {
         onCancel={mockOnCancel}
         onSubmit={mockOnSubmit}
         required={true}
+        submitButtonText="Send Introduction"
       />
     )
     const submitButton = screen.getByText('Send Introduction')
