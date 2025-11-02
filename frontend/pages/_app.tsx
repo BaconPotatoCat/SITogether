@@ -32,6 +32,11 @@ function Navigation() {
             <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
               Discover
             </Link>
+            {isAuthenticated && (
+              <Link className={isActive('/liked') ? 'nav-link active' : 'nav-link'} href="/liked">
+                Liked
+              </Link>
+            )}
             <Link className={isActive('/premium') ? 'nav-link active' : 'nav-link'} href="/premium">
               Premium
             </Link>
@@ -92,6 +97,11 @@ function Navigation() {
         <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
           Discover
         </Link>
+        {isAuthenticated && (
+          <Link className={isActive('/liked') ? 'tab-link active' : 'tab-link'} href="/liked">
+            Liked
+          </Link>
+        )}
         <Link className={isActive('/premium') ? 'tab-link active' : 'tab-link'} href="/premium">
           Premium
         </Link>
@@ -99,11 +109,9 @@ function Navigation() {
           Chat
         </Link>
         {isAuthenticated ? (
-          <>
-            <Link className={isActive('/profile') ? 'tab-link active' : 'tab-link'} href="/profile">
-              Profile
-            </Link>
-          </>
+          <Link className={isActive('/profile') ? 'tab-link active' : 'tab-link'} href="/profile">
+            Profile
+          </Link>
         ) : (
           <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">
             Login
