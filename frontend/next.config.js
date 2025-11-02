@@ -1,3 +1,5 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -10,6 +12,8 @@ const nextConfig = {
       sizeLimit: '10mb',
     },
   },
+  // Set outputFileTracingRoot to frontend directory to silence monorepo lockfile warning
+  outputFileTracingRoot: path.resolve(__dirname),
 }
 
 module.exports = nextConfig
