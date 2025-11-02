@@ -4,10 +4,10 @@
  */
 
 // Maximum message length (must match backend)
-export const MAX_MESSAGE_LENGTH = 5000;
+export const MAX_MESSAGE_LENGTH = 5000
 
 // Minimum message length
-export const MIN_MESSAGE_LENGTH = 1;
+export const MIN_MESSAGE_LENGTH = 1
 
 /**
  * Escape HTML to prevent XSS attacks when displaying user input
@@ -15,17 +15,17 @@ export const MIN_MESSAGE_LENGTH = 1;
  * @returns Escaped string safe for HTML display
  */
 export function escapeHtml(str: string): string {
-  if (typeof str !== 'string') return '';
-  
+  if (typeof str !== 'string') return ''
+
   const map: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
     "'": '&#039;',
-  };
-  
-  return str.replace(/[&<>"']/g, (m) => map[m] || m);
+  }
+
+  return str.replace(/[&<>"']/g, (m) => map[m] || m)
 }
 
 /**
@@ -34,36 +34,36 @@ export function escapeHtml(str: string): string {
  * @returns Object with isValid flag and error message if invalid
  */
 export function validateMessageContent(content: string | null | undefined): {
-  isValid: boolean;
-  error: string | null;
+  isValid: boolean
+  error: string | null
 } {
   if (!content || typeof content !== 'string') {
     return {
       isValid: false,
       error: 'Message content must be a non-empty string',
-    };
+    }
   }
 
-  const trimmed = content.trim();
+  const trimmed = content.trim()
 
   if (trimmed.length < MIN_MESSAGE_LENGTH) {
     return {
       isValid: false,
       error: 'Message cannot be empty',
-    };
+    }
   }
 
   if (content.length > MAX_MESSAGE_LENGTH) {
     return {
       isValid: false,
       error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
-    };
+    }
   }
 
   return {
     isValid: true,
     error: null,
-  };
+  }
 }
 
 /**
@@ -72,7 +72,6 @@ export function validateMessageContent(content: string | null | undefined): {
  * @returns Sanitized content safe for HTML rendering
  */
 export function sanitizeForDisplay(content: string): string {
-  if (typeof content !== 'string') return '';
-  return escapeHtml(content);
+  if (typeof content !== 'string') return ''
+  return escapeHtml(content)
 }
-

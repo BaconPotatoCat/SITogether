@@ -42,7 +42,9 @@ describe('Message Validation Utility (Frontend)', () => {
       const longMessage = 'a'.repeat(MAX_MESSAGE_LENGTH + 1)
       const result = validateMessageContent(longMessage)
       expect(result.isValid).toBe(false)
-      expect(result.error).toBe(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`)
+      expect(result.error).toBe(
+        `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`
+      )
     })
 
     it('should accept message at maximum length', () => {
@@ -105,4 +107,3 @@ describe('Message Validation Utility (Frontend)', () => {
     })
   })
 })
-

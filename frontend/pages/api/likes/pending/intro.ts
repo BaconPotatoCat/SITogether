@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log('[pending-intro] Route hit:', req.method, req.url)
-  
+
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
@@ -45,4 +45,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
-

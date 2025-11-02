@@ -30,7 +30,7 @@ export default function LikedProfiles() {
         setLoading(true)
         setError(null)
         const response = await fetchWithAuth('/api/likes/all')
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
@@ -179,7 +179,8 @@ export default function LikedProfiles() {
             >
               <p style={{ marginBottom: '16px' }}>✨ No profiles to introduce yourself to!</p>
               <p className="muted" style={{ fontSize: '14px' }}>
-                All your liked profiles already have introductions, or you haven&apos;t liked anyone yet.
+                All your liked profiles already have introductions, or you haven&apos;t liked anyone
+                yet.
               </p>
             </div>
           ) : (
@@ -202,7 +203,8 @@ export default function LikedProfiles() {
                     gap: '16px',
                     padding: '16px',
                     borderRadius: '12px',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
+                    transition:
+                      'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
                     cursor: 'pointer',
                   }}
                   onMouseEnter={(e) => {
@@ -224,10 +226,20 @@ export default function LikedProfiles() {
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 600, textAlign: 'left' }}>
+                    <h3
+                      style={{
+                        margin: '0 0 4px 0',
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        textAlign: 'left',
+                      }}
+                    >
                       {profile.name}, {profile.age}
                     </h3>
-                    <p className="course muted" style={{ margin: '0 0 8px 0', fontSize: '14px', textAlign: 'left' }}>
+                    <p
+                      className="course muted"
+                      style={{ margin: '0 0 8px 0', fontSize: '14px', textAlign: 'left' }}
+                    >
                       {profile.course}
                     </p>
                     <p
@@ -252,7 +264,15 @@ export default function LikedProfiles() {
                       gap: '8px',
                     }}
                   >
-                    <div className="chips" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'flex-end' }}>
+                    <div
+                      className="chips"
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '4px',
+                        justifyContent: 'flex-end',
+                      }}
+                    >
                       {profile.interests.slice(0, 2).map((interest) => (
                         <span
                           key={interest}
@@ -269,7 +289,10 @@ export default function LikedProfiles() {
                         </span>
                       ))}
                     </div>
-                    <span className="liked-profile-action" style={{ fontSize: '12px', fontWeight: 500 }}>
+                    <span
+                      className="liked-profile-action"
+                      style={{ fontSize: '12px', fontWeight: 500 }}
+                    >
                       Click to view →
                     </span>
                   </div>
@@ -277,7 +300,7 @@ export default function LikedProfiles() {
               ))}
             </div>
           )}
-          
+
           {/* Profile Detail Modal */}
           {isProfileModalOpen && selectedProfile && (
             <div
@@ -359,8 +382,13 @@ export default function LikedProfiles() {
                     </p>
                   </div>
                   <div style={{ marginBottom: '24px' }}>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600 }}>Interests</h3>
-                    <div className="chips" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600 }}>
+                      Interests
+                    </h3>
+                    <div
+                      className="chips"
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+                    >
                       {selectedProfile.interests.length > 0 ? (
                         selectedProfile.interests.map((interest) => (
                           <span
@@ -376,7 +404,9 @@ export default function LikedProfiles() {
                           </span>
                         ))
                       ) : (
-                        <span className="muted" style={{ fontSize: '14px' }}>No interests specified</span>
+                        <span className="muted" style={{ fontSize: '14px' }}>
+                          No interests specified
+                        </span>
                       )}
                     </div>
                   </div>
@@ -396,4 +426,3 @@ export default function LikedProfiles() {
     </>
   )
 }
-

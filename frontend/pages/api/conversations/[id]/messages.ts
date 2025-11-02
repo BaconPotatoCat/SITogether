@@ -2,7 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query
-  if (!id || typeof id !== 'string') return res.status(400).json({ success: false, error: 'Invalid id' })
+  if (!id || typeof id !== 'string')
+    return res.status(400).json({ success: false, error: 'Invalid id' })
 
   try {
     const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/conversations/${id}/messages`
@@ -36,5 +37,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ success: false, error: 'Failed to process request' })
   }
 }
-
-

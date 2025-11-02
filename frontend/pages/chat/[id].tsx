@@ -78,7 +78,7 @@ export default function ConversationPage() {
   const onSend = async (e: FormEvent) => {
     e.preventDefault()
     if (!text.trim() || sending || !id || typeof id !== 'string') return
-    
+
     // Client-side validation
     const { validateMessageContent } = await import('../../utils/messageValidation')
     const validation = validateMessageContent(text)
@@ -86,7 +86,7 @@ export default function ConversationPage() {
       alert(validation.error || 'Invalid message')
       return
     }
-    
+
     setSending(true)
     try {
       const res = await fetch(`/api/conversations/${id}/messages`, {
@@ -122,14 +122,20 @@ export default function ConversationPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <main className="container" style={{ maxWidth: 720 }}>
-        <button className="btn ghost" onClick={() => router.push('/chat')} style={{ marginBottom: 12 }}>
+        <button
+          className="btn ghost"
+          onClick={() => router.push('/chat')}
+          style={{ marginBottom: 12 }}
+        >
           ← Back
         </button>
         {loading ? (
           <p>Loading…</p>
         ) : (
           <>
-            {isLocked && <div className="lock-banner">🔒 Chat is locked until you both like each other.</div>}
+            {isLocked && (
+              <div className="lock-banner">🔒 Chat is locked until you both like each other.</div>
+            )}
 
             <div className="chat-thread">
               {messages.map((m) => {
@@ -139,9 +145,25 @@ export default function ConversationPage() {
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {avatarUrl ? (
-                      <img src={avatarUrl} alt={`${name || 'User'} avatar`} className="chat-avatar-sm" />
+                      <img
+                        src={avatarUrl}
+                        alt={`${name || 'User'} avatar`}
+                        className="chat-avatar-sm"
+                      />
                     ) : (
-                      <div aria-label={`${name || 'User'} avatar`} className="chat-avatar-sm" style={{ background: '#eee', color: '#555', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                      <div
+                        aria-label={`${name || 'User'} avatar`}
+                        className="chat-avatar-sm"
+                        style={{
+                          background: '#eee',
+                          color: '#555',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          fontSize: 12,
+                        }}
+                      >
                         {(name || 'U').charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -180,5 +202,3 @@ export default function ConversationPage() {
     </>
   )
 }
-
-

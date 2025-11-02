@@ -657,7 +657,9 @@ html.dark .lock-banner {
   margin-bottom: 10px;
 }
 
-.chat-row.mine { flex-direction: row-reverse; }
+.chat-row.mine {
+  flex-direction: row-reverse;
+}
 
 .chat-avatar-sm {
   width: 28px;
@@ -666,7 +668,9 @@ html.dark .lock-banner {
   object-fit: cover;
 }
 
-.chat-bubble-wrap { max-width: 80%; }
+.chat-bubble-wrap {
+  max-width: 80%;
+}
 
 .chat-meta {
   font-size: 11px;
@@ -674,7 +678,9 @@ html.dark .lock-banner {
   margin-bottom: 2px;
 }
 
-html.dark .chat-meta { color: #9ca3af; }
+html.dark .chat-meta {
+  color: #9ca3af;
+}
 
 .chat-bubble {
   padding: 8px 10px;
@@ -2581,7 +2587,7 @@ html.dark .success-alert {
 .liked-profile-item {
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -2590,20 +2596,20 @@ html.dark .success-alert {
 }
 
 .liked-profile-item:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-color: #6366f1;
 }
 
 html.dark .liked-profile-item {
   background: #1f2937;
   border-color: #374151;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 html.dark .liked-profile-item:hover {
   background: #374151;
   border-color: #6366f1;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .liked-profile-action {
