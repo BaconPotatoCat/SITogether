@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import { fetchWithAuth } from '../utils/api'
 
 interface Profile {
@@ -14,6 +15,7 @@ interface Profile {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [deck, setDeck] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -111,7 +113,11 @@ export default function Home() {
     }
   }
 
-  const onLike = () => handleSwipeAction('/api/likes', { likedId: topCard.id }, 500, 'like')
+  const onLike = () => {
+    if (!topCard) return
+    handleSwipeAction('/api/likes', { likedId: topCard.id }, 500, 'like')
+  }
+
   const onPass = () => handleSwipeAction('/api/passes', { passedId: topCard.id }, -500, 'pass')
 
   const pointerDown = (clientX: number, clientY: number) => {
@@ -416,13 +422,15 @@ export default function Home() {
                           className="card-view-profile"
                           onClick={(e) => {
                             e.stopPropagation()
-                            window.location.href = `/profile/${topCard.id}`
+                            e.preventDefault()
+                            router.push(`/profile/${topCard.id}`)
                           }}
                           onMouseDown={(e) => e.stopPropagation()}
                           onTouchStart={(e) => e.stopPropagation()}
                           title="View full profile"
+                          type="button"
                         >
-                          ▼
+                          View Profile
                         </button>
                       </div>
                     </article>

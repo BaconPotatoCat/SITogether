@@ -153,10 +153,7 @@ export default function ProfilePage() {
                 <span className="chip muted">No interests specified</span>
               )}
             </div>
-            <div style={{ marginTop: 16, display: 'flex', gap: '0.5rem' }}>
-              <Link className="btn primary" href="/chat" style={{ textAlign: 'center' }}>
-                Message
-              </Link>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
               <Link className="btn ghost" href="/" style={{ textAlign: 'center' }}>
                 Back to Discover
               </Link>

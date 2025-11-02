@@ -1145,11 +1145,143 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
 
 // Likes API routes (protected)
 
+// Get all liked profiles (regardless of intro status)
+app.get('/api/likes', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+
+    // Get all likes by the current user
+    const likes = await prisma.userLikes.findMany({
+      where: {
+        likerId: likerId,
+      },
+      include: {
+        liked: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            gender: true,
+            course: true,
+            bio: true,
+            interests: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Format the response
+    const likedProfiles = likes.map((like) => ({
+      id: like.liked.id,
+      name: like.liked.name,
+      age: like.liked.age,
+      gender: like.liked.gender,
+      course: like.liked.course,
+      bio: like.liked.bio,
+      interests: like.liked.interests,
+      avatarUrl: like.liked.avatarUrl,
+    }));
+
+    res.json({
+      success: true,
+      data: likedProfiles,
+    });
+  } catch (error) {
+    console.error('Get all liked profiles error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get liked profiles',
+      message: error.message,
+    });
+  }
+});
+
+// Get liked profiles that don't have intro messages yet
+// Must be defined before parameterized routes like /api/likes/:userId
+app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+
+    // Get all likes by the current user
+    const likes = await prisma.userLikes.findMany({
+      where: {
+        likerId: likerId,
+      },
+      include: {
+        liked: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            gender: true,
+            course: true,
+            bio: true,
+            interests: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Check which likes have intro messages
+    const likesWithoutIntro = [];
+
+    for (const like of likes) {
+      const likedId = like.likedId;
+      // Find conversation between the two users
+      const userAId = likerId < likedId ? likerId : likedId;
+      const userBId = likerId < likedId ? likedId : likerId;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { userAId_userBId: { userAId, userBId } },
+        include: {
+          messages: {
+            where: {
+              senderId: likerId,
+            },
+            take: 1,
+          },
+        },
+      });
+
+      // If no conversation exists or no messages from the liker, they haven't sent an intro
+      if (!conversation || conversation.messages.length === 0) {
+        likesWithoutIntro.push({
+          id: like.liked.id,
+          name: like.liked.name,
+          age: like.liked.age,
+          gender: like.liked.gender,
+          course: like.liked.course,
+          bio: like.liked.bio,
+          interests: like.liked.interests,
+          avatarUrl: like.liked.avatarUrl,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: likesWithoutIntro,
+    });
+  } catch (error) {
+    console.error('Get pending intro likes error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get liked profiles',
+      message: error.message,
+    });
+  }
+});
+
 // Like a user
 app.post('/api/likes', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
-    const { likedId } = req.body;
+    const { likedId, introMessage } = req.body;
 
     console.log(`Like attempt: likerId=${likerId}, likedId=${likedId}`);
 
@@ -1207,6 +1339,61 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
+    // Check if there is already a reciprocal like (match)
+    const reciprocalLike = await prisma.userLikes.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likedId,
+          likedId: likerId,
+        },
+      },
+    });
+
+    const isMatch = !!reciprocalLike;
+
+    // Ensure a conversation exists between the pair (ordered for uniqueness)
+    const userAId = likerId < likedId ? likerId : likedId;
+    const userBId = likerId < likedId ? likedId : likerId;
+
+    let conversation = await prisma.conversation.findUnique({
+      where: { userAId_userBId: { userAId, userBId } },
+    });
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          isLocked: !isMatch, // unlock immediately if already matched
+        },
+      });
+    } else if (isMatch && conversation.isLocked) {
+      // Unlock on match
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { isLocked: false },
+      });
+    }
+
+    // If intro message provided, store it as the first message (allowed even if locked)
+    let createdIntroMessage = null;
+    if (introMessage) {
+      // Validate and sanitize intro message
+      const { validateAndSanitizeMessage } = require('./utils/messageValidation');
+      const validation = validateAndSanitizeMessage(introMessage);
+
+      if (validation.isValid) {
+        createdIntroMessage = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderId: likerId,
+            content: validation.sanitized,
+          },
+        });
+      }
+      // If validation fails, we silently ignore the intro message (it's optional)
+    }
+
     // Get updated points data (no need to update flags anymore)
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId: likerId },
@@ -1221,6 +1408,9 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       success: true,
       message: 'User liked successfully',
       like: like,
+      matched: isMatch,
+      conversation: { id: conversation.id, isLocked: conversation.isLocked },
+      introMessage: createdIntroMessage ? { id: createdIntroMessage.id } : null,
       points: userPoints,
     });
   } catch (error) {
@@ -1304,6 +1494,261 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
       error: 'Failed to unlike user',
       message: error.message,
     });
+  }
+});
+
+// Send introduction message to an existing like
+app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+    const { userId: likedId } = req.params;
+    const { introMessage } = req.body;
+
+    // Validate user ID format
+    const { validateUserId, validateAndSanitizeMessage } = require('./utils/messageValidation');
+    if (!validateUserId(likedId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user ID format',
+      });
+    }
+
+    // Validate and sanitize intro message
+    const validation = validateAndSanitizeMessage(introMessage);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error || 'Intro message is required',
+      });
+    }
+
+    // Verify the like exists
+    const like = await prisma.userLikes.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likerId,
+          likedId: likedId,
+        },
+      },
+    });
+
+    if (!like) {
+      return res.status(404).json({
+        success: false,
+        error: 'Like not found',
+      });
+    }
+
+    // Find or create conversation between the two users
+    const userAId = likerId < likedId ? likerId : likedId;
+    const userBId = likerId < likedId ? likedId : likerId;
+
+    let conversation = await prisma.conversation.findUnique({
+      where: { userAId_userBId: { userAId, userBId } },
+    });
+
+    if (!conversation) {
+      // Check if there's a reciprocal like (match)
+      const reciprocalLike = await prisma.userLikes.findUnique({
+        where: {
+          likerId_likedId: {
+            likerId: likedId,
+            likedId: likerId,
+          },
+        },
+      });
+
+      const isMatch = !!reciprocalLike;
+
+      conversation = await prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          isLocked: !isMatch,
+        },
+      });
+    }
+
+    // Check if intro message already exists
+    const existingMessage = await prisma.message.findFirst({
+      where: {
+        conversationId: conversation.id,
+        senderId: likerId,
+      },
+    });
+
+    if (existingMessage) {
+      return res.status(409).json({
+        success: false,
+        error: 'Introduction message already sent',
+      });
+    }
+
+    // Create the intro message with sanitized content
+    const createdIntroMessage = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        senderId: likerId,
+        content: validation.sanitized,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Introduction sent successfully',
+      introMessage: { id: createdIntroMessage.id },
+    });
+  } catch (error) {
+    console.error('Send intro message error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send introduction',
+      message: error.message,
+    });
+  }
+});
+
+// Conversations API
+// List conversations for current user
+app.get('/api/conversations', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        OR: [{ userAId: userId }, { userBId: userId }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    const result = await Promise.all(
+      conversations.map(async (c) => {
+        const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
+        const otherUser = await prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: { id: true, name: true, avatarUrl: true },
+        });
+        return {
+          id: c.id,
+          isLocked: c.isLocked,
+          lastMessage: c.messages[0] || null,
+          otherUser,
+        };
+      })
+    );
+
+    res.json({ success: true, conversations: result });
+  } catch (error) {
+    console.error('List conversations error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to list conversations', message: error.message });
+  }
+});
+
+// Get messages in a conversation
+app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Include lightweight participant details to render avatars in chat UI
+    const [userA, userB] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: conversation.userAId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: conversation.userBId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
+    ]);
+    const me = userA && userA.id === userId ? userA : userB;
+    const other = userA && userA.id === userId ? userB : userA;
+
+    res.json({
+      success: true,
+      isLocked: conversation.isLocked,
+      messages,
+      participants: { me, other },
+      currentUserId: userId,
+    });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to get messages', message: error.message });
+  }
+});
+
+// Send a message in a conversation (blocked if locked)
+app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+    const { content } = req.body;
+
+    // Validate conversation ID format
+    const {
+      validateConversationId,
+      validateAndSanitizeMessage,
+    } = require('./utils/messageValidation');
+    if (!validateConversationId(id)) {
+      return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
+    }
+
+    // Validate and sanitize message content
+    const validation = validateAndSanitizeMessage(content);
+    if (!validation.isValid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    if (conversation.isLocked) {
+      return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId: id,
+        senderId: userId,
+        content: validation.sanitized,
+      },
+    });
+
+    // touch conversation updatedAt
+    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to send message', message: error.message });
   }
 });
 
