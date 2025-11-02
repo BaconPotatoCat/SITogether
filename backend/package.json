@@ -14,7 +14,7 @@
     "format": "prettier --write \"**/*.{js,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,json,md}\"",
     "security:audit": "npm audit --audit-level=moderate",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "prisma db push",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js"
