@@ -75,7 +75,10 @@ app.get('/api', (req, res) => {
         resendVerification: 'POST /api/auth/resend-verification',
         login: 'POST /api/auth/login',
         logout: 'POST /api/auth/logout',
+        changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
+        forgotPassword: 'POST /api/auth/forgot-password',
+        resetPassword: 'POST /api/auth/reset-password',
       },
       points: {
         getPoints: 'GET /api/points (protected)',
@@ -391,9 +394,10 @@ app.post('/api/auth/register', async (req, res) => {
         bio: null,
         interests: [],
         verified: false,
-        verificationTokens: {
+        tokens: {
           create: {
             token: verificationToken,
+            type: 'EMAIL_VERIFICATION',
             expiresAt: verificationTokenExpires,
           },
         },
@@ -466,8 +470,11 @@ app.get('/api/auth/verify', async (req, res) => {
     }
 
     // Find verification token with user
-    const verificationToken = await prisma.verificationToken.findUnique({
-      where: { token },
+    const verificationToken = await prisma.token.findFirst({
+      where: {
+        token,
+        type: 'EMAIL_VERIFICATION',
+      },
       include: { user: true },
     });
 
@@ -481,7 +488,7 @@ app.get('/api/auth/verify', async (req, res) => {
     // Check if token has expired
     if (new Date() > verificationToken.expiresAt) {
       // Delete expired token
-      await prisma.verificationToken.delete({
+      await prisma.token.delete({
         where: { id: verificationToken.id },
       });
       return res.status(400).json({
@@ -493,7 +500,7 @@ app.get('/api/auth/verify', async (req, res) => {
     // Check if user is already verified
     if (verificationToken.user.verified) {
       // Delete token since user is already verified
-      await prisma.verificationToken.delete({
+      await prisma.token.delete({
         where: { id: verificationToken.id },
       });
       return res.status(200).json({
@@ -508,7 +515,7 @@ app.get('/api/auth/verify', async (req, res) => {
         where: { id: verificationToken.userId },
         data: { verified: true },
       }),
-      prisma.verificationToken.delete({
+      prisma.token.delete({
         where: { id: verificationToken.id },
       }),
     ]);
@@ -564,13 +571,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Delete any existing tokens for this user and create new one in a transaction
-    await prisma.$transaction([
-      prisma.verificationToken.deleteMany({
-        where: { userId: user.id },
+    const [, createdToken] = await prisma.$transaction([
+      prisma.token.deleteMany({
+        where: {
+          userId: user.id,
+          type: 'EMAIL_VERIFICATION',
+        },
       }),
-      prisma.verificationToken.create({
+      prisma.token.create({
         data: {
           token: verificationToken,
+          type: 'EMAIL_VERIFICATION',
           userId: user.id,
           expiresAt: verificationTokenExpires,
         },
@@ -586,6 +597,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up verification token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
       res.status(500).json({
         success: false,
         error: 'Failed to send verification email. Please try again later.',
@@ -701,6 +723,78 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
+// Change password endpoint (protected)
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate required fields
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password and new password are required',
+      });
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'New password must be at least 6 characters long',
+      });
+    }
+
+    // Find user by ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        password: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user password
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to change password',
+      message: error.message,
+    });
+  }
+});
+
 // Session endpoint (protected)
 app.get('/api/auth/session', authenticateToken, async (req, res) => {
   try {
@@ -738,6 +832,195 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve session',
+      message: error.message,
+    });
+  }
+});
+
+// Forgot password endpoint (request password reset)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    // Always return success to prevent email enumeration attacks
+    // Even if user doesn't exist, we say we sent the email
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    }
+
+    // Check if user is verified
+    if (!user.verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please verify your email address before resetting your password.',
+        requiresVerification: true,
+      });
+    }
+
+    // Generate password reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Delete any existing password reset tokens for this email
+    await prisma.token.deleteMany({
+      where: {
+        email,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    // Create new password reset token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: resetToken,
+        type: 'PASSWORD_RESET',
+        email: user.email,
+        userId: user.id,
+        expiresAt: resetTokenExpires,
+      },
+    });
+
+    // Send password reset email
+    const { sendPasswordResetEmail } = require('./lib/email');
+    try {
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
+
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up password reset token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send password reset email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request',
+      message: error.message,
+    });
+  }
+});
+
+// Reset password endpoint (verify token and update password)
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and new password are required',
+      });
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 6 characters long',
+      });
+    }
+
+    // Find password reset token
+    const resetToken = await prisma.token.findFirst({
+      where: {
+        token,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired password reset token',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > resetToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: resetToken.id },
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Password reset token has expired. Please request a new one.',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: resetToken.email },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user password
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    // Delete the used reset token
+    await prisma.token.delete({
+      where: { id: resetToken.id },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now log in with your new password.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password',
       message: error.message,
     });
   }
@@ -1159,11 +1442,143 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
 
 // Likes API routes (protected)
 
+// Get all liked profiles (regardless of intro status)
+app.get('/api/likes', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+
+    // Get all likes by the current user
+    const likes = await prisma.userLikes.findMany({
+      where: {
+        likerId: likerId,
+      },
+      include: {
+        liked: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            gender: true,
+            course: true,
+            bio: true,
+            interests: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Format the response
+    const likedProfiles = likes.map((like) => ({
+      id: like.liked.id,
+      name: like.liked.name,
+      age: like.liked.age,
+      gender: like.liked.gender,
+      course: like.liked.course,
+      bio: like.liked.bio,
+      interests: like.liked.interests,
+      avatarUrl: like.liked.avatarUrl,
+    }));
+
+    res.json({
+      success: true,
+      data: likedProfiles,
+    });
+  } catch (error) {
+    console.error('Get all liked profiles error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get liked profiles',
+      message: error.message,
+    });
+  }
+});
+
+// Get liked profiles that don't have intro messages yet
+// Must be defined before parameterized routes like /api/likes/:userId
+app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+
+    // Get all likes by the current user
+    const likes = await prisma.userLikes.findMany({
+      where: {
+        likerId: likerId,
+      },
+      include: {
+        liked: {
+          select: {
+            id: true,
+            name: true,
+            age: true,
+            gender: true,
+            course: true,
+            bio: true,
+            interests: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Check which likes have intro messages
+    const likesWithoutIntro = [];
+
+    for (const like of likes) {
+      const likedId = like.likedId;
+      // Find conversation between the two users
+      const userAId = likerId < likedId ? likerId : likedId;
+      const userBId = likerId < likedId ? likedId : likerId;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { userAId_userBId: { userAId, userBId } },
+        include: {
+          messages: {
+            where: {
+              senderId: likerId,
+            },
+            take: 1,
+          },
+        },
+      });
+
+      // If no conversation exists or no messages from the liker, they haven't sent an intro
+      if (!conversation || conversation.messages.length === 0) {
+        likesWithoutIntro.push({
+          id: like.liked.id,
+          name: like.liked.name,
+          age: like.liked.age,
+          gender: like.liked.gender,
+          course: like.liked.course,
+          bio: like.liked.bio,
+          interests: like.liked.interests,
+          avatarUrl: like.liked.avatarUrl,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: likesWithoutIntro,
+    });
+  } catch (error) {
+    console.error('Get pending intro likes error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get liked profiles',
+      message: error.message,
+    });
+  }
+});
+
 // Like a user
 app.post('/api/likes', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
-    const { likedId } = req.body;
+    const { likedId, introMessage } = req.body;
 
     console.log(`Like attempt: likerId=${likerId}, likedId=${likedId}`);
 
@@ -1221,6 +1636,61 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
+    // Check if there is already a reciprocal like (match)
+    const reciprocalLike = await prisma.userLikes.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likedId,
+          likedId: likerId,
+        },
+      },
+    });
+
+    const isMatch = !!reciprocalLike;
+
+    // Ensure a conversation exists between the pair (ordered for uniqueness)
+    const userAId = likerId < likedId ? likerId : likedId;
+    const userBId = likerId < likedId ? likedId : likerId;
+
+    let conversation = await prisma.conversation.findUnique({
+      where: { userAId_userBId: { userAId, userBId } },
+    });
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          isLocked: !isMatch, // unlock immediately if already matched
+        },
+      });
+    } else if (isMatch && conversation.isLocked) {
+      // Unlock on match
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { isLocked: false },
+      });
+    }
+
+    // If intro message provided, store it as the first message (allowed even if locked)
+    let createdIntroMessage = null;
+    if (introMessage) {
+      // Validate and sanitize intro message
+      const { validateAndSanitizeMessage } = require('./utils/messageValidation');
+      const validation = validateAndSanitizeMessage(introMessage);
+
+      if (validation.isValid) {
+        createdIntroMessage = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            senderId: likerId,
+            content: validation.sanitized,
+          },
+        });
+      }
+      // If validation fails, we silently ignore the intro message (it's optional)
+    }
+
     // Get updated points data (no need to update flags anymore)
     const userPoints = await prisma.userPoints.findUnique({
       where: { userId: likerId },
@@ -1235,6 +1705,9 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       success: true,
       message: 'User liked successfully',
       like: like,
+      matched: isMatch,
+      conversation: { id: conversation.id, isLocked: conversation.isLocked },
+      introMessage: createdIntroMessage ? { id: createdIntroMessage.id } : null,
       points: userPoints,
     });
   } catch (error) {
@@ -1318,6 +1791,261 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
       error: 'Failed to unlike user',
       message: error.message,
     });
+  }
+});
+
+// Send introduction message to an existing like
+app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
+  try {
+    const likerId = req.user.userId;
+    const { userId: likedId } = req.params;
+    const { introMessage } = req.body;
+
+    // Validate user ID format
+    const { validateUserId, validateAndSanitizeMessage } = require('./utils/messageValidation');
+    if (!validateUserId(likedId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user ID format',
+      });
+    }
+
+    // Validate and sanitize intro message
+    const validation = validateAndSanitizeMessage(introMessage);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error || 'Intro message is required',
+      });
+    }
+
+    // Verify the like exists
+    const like = await prisma.userLikes.findUnique({
+      where: {
+        likerId_likedId: {
+          likerId: likerId,
+          likedId: likedId,
+        },
+      },
+    });
+
+    if (!like) {
+      return res.status(404).json({
+        success: false,
+        error: 'Like not found',
+      });
+    }
+
+    // Find or create conversation between the two users
+    const userAId = likerId < likedId ? likerId : likedId;
+    const userBId = likerId < likedId ? likedId : likerId;
+
+    let conversation = await prisma.conversation.findUnique({
+      where: { userAId_userBId: { userAId, userBId } },
+    });
+
+    if (!conversation) {
+      // Check if there's a reciprocal like (match)
+      const reciprocalLike = await prisma.userLikes.findUnique({
+        where: {
+          likerId_likedId: {
+            likerId: likedId,
+            likedId: likerId,
+          },
+        },
+      });
+
+      const isMatch = !!reciprocalLike;
+
+      conversation = await prisma.conversation.create({
+        data: {
+          userAId,
+          userBId,
+          isLocked: !isMatch,
+        },
+      });
+    }
+
+    // Check if intro message already exists
+    const existingMessage = await prisma.message.findFirst({
+      where: {
+        conversationId: conversation.id,
+        senderId: likerId,
+      },
+    });
+
+    if (existingMessage) {
+      return res.status(409).json({
+        success: false,
+        error: 'Introduction message already sent',
+      });
+    }
+
+    // Create the intro message with sanitized content
+    const createdIntroMessage = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        senderId: likerId,
+        content: validation.sanitized,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Introduction sent successfully',
+      introMessage: { id: createdIntroMessage.id },
+    });
+  } catch (error) {
+    console.error('Send intro message error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send introduction',
+      message: error.message,
+    });
+  }
+});
+
+// Conversations API
+// List conversations for current user
+app.get('/api/conversations', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        OR: [{ userAId: userId }, { userBId: userId }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    const result = await Promise.all(
+      conversations.map(async (c) => {
+        const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
+        const otherUser = await prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: { id: true, name: true, avatarUrl: true },
+        });
+        return {
+          id: c.id,
+          isLocked: c.isLocked,
+          lastMessage: c.messages[0] || null,
+          otherUser,
+        };
+      })
+    );
+
+    res.json({ success: true, conversations: result });
+  } catch (error) {
+    console.error('List conversations error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to list conversations', message: error.message });
+  }
+});
+
+// Get messages in a conversation
+app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Include lightweight participant details to render avatars in chat UI
+    const [userA, userB] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: conversation.userAId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: conversation.userBId },
+        select: { id: true, name: true, avatarUrl: true },
+      }),
+    ]);
+    const me = userA && userA.id === userId ? userA : userB;
+    const other = userA && userA.id === userId ? userB : userA;
+
+    res.json({
+      success: true,
+      isLocked: conversation.isLocked,
+      messages,
+      participants: { me, other },
+      currentUserId: userId,
+    });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to get messages', message: error.message });
+  }
+});
+
+// Send a message in a conversation (blocked if locked)
+app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+    const { content } = req.body;
+
+    // Validate conversation ID format
+    const {
+      validateConversationId,
+      validateAndSanitizeMessage,
+    } = require('./utils/messageValidation');
+    if (!validateConversationId(id)) {
+      return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
+    }
+
+    // Validate and sanitize message content
+    const validation = validateAndSanitizeMessage(content);
+    if (!validation.isValid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation)
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    if (conversation.isLocked) {
+      return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        conversationId: id,
+        senderId: userId,
+        content: validation.sanitized,
+      },
+    });
+
+    // touch conversation updatedAt
+    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to send message', message: error.message });
   }
 });
 

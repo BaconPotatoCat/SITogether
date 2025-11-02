@@ -7,7 +7,7 @@ import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 import { fetchWithAuth } from '../../utils/api'
 
-type ViewMode = 'menu' | 'edit'
+type ViewMode = 'menu' | 'edit' | 'changePassword'
 
 export default function MyProfilePage() {
   const { session, status, signOut, refreshSession } = useSession()
@@ -23,6 +23,12 @@ export default function MyProfilePage() {
   })
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Initialize edit form when session loads
@@ -92,7 +98,108 @@ export default function MyProfilePage() {
         interests: Array.isArray(session.user.interests) ? session.user.interests.join(', ') : '',
       })
     }
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
     setViewMode('menu')
+  }
+
+  const handleChangePassword = async () => {
+    if (!session?.user) return
+
+    // Validate password fields
+    if (
+      !passwordForm.currentPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
+      showToast('All password fields are required', 'error')
+      return
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      showToast('New password must be at least 6 characters long', 'error')
+      return
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showToast('New password and confirm password do not match', 'error')
+      return
+    }
+
+    if (passwordForm.currentPassword === passwordForm.newPassword) {
+      showToast('New password must be different from current password', 'error')
+      return
+    }
+
+    try {
+      setIsChangingPassword(true)
+
+      // Use fetchWithAuth with redirectOn401: false to maintain authentication (UBAC)
+      // but avoid automatic redirect on 401
+      // For change-password, 401 means wrong current password, not unauthenticated
+      const response = await fetchWithAuth(
+        '/api/auth/change-password',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            currentPassword: passwordForm.currentPassword,
+            newPassword: passwordForm.newPassword,
+          }),
+        },
+        false
+      )
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setViewMode('menu')
+        setPasswordForm({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        })
+        showToast('Password changed successfully!', 'success')
+      } else {
+        // Handle different error cases
+        if (response.status === 401) {
+          // Check if it's an authentication failure (no token/invalid token)
+          // or just wrong current password
+          if (result.error && result.error.toLowerCase().includes('current password')) {
+            // Wrong current password
+            showToast('Current password is incorrect', 'error')
+          } else if (result.error && result.error.toLowerCase().includes('authentication')) {
+            // Authentication failure - user not logged in
+            window.location.href = '/auth'
+          } else {
+            // Generic 401 - assume wrong password for security (don't reveal auth state)
+            showToast('Current password is incorrect', 'error')
+          }
+        } else if (response.status === 400) {
+          // Validation error from backend
+          showToast(
+            result.error || 'Invalid input. Please check your password requirements.',
+            'error'
+          )
+        } else if (response.status === 403) {
+          // Authorization failure - redirect to login
+          window.location.href = '/auth'
+        } else if (response.status === 500) {
+          // Server error
+          showToast('An error occurred. Please try again later.', 'error')
+        } else {
+          // Other errors
+          showToast(result.error || 'Failed to change password. Please try again.', 'error')
+        }
+      }
+    } catch (error) {
+      console.error('Error changing password:', error)
+      showToast('An error occurred while changing your password. Please try again.', 'error')
+    } finally {
+      setIsChangingPassword(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -309,6 +416,38 @@ export default function MyProfilePage() {
                 </svg>
               </button>
 
+              <button className="profile-menu-item" onClick={() => setViewMode('changePassword')}>
+                <div className="menu-item-icon" style={{ backgroundColor: '#eef2ff' }}>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#6366f1"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </div>
+                <span className="menu-item-text">Change Password</span>
+                <svg
+                  className="menu-item-arrow"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+
               <div className="profile-menu-item">
                 <div className="menu-item-icon" style={{ backgroundColor: '#eef2ff' }}>
                   <svg
@@ -373,7 +512,7 @@ export default function MyProfilePage() {
               </button>
             </div>
           </div>
-        ) : (
+        ) : viewMode === 'edit' ? (
           <div className="profile-edit-view">
             <div className="edit-header">
               <button className="back-btn" onClick={handleCancel}>
@@ -456,7 +595,85 @@ export default function MyProfilePage() {
               </button>
             </div>
           </div>
-        )}
+        ) : viewMode === 'changePassword' ? (
+          <div className="profile-edit-view">
+            <div className="edit-header">
+              <button className="back-btn" onClick={handleCancel}>
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <h2>Change Password</h2>
+              <div style={{ width: '24px' }}></div>
+            </div>
+
+            <div className="edit-form-container">
+              <div className="form-group">
+                <label htmlFor="current-password">Current Password</label>
+                <input
+                  id="current-password"
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
+                  }
+                  className="input"
+                  placeholder="Enter your current password"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-password">New Password</label>
+                <input
+                  id="new-password"
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+                  }
+                  className="input"
+                  placeholder="Enter your new password"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="confirm-password">Confirm New Password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+                  }
+                  className="input"
+                  placeholder="Confirm your new password"
+                  required
+                />
+              </div>
+              <button
+                className="btn primary save-btn"
+                onClick={handleChangePassword}
+                disabled={
+                  isChangingPassword ||
+                  !passwordForm.currentPassword ||
+                  !passwordForm.newPassword ||
+                  !passwordForm.confirmPassword
+                }
+              >
+                {isChangingPassword ? 'Changing Password...' : 'Change Password'}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </main>
 
       {/* Toast Container */}
