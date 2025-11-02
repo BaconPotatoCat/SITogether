@@ -53,6 +53,19 @@ describe('Message Validation Utility (Frontend)', () => {
       expect(result.isValid).toBe(true)
       expect(result.error).toBeNull()
     })
+
+    it('should accept message with special characters at max length', () => {
+      const specialMessage = 'a'.repeat(MAX_MESSAGE_LENGTH - 10) + '!@#$%^&*()'
+      const result = validateMessageContent(specialMessage)
+      expect(result.isValid).toBe(true)
+      expect(result.error).toBeNull()
+    })
+
+    it('should accept message with unicode characters', () => {
+      const result = validateMessageContent('Hello 世界 🌍')
+      expect(result.isValid).toBe(true)
+      expect(result.error).toBeNull()
+    })
   })
 
   describe('escapeHtml', () => {
@@ -63,12 +76,32 @@ describe('Message Validation Utility (Frontend)', () => {
       expect(escapeHtml("'apostrophe'")).toBe('&#039;apostrophe&#039;')
     })
 
+    it('should escape all special characters in combination', () => {
+      const input = '<script>alert("XSS")</script>'
+      const output = escapeHtml(input)
+      expect(output).not.toContain('<')
+      expect(output).not.toContain('>')
+      expect(output).not.toContain('"')
+      expect(output).toContain('&lt;')
+      expect(output).toContain('&gt;')
+      expect(output).toContain('&quot;')
+    })
+
     it('should handle normal text', () => {
       expect(escapeHtml('Hello world')).toBe('Hello world')
     })
 
     it('should handle empty string', () => {
       expect(escapeHtml('')).toBe('')
+    })
+
+    it('should handle non-string input', () => {
+      // @ts-expect-error - testing invalid input
+      expect(escapeHtml(null)).toBe('')
+      // @ts-expect-error - testing invalid input
+      expect(escapeHtml(undefined)).toBe('')
+      // @ts-expect-error - testing invalid input
+      expect(escapeHtml(123)).toBe('')
     })
   })
 
