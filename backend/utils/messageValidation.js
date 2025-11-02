@@ -28,36 +28,53 @@ function escapeHtml(str) {
 }
 
 /**
- * Remove potentially dangerous patterns
+ * Sanitize potentially dangerous patterns by removing dangerous tags but preserving safe text content
  * @param {string} str - String to clean
- * @returns {string} - Cleaned string
+ * @returns {string} - Sanitized string with dangerous tags removed but text content preserved
  */
 function removeDangerousPatterns(str) {
   if (typeof str !== 'string') return '';
 
+  let cleaned = str;
+
   // Remove javascript: protocol
-  let cleaned = str.replace(/javascript:/gi, '');
+  cleaned = cleaned.replace(/javascript:/gi, '');
 
   // Remove data: URLs (can be used for XSS)
   cleaned = cleaned.replace(/data:(?:image|text|application)\/[^;]*;base64,/gi, '');
 
-  // Remove on* event handlers (onclick, onerror, etc.)
-  cleaned = cleaned.replace(/\bon\w+\s*=/gi, '');
+  // Remove on* event handlers (onclick, onerror, etc.) - remove attributes but preserve tag content
+  cleaned = cleaned.replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '');
+  cleaned = cleaned.replace(/\bon\w+\s*=\s*[^\s>]*/gi, '');
 
-  // Remove script tags (simplified regex to avoid catastrophic backtracking)
+  // Remove script tags - script content is typically code and should be removed entirely
   cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
 
-  // Remove iframe tags (simplified regex to avoid catastrophic backtracking)
+  // Remove iframe tags - preserve alt text or title if present
+  cleaned = cleaned.replace(/<iframe[^>]*alt=["']([^"']*)["'][^>]*>[\s\S]*?<\/iframe>/gi, '$1');
+  cleaned = cleaned.replace(/<iframe[^>]*title=["']([^"']*)["'][^>]*>[\s\S]*?<\/iframe>/gi, '$1');
   cleaned = cleaned.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
 
-  // Remove style tags (simplified regex to avoid catastrophic backtracking)
+  // Remove style tags - CSS content shouldn't be preserved as text
   cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
 
-  // Remove object/embed tags (simplified regex to avoid catastrophic backtracking)
-  cleaned = cleaned.replace(/<object[\s\S]*?<\/object>/gi, '');
+  // Remove object tags - preserve text content if it exists
+  cleaned = cleaned.replace(/<object[^>]*>([\s\S]*?)<\/object>/gi, (match, content) => {
+    // Extract text content only (remove nested tags)
+    const textOnly = content.replace(/<[^>]*>/g, '').trim();
+    return textOnly;
+  });
+
+  // Remove embed tags - these typically don't have meaningful text content
   cleaned = cleaned.replace(/<embed[\s\S]*?<\/embed>/gi, '');
-  // Also match self-closing embed tags
   cleaned = cleaned.replace(/<embed\b[^>]*\/?>/gi, '');
+
+  // Remove any remaining dangerous attributes from other tags
+  cleaned = cleaned.replace(/<([^>]*)\s(on\w+|javascript:|data:[^=]*)=[^\s>]*(.*?)>/gi, '<$1$3>');
+
+  // Final pass: remove any remaining dangerous tag patterns
+  cleaned = cleaned.replace(/<(script|iframe|style|object|embed)[\s\S]*?<\/\1>/gi, '');
+  cleaned = cleaned.replace(/<(script|iframe|style|object|embed)\b[^>]*\/?>/gi, '');
 
   return cleaned;
 }

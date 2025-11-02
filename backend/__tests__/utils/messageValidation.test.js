@@ -181,6 +181,7 @@ describe('Message Validation Utility', () => {
         const mixed = 'Hello<script>alert(1)</script>World';
         const result = validateAndSanitizeMessage(mixed);
         expect(result.isValid).toBe(true);
+        // Script tags removed entirely, valid text preserved
         expect(result.sanitized).toBe('HelloWorld');
       });
 
@@ -188,6 +189,7 @@ describe('Message Validation Utility', () => {
         const malicious = '<ScRiPt>alert(1)</ScRiPt>Hello';
         const result = validateAndSanitizeMessage(malicious);
         expect(result.isValid).toBe(true);
+        // Script tags removed entirely, valid text preserved
         expect(result.sanitized).toBe('Hello');
         expect(result.sanitized).not.toMatch(/<script/i);
       });
