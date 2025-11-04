@@ -58,6 +58,32 @@ describe('Auth Page', () => {
       expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument()
     })
 
+    it('should have password input with minLength 8 and maxLength 64 in registration form', () => {
+      render(<Auth />)
+
+      // Toggle to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      const passwordInput = screen.getByLabelText(/^password$/i)
+      expect(passwordInput).toHaveAttribute('minLength', '8')
+      expect(passwordInput).toHaveAttribute('maxLength', '64')
+      expect(passwordInput).toHaveAttribute('placeholder', 'Enter your password (min 8 characters)')
+
+      const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+      expect(confirmPasswordInput).toHaveAttribute('minLength', '8')
+      expect(confirmPasswordInput).toHaveAttribute('maxLength', '64')
+    })
+
+    it('should have password input with minLength 8 and maxLength 64 in login form', () => {
+      render(<Auth />)
+
+      const passwordInput = screen.getByLabelText(/^password$/i)
+      expect(passwordInput).toHaveAttribute('minLength', '8')
+      expect(passwordInput).toHaveAttribute('maxLength', '64')
+      expect(passwordInput).toHaveAttribute('placeholder', 'Enter your password (min 8 characters)')
+    })
+
     it('should render forgot password link on login form', () => {
       render(<Auth />)
 
@@ -447,10 +473,20 @@ describe('Auth Page', () => {
 
       fireEvent.click(submitButton)
 
+      // The form should show a toast error when passwords don't match on submit
       await waitFor(() => {
-        expect(
-          screen.getByText(/please fix the password mismatch before submitting/i)
-        ).toBeInTheDocument()
+        // Check for toast error message specifically (not the inline error)
+        // Use getAllByText since there are multiple instances (inline + toast)
+        const messages = screen.getAllByText(/passwords do not match/i)
+        // Should have both inline error and toast message
+        expect(messages.length).toBeGreaterThanOrEqual(2)
+        // Verify toast message exists by checking for toast-container parent
+        const toastMessage = messages.find((msg) => {
+          const container = msg.closest('.toast-container')
+          return container !== null
+        })
+        expect(toastMessage).toBeDefined()
+        expect(toastMessage).toBeInTheDocument()
       })
 
       expect(global.fetch).not.toHaveBeenCalled()

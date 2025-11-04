@@ -134,10 +134,13 @@ describe('Password Reset API Endpoints', () => {
           });
         }
 
-        if (newPassword.length < 6) {
+        // Validate password according to NIST 2025 guidelines
+        const { validatePassword } = require('../../utils/passwordValidation');
+        const passwordValidation = await validatePassword(newPassword);
+        if (!passwordValidation.isValid) {
           return res.status(400).json({
             success: false,
-            error: 'Password must be at least 6 characters long',
+            error: passwordValidation.errors.join('; '),
           });
         }
 
@@ -201,8 +204,19 @@ describe('Password Reset API Endpoints', () => {
     });
   });
 
+  let consoleWarnSpy;
+  let consoleLogSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // Suppress console output during tests
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   describe('POST /api/auth/forgot-password', () => {
@@ -367,6 +381,38 @@ describe('Password Reset API Endpoints', () => {
 
   describe('POST /api/auth/reset-password', () => {
     it('should reset password with valid token', async () => {
+      // Mock HIBP API to return empty (password not found)
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
       const mockResetToken = {
         id: 'token-1',
         token: 'valid-reset-token',
@@ -395,6 +441,9 @@ describe('Password Reset API Endpoints', () => {
         token: 'valid-reset-token',
         newPassword: 'newpassword123',
       });
+
+      // Wait for async operations
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -430,14 +479,90 @@ describe('Password Reset API Endpoints', () => {
     });
 
     it('should return 400 if password is too short', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn(),
+        end: jest.fn(),
+      };
+      mockRequest.on.mockReturnValue(mockRequest);
+      https.request = jest.fn().mockReturnValue(mockRequest);
+
       const response = await request(app).post('/api/auth/reset-password').send({
         token: 'some-token',
         newPassword: '12345', // Only 5 characters
       });
 
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('at least 6 characters');
+      expect(response.body.error).toContain('at least 8 characters');
+    });
+
+    it('should return 400 if password is too long (more than 64 characters)', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn(),
+        end: jest.fn(),
+      };
+      mockRequest.on.mockReturnValue(mockRequest);
+      https.request = jest.fn().mockReturnValue(mockRequest);
+
+      const longPassword = 'a'.repeat(65);
+      const response = await request(app).post('/api/auth/reset-password').send({
+        token: 'some-token',
+        newPassword: longPassword,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('no more than 64 characters');
+    });
+
+    it('should return 400 if password is found in data breaches', async () => {
+      // Mock HIBP API to return compromised password
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, _callback) => {
+          if (event === 'error') {
+            // No error
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            // Password "password" is compromised
+            setTimeout(() => callback('1E4C9B93F3F0682250B6CF8331B7EE68FD8:26230667\n'), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => callback(mockResponse), 0);
+        return mockRequest;
+      });
+
+      const response = await request(app).post('/api/auth/reset-password').send({
+        token: 'some-token',
+        newPassword: 'password', // Known compromised password
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('This password has been found in data breaches');
     });
 
     it('should return 400 for invalid token', async () => {
