@@ -18,7 +18,7 @@ const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
 describe('Chat Page - Empty State', () => {
   const mockPush = jest.fn()
   let originalUnhandledRejection: NodeJS.UnhandledRejectionListener[]
-  let rejectionHandler: ((reason: any) => void) | null = null
+  let rejectionHandler: ((reason: unknown) => void) | null = null
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -26,7 +26,7 @@ describe('Chat Page - Empty State', () => {
       push: mockPush,
       pathname: '/chat',
       query: {},
-    } as any)
+    } as unknown as ReturnType<typeof useRouter>)
     jest.spyOn(console, 'error').mockImplementation(() => {})
     
     // Store original unhandled rejection handlers

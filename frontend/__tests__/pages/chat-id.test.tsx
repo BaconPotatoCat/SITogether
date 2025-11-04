@@ -23,7 +23,7 @@ jest.mock('../../utils/messageValidation', () => ({
 describe('Conversation Page - Empty State', () => {
   const mockPush = jest.fn()
   let originalUnhandledRejection: NodeJS.UnhandledRejectionListener[]
-  let rejectionHandler: ((reason: any) => void) | null = null
+  let rejectionHandler: ((reason: unknown) => void) | null = null
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -31,7 +31,7 @@ describe('Conversation Page - Empty State', () => {
       push: mockPush,
       pathname: '/chat/[id]',
       query: { id: 'conversation-123' },
-    } as any)
+    } as unknown as ReturnType<typeof useRouter>)
     jest.spyOn(console, 'error').mockImplementation(() => {})
     
     // Store original unhandled rejection handlers
@@ -329,7 +329,7 @@ describe('Conversation Page - Empty State', () => {
         push: mockPush,
         pathname: '/chat/[id]',
         query: {},
-      } as any)
+      } as unknown as ReturnType<typeof useRouter>)
 
       render(<ConversationPage />)
 
