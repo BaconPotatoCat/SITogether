@@ -298,18 +298,18 @@ describe('Conversation Page - Empty State', () => {
 
       const networkError = new Error('Network error')
       let rejectionCaught = false
-      
+
       // Create a promise that rejects but is immediately caught
       // This ensures the rejection is handled before it becomes unhandled
       const jsonPromise = (async () => {
         throw networkError
       })() as Promise<unknown>
-      
+
       // Catch the rejection immediately to prevent unhandled rejection
       jsonPromise.catch(() => {
         rejectionCaught = true
       })
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => jsonPromise,
