@@ -33,9 +33,11 @@ describe('Conversation Page - Empty State', () => {
       query: { id: 'conversation-123' },
     } as unknown as ReturnType<typeof useRouter>)
     jest.spyOn(console, 'error').mockImplementation(() => {})
-    
+
     // Store original unhandled rejection handlers
-    originalUnhandledRejection = process.listeners('unhandledRejection') as NodeJS.UnhandledRejectionListener[]
+    originalUnhandledRejection = process.listeners(
+      'unhandledRejection'
+    ) as NodeJS.UnhandledRejectionListener[]
   })
 
   afterEach(() => {
@@ -44,10 +46,10 @@ describe('Conversation Page - Empty State', () => {
       process.removeListener('unhandledRejection', rejectionHandler)
       rejectionHandler = null
     }
-    
+
     // Restore original unhandled rejection handlers
     process.removeAllListeners('unhandledRejection')
-    originalUnhandledRejection.forEach(handler => {
+    originalUnhandledRejection.forEach((handler) => {
       process.on('unhandledRejection', handler)
     })
     jest.restoreAllMocks()
@@ -185,7 +187,9 @@ describe('Conversation Page - Empty State', () => {
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
       })
 
-      expect(screen.getByText('🔒 Chat is locked until you both like each other.')).toBeInTheDocument()
+      expect(
+        screen.getByText('🔒 Chat is locked until you both like each other.')
+      ).toBeInTheDocument()
     })
 
     it('should disable message input when conversation is locked', async () => {
@@ -288,7 +292,7 @@ describe('Conversation Page - Empty State', () => {
       // We catch the rejection in the test to verify the component handles it gracefully
       // Note: Jest may still fail this test due to unhandled rejection, but we verify the component behavior
       let caughtError: Error | null = null
-      
+
       // Set up handler to catch unhandled rejections BEFORE Jest's handler
       const handler = (reason: unknown) => {
         caughtError = reason instanceof Error ? reason : new Error(String(reason))
@@ -303,23 +307,26 @@ describe('Conversation Page - Empty State', () => {
 
       // Wait for the component to finish loading (error is caught in finally block)
       // The component's finally block ensures loading state is updated even on error
-      await waitFor(() => {
-        expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
-      }, { timeout: 3000 })
+      await waitFor(
+        () => {
+          expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
 
       // Should still render the page structure
       expect(screen.getByText('← Back')).toBeInTheDocument()
-      
+
       // Wait a moment for any async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 200))
-      
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
       // Verify we caught the rejection (expected behavior)
       expect(caughtError).toBeTruthy()
       expect(caughtError).toBeInstanceOf(Error)
       // TypeScript narrowing: after truthy and instanceof checks, we know it's an Error
       const error = caughtError!
       expect(error.message).toBe('Network error')
-      
+
       // Clean up
       process.removeListener('unhandledRejection', handler)
     })
@@ -648,4 +655,3 @@ describe('Conversation Page - Empty State', () => {
     })
   })
 })
-

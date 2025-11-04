@@ -28,9 +28,11 @@ describe('Chat Page - Empty State', () => {
       query: {},
     } as unknown as ReturnType<typeof useRouter>)
     jest.spyOn(console, 'error').mockImplementation(() => {})
-    
+
     // Store original unhandled rejection handlers
-    originalUnhandledRejection = process.listeners('unhandledRejection') as NodeJS.UnhandledRejectionListener[]
+    originalUnhandledRejection = process.listeners(
+      'unhandledRejection'
+    ) as NodeJS.UnhandledRejectionListener[]
   })
 
   afterEach(() => {
@@ -39,10 +41,10 @@ describe('Chat Page - Empty State', () => {
       process.removeListener('unhandledRejection', rejectionHandler)
       rejectionHandler = null
     }
-    
+
     // Restore original unhandled rejection handlers
     process.removeAllListeners('unhandledRejection')
-    originalUnhandledRejection.forEach(handler => {
+    originalUnhandledRejection.forEach((handler) => {
       process.on('unhandledRejection', handler)
     })
     jest.restoreAllMocks()
@@ -74,12 +76,14 @@ describe('Chat Page - Empty State', () => {
 
       // Check for empty state elements
       expect(screen.getByText('No chats yet')).toBeInTheDocument()
-      expect(screen.getByText('Start swiping to find matches and begin chatting!')).toBeInTheDocument()
-      
+      expect(
+        screen.getByText('Start swiping to find matches and begin chatting!')
+      ).toBeInTheDocument()
+
       // Check for empty state icon
       const emptyIcon = screen.getByText('💬')
       expect(emptyIcon).toBeInTheDocument()
-      
+
       // Check for empty state container
       const emptyState = emptyIcon.closest('.chat-empty-state')
       expect(emptyState).toBeInTheDocument()
@@ -164,7 +168,7 @@ describe('Chat Page - Empty State', () => {
       // We catch the rejection in the test to verify the component handles it gracefully
       // Note: Jest may still fail this test due to unhandled rejection, but we verify the component behavior
       let caughtError: Error | null = null
-      
+
       // Set up handler to catch unhandled rejections BEFORE Jest's handler
       const handler = (reason: unknown) => {
         caughtError = reason instanceof Error ? reason : new Error(String(reason))
@@ -179,23 +183,26 @@ describe('Chat Page - Empty State', () => {
 
       // Wait for the component to finish loading (error is caught in finally block)
       // The component's finally block ensures loading state is updated even on error
-      await waitFor(() => {
-        expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
-      }, { timeout: 3000 })
+      await waitFor(
+        () => {
+          expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
 
       // Should show empty state when network fails (conversations remains empty array)
       expect(screen.getByText('No chats yet')).toBeInTheDocument()
-      
+
       // Wait a moment for any async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 200))
-      
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
       // Verify we caught the rejection (expected behavior)
       expect(caughtError).toBeTruthy()
       expect(caughtError).toBeInstanceOf(Error)
       // TypeScript narrowing: after truthy and instanceof checks, we know it's an Error
       const error = caughtError!
       expect(error.message).toBe('Network error')
-      
+
       // Clean up
       process.removeListener('unhandledRejection', handler)
     })
@@ -346,4 +353,3 @@ describe('Chat Page - Empty State', () => {
     })
   })
 })
-
