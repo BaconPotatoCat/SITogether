@@ -83,21 +83,43 @@ describe('/api/auth/change-password', () => {
     })
   })
 
-  it('should return 400 when new password is too short', async () => {
+  it('should return 400 when new password is too short (less than 8 characters)', async () => {
     const { req, res } = createMockReqRes({
       body: {
         currentPassword: 'oldpass123',
-        newPassword: '12345', // Less than 6 characters
+        newPassword: '12345', // Less than 8 characters
       },
     })
 
     await handler(req, res)
 
     expect(res.status).toHaveBeenCalledWith(400)
-    expect(res.json).toHaveBeenCalledWith({
-      success: false,
-      error: 'New password must be at least 6 characters long',
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('at least 8 characters'),
+      })
+    )
+  })
+
+  it('should return 400 when new password is too long (more than 64 characters)', async () => {
+    const longPassword = 'a'.repeat(65)
+    const { req, res } = createMockReqRes({
+      body: {
+        currentPassword: 'oldpass123',
+        newPassword: longPassword,
+      },
     })
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('no more than 64 characters'),
+      })
+    )
   })
 
   it('should successfully change password', async () => {
@@ -180,7 +202,7 @@ describe('/api/auth/change-password', () => {
       status: 400,
       json: async () => ({
         success: false,
-        error: 'New password must be at least 6 characters long',
+        error: 'Password must be at least 8 characters long',
       }),
     }
 
@@ -189,7 +211,7 @@ describe('/api/auth/change-password', () => {
     const { req, res } = createMockReqRes({
       body: {
         currentPassword: 'oldpass123',
-        newPassword: 'short', // Will be caught by backend validation
+        newPassword: 'short', // Will be caught by backend validation (less than 8 characters)
       },
       cookies: {
         token: 'test-token',
@@ -201,7 +223,7 @@ describe('/api/auth/change-password', () => {
     expect(res.status).toHaveBeenCalledWith(400)
     expect(res.json).toHaveBeenCalledWith({
       success: false,
-      error: 'New password must be at least 6 characters long',
+      error: 'Password must be at least 8 characters long',
     })
   })
 

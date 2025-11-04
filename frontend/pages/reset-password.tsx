@@ -3,6 +3,7 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
+import { validatePassword } from '../utils/passwordValidation'
 
 export default function ResetPassword() {
   const router = useRouter()
@@ -40,7 +41,17 @@ export default function ResetPassword() {
       const newPassword = name === 'newPassword' ? value : formData.newPassword
       const confirmPassword = name === 'confirmPassword' ? value : formData.confirmPassword
 
-      if (confirmPassword && newPassword !== confirmPassword) {
+      // Validate password according to NIST 2025 guidelines
+      if (newPassword) {
+        const validation = validatePassword(newPassword)
+        if (!validation.isValid) {
+          setPasswordError(validation.errors[0])
+        } else if (confirmPassword && newPassword !== confirmPassword) {
+          setPasswordError('Passwords do not match')
+        } else {
+          setPasswordError('')
+        }
+      } else if (confirmPassword) {
         setPasswordError('Passwords do not match')
       } else {
         setPasswordError('')
@@ -51,15 +62,16 @@ export default function ResetPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validate passwords match
-    if (formData.newPassword !== formData.confirmPassword) {
-      showToast('Passwords do not match', 'error')
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = validatePassword(formData.newPassword)
+    if (!passwordValidation.isValid) {
+      showToast(passwordValidation.errors[0], 'error')
       return
     }
 
-    // Validate password length
-    if (formData.newPassword.length < 6) {
-      showToast('Password must be at least 6 characters long', 'error')
+    // Validate passwords match
+    if (formData.newPassword !== formData.confirmPassword) {
+      showToast('Passwords do not match', 'error')
       return
     }
 
@@ -195,8 +207,9 @@ export default function ResetPassword() {
                   value={formData.newPassword}
                   onChange={handleInputChange}
                   required
-                  placeholder="Enter your new password"
-                  minLength={6}
+                  placeholder="Enter your new password (min 8 characters)"
+                  minLength={8}
+                  maxLength={64}
                 />
               </div>
 
@@ -210,7 +223,8 @@ export default function ResetPassword() {
                   onChange={handleInputChange}
                   required
                   placeholder="Confirm your new password"
-                  minLength={6}
+                  minLength={8}
+                  maxLength={64}
                   className={passwordError ? 'input-error' : ''}
                 />
                 {passwordError && <span className="error-message">{passwordError}</span>}

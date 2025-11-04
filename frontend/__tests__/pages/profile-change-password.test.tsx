@@ -94,6 +94,30 @@ describe('MyProfilePage - Change Password', () => {
     })
   })
 
+  it('should have password inputs with minLength 8 and maxLength 64', async () => {
+    render(<MyProfilePage />)
+
+    // Navigate to change password view
+    await waitFor(() => {
+      const changePasswordButton = screen.getByText('Change Password')
+      fireEvent.click(changePasswordButton)
+    })
+
+    await waitFor(() => {
+      const currentPasswordInput = screen.getByLabelText(/current password/i)
+      // Use exact label text to avoid matching "Confirm New Password"
+      const newPasswordInput = screen.getByLabelText('New Password')
+      const confirmPasswordInput = screen.getByLabelText('Confirm New Password')
+
+      expect(currentPasswordInput).toHaveAttribute('minLength', '8')
+      expect(currentPasswordInput).toHaveAttribute('maxLength', '64')
+      expect(newPasswordInput).toHaveAttribute('minLength', '8')
+      expect(newPasswordInput).toHaveAttribute('maxLength', '64')
+      expect(confirmPasswordInput).toHaveAttribute('minLength', '8')
+      expect(confirmPasswordInput).toHaveAttribute('maxLength', '64')
+    })
+  })
+
   it('should navigate to change password view when Change Password button is clicked', async () => {
     render(<MyProfilePage />)
 
@@ -208,7 +232,7 @@ describe('MyProfilePage - Change Password', () => {
 
     // Fill the form
     fireEvent.change(currentPasswordInput, { target: { value: 'oldpass123' } })
-    fireEvent.change(newPasswordInput, { target: { value: '12345' } }) // Too short
+    fireEvent.change(newPasswordInput, { target: { value: '12345' } }) // Too short (less than 8)
     fireEvent.change(confirmPasswordInput, { target: { value: '12345' } })
 
     // Wait for button to be enabled
@@ -222,7 +246,7 @@ describe('MyProfilePage - Change Password', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'New password must be at least 6 characters long',
+        'Password must be at least 8 characters long',
         'error'
       )
     })
@@ -304,7 +328,7 @@ describe('MyProfilePage - Change Password', () => {
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
-        'New password must be different from current password',
+        'New password must be different from your current password',
         'error'
       )
     })

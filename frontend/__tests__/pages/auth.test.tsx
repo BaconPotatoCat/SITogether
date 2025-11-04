@@ -10,6 +10,28 @@ jest.mock('next/router', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
+// Mock sessionStorage
+const sessionStorageMock = (() => {
+  let store: { [key: string]: string } = {}
+
+  return {
+    getItem: jest.fn((key: string) => store[key] || null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value.toString()
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: jest.fn(() => {
+      store = {}
+    }),
+  }
+})()
+
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
+})
+
 describe('Auth Page', () => {
   const mockPush = jest.fn()
   const mockRouter = {
@@ -19,6 +41,7 @@ describe('Auth Page', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    sessionStorageMock.clear()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     ;(global.fetch as jest.Mock).mockClear()
     // Default mock implementation to prevent unhandled fetch calls
@@ -56,6 +79,32 @@ describe('Auth Page', () => {
       expect(radioButtons.length).toBeGreaterThan(0)
       expect(screen.getByLabelText(/course/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument()
+    })
+
+    it('should have password input with minLength 8 and maxLength 64 in registration form', () => {
+      render(<Auth />)
+
+      // Toggle to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      const passwordInput = screen.getByLabelText(/^password$/i)
+      expect(passwordInput).toHaveAttribute('minLength', '8')
+      expect(passwordInput).toHaveAttribute('maxLength', '64')
+      expect(passwordInput).toHaveAttribute('placeholder', 'Enter your password (min 8 characters)')
+
+      const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+      expect(confirmPasswordInput).toHaveAttribute('minLength', '8')
+      expect(confirmPasswordInput).toHaveAttribute('maxLength', '64')
+    })
+
+    it('should have password input with minLength 8 and maxLength 64 in login form', () => {
+      render(<Auth />)
+
+      const passwordInput = screen.getByLabelText(/^password$/i)
+      expect(passwordInput).toHaveAttribute('minLength', '8')
+      expect(passwordInput).toHaveAttribute('maxLength', '64')
+      expect(passwordInput).toHaveAttribute('placeholder', 'Enter your password (min 8 characters)')
     })
 
     it('should render forgot password link on login form', () => {
@@ -242,6 +291,45 @@ describe('Auth Page', () => {
       jest.advanceTimersByTime(500)
 
       expect(mockPush).toHaveBeenCalledWith('/')
+
+      jest.useRealTimers()
+    })
+
+    it('should redirect to 2FA page when requiresTwoFactor is true', async () => {
+      jest.useFakeTimers()
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          message: 'Please check your email for the verification code',
+          requiresTwoFactor: true,
+          tempToken: 'mock-temp-token-12345',
+        }),
+      })
+
+      render(<Auth />)
+
+      const emailInput = screen.getByLabelText(/email/i)
+      const passwordInput = screen.getByLabelText(/password/i)
+      const loginButton = screen.getByRole('button', { name: /sign in/i })
+
+      fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
+      fireEvent.change(passwordInput, { target: { value: 'password123' } })
+      fireEvent.click(loginButton)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/please check your email for the verification code/i)
+        ).toBeInTheDocument()
+      })
+
+      // Verify tempToken is stored in sessionStorage
+      expect(sessionStorageMock.setItem).toHaveBeenCalledWith('tempToken', 'mock-temp-token-12345')
+
+      // Fast-forward time to trigger redirect
+      jest.advanceTimersByTime(500)
+
+      expect(mockPush).toHaveBeenCalledWith('/verify-2fa')
 
       jest.useRealTimers()
     })
@@ -447,10 +535,20 @@ describe('Auth Page', () => {
 
       fireEvent.click(submitButton)
 
+      // The form should show a toast error when passwords don't match on submit
       await waitFor(() => {
-        expect(
-          screen.getByText(/please fix the password mismatch before submitting/i)
-        ).toBeInTheDocument()
+        // Check for toast error message specifically (not the inline error)
+        // Use getAllByText since there are multiple instances (inline + toast)
+        const messages = screen.getAllByText(/passwords do not match/i)
+        // Should have both inline error and toast message
+        expect(messages.length).toBeGreaterThanOrEqual(2)
+        // Verify toast message exists by checking for toast-container parent
+        const toastMessage = messages.find((msg) => {
+          const container = msg.closest('.toast-container')
+          return container !== null
+        })
+        expect(toastMessage).toBeDefined()
+        expect(toastMessage).toBeInTheDocument()
       })
 
       expect(global.fetch).not.toHaveBeenCalled()
