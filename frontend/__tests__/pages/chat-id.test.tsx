@@ -287,13 +287,6 @@ describe('Conversation Page - Empty State', () => {
       expect(screen.getByText('← Back')).toBeInTheDocument()
     })
 
-    it.skip('should handle network errors gracefully', async () => {
-      // Skipped: This test intentionally creates unhandled rejections that Jest in CI mode detects
-      // The component behavior is verified in other tests (API response with success false)
-      // Components using try-finally without catch will have unhandled rejections
-      // but handle them gracefully in production via finally blocks
-    })
-
     it('should not fetch messages when id is not available', () => {
       mockUseRouter.mockReturnValue({
         push: mockPush,
