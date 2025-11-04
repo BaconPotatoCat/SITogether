@@ -3,11 +3,13 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
+import { validatePassword } from '../utils/passwordValidation'
 
 export default function Auth() {
   const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
+  const [confirmPasswordError, setConfirmPasswordError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
@@ -43,14 +45,38 @@ export default function Auth() {
     // }
 
     // Real-time password validation for registration
-    if (!isLogin && (name === 'password' || name === 'confirmPassword')) {
-      const password = name === 'password' ? value : formData.password
-      const confirmPassword = name === 'confirmPassword' ? value : formData.confirmPassword
+    if (!isLogin) {
+      if (name === 'password') {
+        const validation = validatePassword(value)
+        if (!validation.isValid) {
+          setPasswordError(validation.errors[0])
+        } else {
+          setPasswordError('')
+          if (formData.confirmPassword && value === formData.confirmPassword) {
+            setConfirmPasswordError('')
+          } else if (formData.confirmPassword) {
+            setConfirmPasswordError('Passwords do not match')
+          }
+        }
+      } else if (name === 'confirmPassword') {
+        const password = formData.password
+        const confirmPassword = value
 
-      if (confirmPassword && password !== confirmPassword) {
-        setPasswordError('Passwords do not match')
-      } else {
-        setPasswordError('')
+        // Only validate mismatch if password field has a value
+        if (password) {
+          if (confirmPassword && password !== confirmPassword) {
+            setConfirmPasswordError('Passwords do not match')
+          } else if (confirmPassword) {
+            const validation = validatePassword(password)
+            if (!validation.isValid) {
+              setConfirmPasswordError('')
+            } else {
+              setConfirmPasswordError('')
+            }
+          } else {
+            setConfirmPasswordError('')
+          }
+        }
       }
     }
   }
@@ -66,9 +92,18 @@ export default function Auth() {
     // }
 
     // Password validation for registration
-    if (!isLogin && passwordError) {
-      showToast('Please fix the password mismatch before submitting.', 'error')
-      return
+    if (!isLogin) {
+      // Final validation before submission
+      const passwordValidation = validatePassword(formData.password)
+      if (!passwordValidation.isValid) {
+        showToast(passwordValidation.errors[0], 'error')
+        return
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        showToast('Passwords do not match', 'error')
+        return
+      }
     }
 
     // Age validation for registration
@@ -139,6 +174,7 @@ export default function Auth() {
             course: '',
           })
           setPasswordError('')
+          setConfirmPasswordError('')
 
           // Switch to login form after successful registration
           setIsLogin(true)
@@ -224,6 +260,7 @@ export default function Auth() {
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setPasswordError('')
+    setConfirmPasswordError('')
     setEmailError('')
     setUnverifiedEmail(null)
     setShowForgotPassword(false)
@@ -368,9 +405,12 @@ export default function Auth() {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  placeholder="Enter your password"
-                  minLength={6}
+                  placeholder="Enter your password (min 8 characters)"
+                  minLength={8}
+                  maxLength={64}
+                  className={passwordError ? 'input-error' : ''}
                 />
+                {passwordError && <span className="error-message">{passwordError}</span>}
                 {isLogin && (
                   <div style={{ textAlign: 'right', marginTop: '8px' }}>
                     <button
@@ -395,10 +435,13 @@ export default function Auth() {
                     onChange={handleInputChange}
                     required={!isLogin}
                     placeholder="Confirm your password"
-                    minLength={6}
-                    className={passwordError ? 'input-error' : ''}
+                    minLength={8}
+                    maxLength={64}
+                    className={confirmPasswordError ? 'input-error' : ''}
                   />
-                  {passwordError && <span className="error-message">{passwordError}</span>}
+                  {confirmPasswordError && (
+                    <span className="error-message">{confirmPasswordError}</span>
+                  )}
                 </div>
               )}
 

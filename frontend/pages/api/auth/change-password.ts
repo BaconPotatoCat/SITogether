@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { fetchWithAuthSSR } from '../../../utils/api'
+import { validatePasswordChange } from '../../../utils/passwordValidation'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -11,19 +12,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { currentPassword, newPassword } = req.body
 
-    // Validate required fields
-    if (!currentPassword || !newPassword) {
+    // Basic validation (length, format) - full security check happens on backend
+    const passwordValidation = validatePasswordChange(currentPassword, newPassword)
+    if (!passwordValidation.isValid) {
       return res.status(400).json({
         success: false,
-        error: 'Current password and new password are required',
-      })
-    }
-
-    // Validate password length
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'New password must be at least 6 characters long',
+        error: passwordValidation.errors.join('; '),
       })
     }
 
