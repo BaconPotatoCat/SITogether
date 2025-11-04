@@ -305,6 +305,64 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete user by ID (Protected - requires authentication and authorization)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Authorization check: Users can only delete their own account
+    if (req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only delete your own account.',
+      });
+    }
+
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: id },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    await prisma.user.delete({
+      where: { id: id },
+    });
+
+    // Clear the authentication cookie
+    res.clearCookie('token');
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+
+    // Handle specific Prisma errors
+    if (error.code === 'P2025') {
+      // Record not found
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Return detailed error in development, generic in production
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete account',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    });
+  }
+});
+
 // Authentication routes
 // Register endpoint
 app.post('/api/auth/register', async (req, res) => {
