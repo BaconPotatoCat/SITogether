@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 import { fetchWithAuth } from '../../utils/api'
+import { validatePasswordChange } from '../../utils/passwordValidation'
 
 type ViewMode = 'menu' | 'edit' | 'changePassword'
 
@@ -111,28 +112,18 @@ export default function MyProfilePage() {
   const handleChangePassword = async () => {
     if (!session?.user) return
 
-    // Validate password fields
-    if (
-      !passwordForm.currentPassword ||
-      !passwordForm.newPassword ||
-      !passwordForm.confirmPassword
-    ) {
-      showToast('All password fields are required', 'error')
-      return
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      showToast('New password must be at least 6 characters long', 'error')
+    // Validate password change according to NIST 2025 guidelines
+    const passwordValidation = validatePasswordChange(
+      passwordForm.currentPassword,
+      passwordForm.newPassword
+    )
+    if (!passwordValidation.isValid) {
+      showToast(passwordValidation.errors[0], 'error')
       return
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       showToast('New password and confirm password do not match', 'error')
-      return
-    }
-
-    if (passwordForm.currentPassword === passwordForm.newPassword) {
-      showToast('New password must be different from current password', 'error')
       return
     }
 
@@ -651,6 +642,8 @@ export default function MyProfilePage() {
                   className="input"
                   placeholder="Enter your current password"
                   required
+                  minLength={8}
+                  maxLength={64}
                 />
               </div>
               <div className="form-group">
@@ -663,8 +656,10 @@ export default function MyProfilePage() {
                     setPasswordForm({ ...passwordForm, newPassword: e.target.value })
                   }
                   className="input"
-                  placeholder="Enter your new password"
+                  placeholder="Enter your new password (min 8 characters)"
                   required
+                  minLength={8}
+                  maxLength={64}
                 />
               </div>
               <div className="form-group">
@@ -679,6 +674,8 @@ export default function MyProfilePage() {
                   className="input"
                   placeholder="Confirm your new password"
                   required
+                  minLength={8}
+                  maxLength={64}
                 />
               </div>
               <button

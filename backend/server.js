@@ -9,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail } = require('./lib/email');
+const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
 require('dotenv').config();
 
 const app = express();
@@ -395,6 +396,15 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = await validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+
     // Validate SIT student email format
     // TODO: Uncomment to enforce SIT email validation
     // const sitEmailRegex = /^\d{7}@sit\.singaporetech\.edu\.sg$/;
@@ -773,19 +783,12 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     const { currentPassword, newPassword } = req.body;
 
-    // Validate required fields
-    if (!currentPassword || !newPassword) {
+    // Validate password change according to NIST 2025 guidelines
+    const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
+    if (!passwordValidation.isValid) {
       return res.status(400).json({
         success: false,
-        error: 'Current password and new password are required',
-      });
-    }
-
-    // Validate password length
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        error: 'New password must be at least 6 characters long',
+        error: passwordValidation.errors.join('; '),
       });
     }
 
@@ -994,11 +997,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    // Validate password length
-    if (newPassword.length < 6) {
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = await validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 6 characters long',
+        error: passwordValidation.errors.join('; '),
       });
     }
 
