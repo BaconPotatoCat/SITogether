@@ -11,6 +11,8 @@ export default function Auth() {
   const [emailError, setEmailError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -67,6 +69,15 @@ export default function Auth() {
     if (!isLogin && passwordError) {
       showToast('Please fix the password mismatch before submitting.', 'error')
       return
+    }
+
+    // Age validation for registration
+    if (!isLogin) {
+      const age = formData.age ? parseInt(formData.age) : 0
+      if (!age || age < 18 || age > 65) {
+        showToast('Age must be between 18 and 65.', 'error')
+        return
+      }
     }
 
     setIsLoading(true)
@@ -168,11 +179,45 @@ export default function Auth() {
     }
   }
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!forgotPasswordEmail) {
+      showToast('Please enter your email address', 'error')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast('Password reset instructions have been sent to your email!', 'success')
+        setShowForgotPassword(false)
+        setForgotPasswordEmail('')
+      } else {
+        showToast(result.error || 'Failed to send reset email', 'error')
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error)
+      showToast('An error occurred. Please try again.', 'error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setPasswordError('')
     setEmailError('')
     setUnverifiedEmail(null)
+    setShowForgotPassword(false)
     setFormData({
       email: '',
       password: '',
@@ -232,7 +277,7 @@ export default function Auth() {
                       required={!isLogin}
                       placeholder="Enter your age"
                       min="18"
-                      max="100"
+                      max="65"
                     />
                   </div>
 
@@ -317,6 +362,17 @@ export default function Auth() {
                   placeholder="Enter your password"
                   minLength={6}
                 />
+                {isLogin && (
+                  <div style={{ textAlign: 'right', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="forgot-password-link"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
               </div>
 
               {!isLogin && (
@@ -370,6 +426,54 @@ export default function Auth() {
             </div>
           </div>
         </div>
+
+        {/* Forgot Password Modal */}
+        {showForgotPassword && (
+          <div className="modal-overlay" onClick={() => setShowForgotPassword(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reset Password</h2>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setShowForgotPassword(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="modal-description">
+                Enter your email address and we&apos;ll send you a link to reset your password.
+              </p>
+              <form onSubmit={handleForgotPassword} className="modal-form">
+                <div className="form-group">
+                  <label htmlFor="forgot-email">Email Address</label>
+                  <input
+                    type="email"
+                    id="forgot-email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    required
+                    placeholder="Enter your email"
+                    autoFocus
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="btn secondary"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn primary" disabled={isLoading}>
+                    {isLoading ? 'Sending...' : 'Send Reset Link'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Toast Container */}

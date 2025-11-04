@@ -1,69 +1,69 @@
-import { useState } from 'react'
-import { useRouter } from 'next/router'
+import { useState, useEffect, useRef } from 'react'
 import Head from 'next/head'
-import Link from 'next/link'
-import LoadingSpinner from '../components/LoadingSpinner'
+import { useRouter } from 'next/router'
+import { useToast } from '../hooks/useToast'
+import ToastContainer from '../components/ToastContainer'
 
 export default function ResetPassword() {
   const router = useRouter()
   const { token } = router.query
-
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordError, setPasswordError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [message, setMessage] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [isReady, setIsReady] = useState(false)
+  const { toasts, showToast, removeToast } = useToast()
+  const hasShownToast = useRef(false)
+  const [formData, setFormData] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  })
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPassword = e.target.value
-    setPassword(newPassword)
-
-    // Real-time validation
-    if (newPassword.length > 0 && newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters long')
-    } else if (confirmPassword && newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match')
-    } else {
-      setPasswordError('')
+  useEffect(() => {
+    // Check if token exists in URL once router is ready
+    if (router.isReady) {
+      setIsReady(true)
+      if (!token && !hasShownToast.current) {
+        showToast('Invalid password reset link', 'error')
+        hasShownToast.current = true
+      }
     }
-  }
+  }, [router.isReady, token, showToast])
 
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newConfirmPassword = e.target.value
-    setConfirmPassword(newConfirmPassword)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
 
-    // Real-time validation
-    if (password && newConfirmPassword !== password) {
-      setPasswordError('Passwords do not match')
-    } else {
-      setPasswordError('')
+    // Real-time password validation
+    if (name === 'newPassword' || name === 'confirmPassword') {
+      const newPassword = name === 'newPassword' ? value : formData.newPassword
+      const confirmPassword = name === 'confirmPassword' ? value : formData.confirmPassword
+
+      if (confirmPassword && newPassword !== confirmPassword) {
+        setPasswordError('Passwords do not match')
+      } else {
+        setPasswordError('')
+      }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validate password
-    if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters long')
+    // Validate passwords match
+    if (formData.newPassword !== formData.confirmPassword) {
+      showToast('Passwords do not match', 'error')
       return
     }
 
-    if (password !== confirmPassword) {
-      setPasswordError('Passwords do not match')
-      return
-    }
-
-    if (!token || typeof token !== 'string') {
-      setStatus('error')
-      setMessage('Invalid reset token. Please check your email link.')
+    // Validate password length
+    if (formData.newPassword.length < 6) {
+      showToast('Password must be at least 6 characters long', 'error')
       return
     }
 
     setIsLoading(true)
-    setPasswordError('')
-    setStatus('idle')
 
     try {
       const response = await fetch('/api/auth/reset-password', {
@@ -73,169 +73,172 @@ export default function ResetPassword() {
         },
         body: JSON.stringify({
           token,
-          password,
+          newPassword: formData.newPassword,
         }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (response.ok && data.success) {
-        setStatus('success')
-        setMessage(data.message || 'Password reset successfully! You can now log in with your new password.')
-        // Redirect to login after 3 seconds
+      if (result.success) {
+        showToast('Password reset successful! Redirecting to login...', 'success')
+
+        // Clear form
+        setFormData({
+          newPassword: '',
+          confirmPassword: '',
+        })
+
+        // Redirect to login after a brief delay
         setTimeout(() => {
           router.push('/auth')
-        }, 3000)
+        }, 2000)
       } else {
-        setStatus('error')
-        setMessage(data.error || 'Failed to reset password. Please try again.')
+        showToast(result.error || 'Failed to reset password', 'error')
+
+        // If token is invalid/expired, give option to request new one
+        if (result.error?.includes('expired') || result.error?.includes('Invalid')) {
+          setTimeout(() => {
+            showToast('Please request a new password reset link', 'warning')
+          }, 2000)
+        }
       }
     } catch (error) {
-      setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'An error occurred. Please try again.')
+      console.error('Reset password error:', error)
+      showToast('An error occurred. Please try again.', 'error')
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Show loading state while router is initializing
+  if (!isReady) {
+    return (
+      <>
+        <Head>
+          <title>SITogether • Reset Password</title>
+          <meta name="description" content="Reset your password" />
+        </Head>
+        <main className="container">
+          <div className="auth-container">
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Reset Password</h1>
+                <p>Loading...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  // Show error if no token in URL
+  if (!token) {
+    return (
+      <>
+        <Head>
+          <title>SITogether • Invalid Link</title>
+          <meta name="description" content="Invalid password reset link" />
+        </Head>
+        <main className="container">
+          <div className="auth-container">
+            <div className="auth-card">
+              <div className="auth-header">
+                <h1>Invalid Link</h1>
+                <p>This password reset link is invalid or has expired.</p>
+              </div>
+              <div style={{ padding: '0 2rem 2rem' }}>
+                <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+                  Please request a new password reset link from the login page.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push('/auth')}
+                  className="btn primary"
+                  style={{ width: '100%' }}
+                >
+                  Go to Login
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+      </>
+    )
+  }
+
   return (
     <>
       <Head>
-        <title>Reset Password - SITogether</title>
+        <title>SITogether • Reset Password</title>
+        <meta name="description" content="Reset your password" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div style={{ maxWidth: '400px', margin: '4rem auto', padding: '2rem' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: '2rem' }}>Reset Password</h1>
 
-        {status === 'success' && (
-          <div
-            style={{
-              padding: '1rem',
-              backgroundColor: '#d1fae5',
-              color: '#065f46',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-            }}
-          >
-            {message}
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div
-            style={{
-              padding: '1rem',
-              backgroundColor: '#fee2e2',
-              color: '#991b1b',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-            }}
-          >
-            {message}
-          </div>
-        )}
-
-        {!token && status === 'idle' && (
-          <div
-            style={{
-              padding: '1rem',
-              backgroundColor: '#fee2e2',
-              color: '#991b1b',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-            }}
-          >
-            Invalid reset link. Please check your email for the correct reset password link.
-          </div>
-        )}
-
-        {token && status !== 'success' && (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                New Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={handlePasswordChange}
-                minLength={6}
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '1rem',
-                }}
-              />
+      <main className="container">
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <h1>Reset Your Password</h1>
+              <p>Enter your new password below</p>
             </div>
 
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}
-              >
-                Confirm New Password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={handleConfirmPasswordChange}
-                minLength={6}
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '1rem',
-                }}
-              />
-            </div>
-
-            {passwordError && (
-              <div
-                style={{
-                  padding: '0.75rem',
-                  backgroundColor: '#fee2e2',
-                  color: '#991b1b',
-                  borderRadius: '8px',
-                  fontSize: '0.875rem',
-                }}
-              >
-                {passwordError}
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="form-group">
+                <label htmlFor="newPassword">New Password</label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="Enter your new password"
+                  minLength={6}
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isLoading || !!passwordError}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: isLoading || passwordError ? '#9ca3af' : '#3730a3',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: isLoading || passwordError ? 'not-allowed' : 'pointer',
-                marginTop: '0.5rem',
-              }}
-            >
-              {isLoading ? <LoadingSpinner message="Resetting password..." /> : 'Reset Password'}
-            </button>
-          </form>
-        )}
+              <div className="form-group">
+                <label htmlFor="confirmPassword">Confirm New Password</label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  required
+                  placeholder="Confirm your new password"
+                  minLength={6}
+                  className={passwordError ? 'input-error' : ''}
+                />
+                {passwordError && <span className="error-message">{passwordError}</span>}
+              </div>
 
-        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-          <Link href="/auth" style={{ color: '#3730a3', textDecoration: 'underline' }}>
-            Back to Login
-          </Link>
+              <button
+                type="submit"
+                className="btn primary auth-submit"
+                disabled={isLoading || !!passwordError}
+              >
+                {isLoading ? 'Resetting Password...' : 'Reset Password'}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              <p>
+                Remember your password?
+                <button type="button" onClick={() => router.push('/auth')} className="auth-toggle">
+                  Sign in
+                </button>
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
+
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }
-

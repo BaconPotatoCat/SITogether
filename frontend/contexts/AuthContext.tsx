@@ -23,12 +23,14 @@ interface AuthContextType {
   session: Session | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
   signOut: () => Promise<void>
+  refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   status: 'loading',
   signOut: async () => {},
+  refreshSession: async () => {},
 })
 
 export const useSession = () => {
@@ -110,6 +112,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, [status])
 
   return (
-    <AuthContext.Provider value={{ session, status, signOut }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, status, signOut, refreshSession: fetchSession }}>
+      {children}
+    </AuthContext.Provider>
   )
 }

@@ -10,6 +10,14 @@ const mockPrismaClient = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  token: {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    delete: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  $transaction: jest.fn((operations) => Promise.all(operations)),
 };
 
 jest.mock('@prisma/client', () => ({
@@ -42,11 +50,15 @@ describe('Email Verification API Endpoints', () => {
           });
         }
 
-        const user = await mockPrismaClient.user.findFirst({
-          where: { verificationToken: token },
+        const verificationToken = await mockPrismaClient.token.findFirst({
+          where: {
+            token,
+            type: 'EMAIL_VERIFICATION',
+          },
+          include: { user: true },
         });
 
-        if (!user) {
+        if (!verificationToken) {
           return res.status(400).json({
             success: false,
             error: 'Invalid or expired verification token',
@@ -54,28 +66,35 @@ describe('Email Verification API Endpoints', () => {
         }
 
         // Check if token has expired
-        if (user.verificationTokenExpires && new Date() > user.verificationTokenExpires) {
+        if (new Date() > verificationToken.expiresAt) {
+          await mockPrismaClient.token.delete({
+            where: { id: verificationToken.id },
+          });
           return res.status(400).json({
             success: false,
             error: 'Verification token has expired. Please request a new verification email.',
           });
         }
 
-        if (user.verified) {
+        if (verificationToken.user.verified) {
+          await mockPrismaClient.token.delete({
+            where: { id: verificationToken.id },
+          });
           return res.status(200).json({
             success: true,
             message: 'Email already verified. You can now log in.',
           });
         }
 
-        await mockPrismaClient.user.update({
-          where: { id: user.id },
-          data: {
-            verified: true,
-            verificationToken: null,
-            verificationTokenExpires: null,
-          },
-        });
+        await mockPrismaClient.$transaction([
+          mockPrismaClient.user.update({
+            where: { id: verificationToken.userId },
+            data: { verified: true },
+          }),
+          mockPrismaClient.token.delete({
+            where: { id: verificationToken.id },
+          }),
+        ]);
 
         res.status(200).json({
           success: true,
@@ -122,13 +141,22 @@ describe('Email Verification API Endpoints', () => {
         const verificationToken = crypto.randomBytes(32).toString('hex');
         const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000);
 
-        await mockPrismaClient.user.update({
-          where: { id: user.id },
-          data: {
-            verificationToken,
-            verificationTokenExpires,
-          },
-        });
+        await mockPrismaClient.$transaction([
+          mockPrismaClient.token.deleteMany({
+            where: {
+              userId: user.id,
+              type: 'EMAIL_VERIFICATION',
+            },
+          }),
+          mockPrismaClient.token.create({
+            data: {
+              token: verificationToken,
+              type: 'EMAIL_VERIFICATION',
+              userId: user.id,
+              expiresAt: verificationTokenExpires,
+            },
+          }),
+        ]);
 
         await sendVerificationEmail(user.email, user.name, verificationToken);
 
@@ -155,12 +183,19 @@ describe('Email Verification API Endpoints', () => {
         id: 'user-1',
         email: 'test@example.com',
         verified: false,
-        verificationToken: 'valid-token-123',
-        verificationTokenExpires: new Date(Date.now() + 3600000), // 1 hour from now
       };
 
-      mockPrismaClient.user.findFirst.mockResolvedValue(mockUser);
+      const mockVerificationToken = {
+        id: 'token-1',
+        token: 'valid-token-123',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 3600000), // 1 hour from now
+        user: mockUser,
+      };
+
+      mockPrismaClient.token.findFirst.mockResolvedValue(mockVerificationToken);
       mockPrismaClient.user.update.mockResolvedValue({ ...mockUser, verified: true });
+      mockPrismaClient.token.delete.mockResolvedValue(mockVerificationToken);
 
       const response = await request(app)
         .get('/api/auth/verify')
@@ -169,14 +204,7 @@ describe('Email Verification API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.message).toContain('verified successfully');
-      expect(mockPrismaClient.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
-        data: {
-          verified: true,
-          verificationToken: null,
-          verificationTokenExpires: null,
-        },
-      });
+      expect(mockPrismaClient.$transaction).toHaveBeenCalled();
     });
 
     it('should return 400 if token is missing', async () => {
@@ -188,7 +216,7 @@ describe('Email Verification API Endpoints', () => {
     });
 
     it('should return 400 if token is invalid', async () => {
-      mockPrismaClient.user.findFirst.mockResolvedValue(null);
+      mockPrismaClient.token.findFirst.mockResolvedValue(null);
 
       const response = await request(app).get('/api/auth/verify').query({ token: 'invalid-token' });
 
@@ -202,17 +230,25 @@ describe('Email Verification API Endpoints', () => {
         id: 'user-1',
         email: 'test@example.com',
         verified: false,
-        verificationToken: 'expired-token',
-        verificationTokenExpires: new Date(Date.now() - 3600000), // 1 hour ago
       };
 
-      mockPrismaClient.user.findFirst.mockResolvedValue(mockUser);
+      const mockVerificationToken = {
+        id: 'token-1',
+        token: 'expired-token',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() - 3600000), // 1 hour ago
+        user: mockUser,
+      };
+
+      mockPrismaClient.token.findFirst.mockResolvedValue(mockVerificationToken);
+      mockPrismaClient.token.delete.mockResolvedValue(mockVerificationToken);
 
       const response = await request(app).get('/api/auth/verify').query({ token: 'expired-token' });
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
       expect(response.body.error).toContain('expired');
+      expect(mockPrismaClient.token.delete).toHaveBeenCalled();
     });
 
     it('should return 200 if account is already verified', async () => {
@@ -220,17 +256,25 @@ describe('Email Verification API Endpoints', () => {
         id: 'user-1',
         email: 'test@example.com',
         verified: true,
-        verificationToken: 'some-token',
       };
 
-      mockPrismaClient.user.findFirst.mockResolvedValue(mockUser);
+      const mockVerificationToken = {
+        id: 'token-1',
+        token: 'some-token',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 3600000),
+        user: mockUser,
+      };
+
+      mockPrismaClient.token.findFirst.mockResolvedValue(mockVerificationToken);
+      mockPrismaClient.token.delete.mockResolvedValue(mockVerificationToken);
 
       const response = await request(app).get('/api/auth/verify').query({ token: 'some-token' });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.message).toContain('already verified');
-      expect(mockPrismaClient.user.update).not.toHaveBeenCalled();
+      expect(mockPrismaClient.token.delete).toHaveBeenCalled();
     });
   });
 
@@ -244,9 +288,13 @@ describe('Email Verification API Endpoints', () => {
       };
 
       mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
-      mockPrismaClient.user.update.mockResolvedValue({
-        ...mockUser,
-        verificationToken: 'new-token',
+      mockPrismaClient.token.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrismaClient.token.create.mockResolvedValue({
+        id: 'token-1',
+        token: 'new-token',
+        type: 'EMAIL_VERIFICATION',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 3600000),
       });
 
       const response = await request(app)
@@ -256,7 +304,7 @@ describe('Email Verification API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.message).toContain('sent successfully');
-      expect(mockPrismaClient.user.update).toHaveBeenCalled();
+      expect(mockPrismaClient.$transaction).toHaveBeenCalled();
       expect(sendVerificationEmail).toHaveBeenCalledWith(
         'test@example.com',
         'Test User',
@@ -312,24 +360,33 @@ describe('Email Verification API Endpoints', () => {
       };
 
       mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
-      mockPrismaClient.user.update.mockResolvedValue(mockUser);
+      mockPrismaClient.token.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrismaClient.token.create.mockResolvedValue({
+        id: 'token-1',
+        token: 'new-token',
+        type: 'EMAIL_VERIFICATION',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 3600000),
+      });
 
       const response = await request(app)
         .post('/api/auth/resend-verification')
         .send({ email: 'test@example.com' });
 
       expect(response.status).toBe(200);
-      expect(mockPrismaClient.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      expect(mockPrismaClient.$transaction).toHaveBeenCalled();
+      expect(mockPrismaClient.token.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          verificationToken: expect.any(String),
-          verificationTokenExpires: expect.any(Date),
+          token: expect.any(String),
+          type: 'EMAIL_VERIFICATION',
+          userId: 'user-1',
+          expiresAt: expect.any(Date),
         }),
       });
 
       // Verify token expiration is approximately 1 hour from now
-      const updateCall = mockPrismaClient.user.update.mock.calls[0][0];
-      const expiresAt = updateCall.data.verificationTokenExpires;
+      const createCall = mockPrismaClient.token.create.mock.calls[0][0];
+      const expiresAt = createCall.data.expiresAt;
       const expectedExpires = new Date(Date.now() + 60 * 60 * 1000);
       const timeDiff = Math.abs(expiresAt - expectedExpires);
       expect(timeDiff).toBeLessThan(1000); // Within 1 second

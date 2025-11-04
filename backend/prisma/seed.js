@@ -18,7 +18,7 @@ async function main() {
         email: 'kira.belle@example.com',
         password: hashedPassword,
         name: 'Kira Belle',
-        age: 13,
+        age: 23,
         gender: 'Female',
         course: 'CSC',
         bio: "Computer Science student who loves coding and gaming. Let's study algorithms together!",
@@ -98,6 +98,25 @@ async function main() {
   console.log(`✅ Created ${users.count} users`);
   console.log('🔑 All seeded users have password: "wasd12"');
   console.log('✅ All seeded users are verified');
+
+  // Get all created users to create points entries
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, email: true },
+  });
+
+  // Create points entries for each user
+  const pointsEntries = await Promise.all(
+    allUsers.map((user) =>
+      prisma.userPoints.create({
+        data: {
+          userId: user.id,
+          totalPoints: 0,
+        },
+      })
+    )
+  );
+
+  console.log(`✅ Created ${pointsEntries.length} user points entries`);
   console.log('🎉 Database seeding completed!');
 }
 

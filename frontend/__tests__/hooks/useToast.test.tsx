@@ -71,6 +71,18 @@ describe('useToast', () => {
     expect(result.current.toasts[2].type).toBe('warning')
   })
 
+  it('should default to error type when type is not provided', () => {
+    const { result } = renderHook(() => useToast())
+
+    act(() => {
+      result.current.showToast('Default type test')
+    })
+
+    expect(result.current.toasts).toHaveLength(1)
+    expect(result.current.toasts[0].message).toBe('Default type test')
+    expect(result.current.toasts[0].type).toBe('error')
+  })
+
   it('should auto-remove toast after 5 seconds', async () => {
     jest.useFakeTimers()
     const { result } = renderHook(() => useToast())

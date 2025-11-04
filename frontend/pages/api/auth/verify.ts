@@ -15,11 +15,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
-      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
-      'http://localhost:5000'
-    const response = await fetch(`${baseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`)
+    // Use internal Docker URL to communicate with backend
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_INTERNALURL
+
+    const response = await fetch(`${backendUrl}/api/auth/verify?token=${encodeURIComponent(token)}`)
 
     const data = await response.json()
 

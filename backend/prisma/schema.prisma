@@ -11,27 +11,34 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(uuid()) @db.Uuid
-  email             String   @unique
-  password          String
-  name              String
-  age               Int
-  gender            String
-  role              String   @default("User")
-  course            String?
-  bio               String?
-  interests         String[]
-  avatarUrl         String?  @map("avatar_url")
-  verified          Boolean   @default(false)
-  verificationToken String?   @map("verification_token")
-  verificationTokenExpires DateTime? @map("verification_token_expires")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  banned     Boolean  @default(false)
-  bannedAt   DateTime? @map("banned_at")
+  id        String       @id @default(uuid()) @db.Uuid
+  email     String       @unique
+  password  String
+  name      String
+  age       Int
+  gender    String
+  role      String       @default("User")
+  course    String?
+  bio       String?
+  interests String[]
+  avatarUrl String?      @map("avatar_url")
+  verified  Boolean      @default(false)
+  banned    Boolean      @default(false)
+  bannedAt  DateTime?    @map("banned_at")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  tokens    Token[]
+  
+  // Relations
+  points     UserPoints?
+  givenLikes UserLikes[] @relation("UserLikes")
+  receivedLikes UserLikes[] @relation("UserReceivedLikes")
+  givenPasses UserPasses[] @relation("UserPasses")
+  receivedPasses UserPasses[] @relation("UserReceivedPasses")
+  conversationsA Conversation[] @relation("UserAConversations")
+  conversationsB Conversation[] @relation("UserBConversations")
+  sentMessages   Message[]      @relation("UserSentMessages")
   reports    Report[] @relation("ReportedUser")
-  resetToken         String?   @map("reset_token")
-  resetTokenExpires DateTime? @map("reset_token_expires")
 
   @@map("users")
 }
@@ -49,4 +56,102 @@ model Report {
   reportedUser User @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
 
   @@map("reports")
+}
+
+model Token {
+  id        String    @id @default(uuid()) @db.Uuid
+  token     String    @unique
+  type      TokenType
+  userId    String?   @map("user_id") @db.Uuid
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String?
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([type, email])
+  @@index([type, userId])
+  @@map("tokens")
+}
+
+model UserPoints {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @db.Uuid
+  totalPoints          Int      @default(0)
+  dailyCheckinDate     DateTime?
+  dailyLikeClaimedDate DateTime?
+  premiumExpiryDate    DateTime?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_points")
+}
+
+model UserLikes {
+  id        String   @id @default(uuid()) @db.Uuid
+  likerId   String   @db.Uuid
+  likedId   String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  liker   User @relation("UserLikes", fields: [likerId], references: [id], onDelete: Cascade)
+  liked   User @relation("UserReceivedLikes", fields: [likedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate likes
+  @@unique([likerId, likedId])
+  @@map("user_likes")
+}
+
+model UserPasses {
+  id        String   @id @default(uuid()) @db.Uuid
+  passerId  String   @db.Uuid
+  passedId  String   @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  passer  User @relation("UserPasses", fields: [passerId], references: [id], onDelete: Cascade)
+  passed  User @relation("UserReceivedPasses", fields: [passedId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate passes
+  @@unique([passerId, passedId])
+  @@map("user_passes")
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userAId   String   @db.Uuid
+  userBId   String   @db.Uuid
+  isLocked  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userA    User @relation("UserAConversations", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User @relation("UserBConversations", fields: [userBId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  // Ensure one conversation per pair regardless of order
+  @@unique([userAId, userBId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  senderId       String       @db.Uuid
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
 }
