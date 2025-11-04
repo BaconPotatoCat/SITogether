@@ -7,10 +7,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: sitogether-frontend
-    env_file:
-      - .env
     environment:
       NODE_ENV: development
+      NEXT_PUBLIC_BACKEND_INTERNALURL: ${NEXT_PUBLIC_BACKEND_INTERNALURL}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -31,11 +30,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sitogether-backend
-    env_file:
-      - .env
     environment:
       NODE_ENV: development
+      JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: ${DATABASE_URL}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      NEXT_PUBLIC_FRONTEND_EXTERNALURL: ${NEXT_PUBLIC_FRONTEND_EXTERNALURL}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app
@@ -71,8 +72,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sitogether-prisma-studio
-    env_file:
-      - .env
     environment:
       NODE_ENV: development
       DATABASE_URL: ${DATABASE_URL}
