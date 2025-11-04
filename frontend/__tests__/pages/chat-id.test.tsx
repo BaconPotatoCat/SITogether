@@ -303,7 +303,7 @@ describe('Conversation Page - Empty State', () => {
       // This ensures the rejection is handled before it becomes unhandled
       const jsonPromise = (async () => {
         throw networkError
-      })()
+      })() as Promise<unknown>
       
       // Catch the rejection immediately to prevent unhandled rejection
       jsonPromise.catch(() => {
@@ -313,7 +313,7 @@ describe('Conversation Page - Empty State', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => jsonPromise,
-      } as Response)
+      } as unknown as Response)
 
       // Set up handler to catch any unhandled rejections as a safety net
       const handler = () => {
