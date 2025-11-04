@@ -290,7 +290,7 @@ describe('Conversation Page - Empty State', () => {
       let caughtError: Error | null = null
       
       // Set up handler to catch unhandled rejections BEFORE Jest's handler
-      const handler = (reason: any) => {
+      const handler = (reason: unknown) => {
         caughtError = reason instanceof Error ? reason : new Error(String(reason))
       }
       // Use prependListener to add our handler before Jest's handler
@@ -315,7 +315,10 @@ describe('Conversation Page - Empty State', () => {
       
       // Verify we caught the rejection (expected behavior)
       expect(caughtError).toBeTruthy()
-      expect(caughtError?.message).toBe('Network error')
+      expect(caughtError).toBeInstanceOf(Error)
+      // TypeScript narrowing: after truthy and instanceof checks, we know it's an Error
+      const error = caughtError!
+      expect(error.message).toBe('Network error')
       
       // Clean up
       process.removeListener('unhandledRejection', handler)
