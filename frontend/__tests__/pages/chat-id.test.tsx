@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import ConversationPage from '../../pages/chat/[id]'
 import { useRouter } from 'next/router'
