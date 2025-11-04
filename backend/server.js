@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./lib/email');
+const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
 require('dotenv').config();
 
@@ -61,6 +61,8 @@ app.get('/api', (req, res) => {
         verify: 'GET /api/auth/verify?token=<verification_token>',
         resendVerification: 'POST /api/auth/resend-verification',
         login: 'POST /api/auth/login',
+        verify2fa: 'POST /api/auth/verify-2fa',
+        resend2fa: 'POST /api/auth/resend-2fa',
         logout: 'POST /api/auth/logout',
         changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
@@ -681,15 +683,146 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id },
+    // Generate 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
+    const tempToken = jwt.sign(
+      { userId: user.id, requiresTwoFactor: true },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' } // Token expires in 1 hour
+      { expiresIn: '10m' }
     );
 
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Please check your email for the verification code',
+        requiresTwoFactor: true,
+        tempToken: tempToken,
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to login',
+      message: error.message,
+    });
+  }
+});
+
+// Verify 2FA code and complete login
+app.post('/api/auth/verify-2fa', async (req, res) => {
+  try {
+    const { tempToken, code } = req.body;
+
+    if (!tempToken || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token and verification code are required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Find 2FA token
+    const twoFactorToken = await prisma.token.findFirst({
+      where: {
+        token: code,
+        type: 'TWO_FACTOR_AUTH',
+        userId: userId,
+      },
+    });
+
+    if (!twoFactorToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid verification code',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > twoFactorToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: twoFactorToken.id },
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Verification code has expired. Please try logging in again.',
+      });
+    }
+
+    // Delete the used 2FA token
+    await prisma.token.delete({
+      where: { id: twoFactorToken.id },
+    });
+
+    // Generate final JWT token
+    const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
     // Set cookie with token
-    res.cookie('token', token, {
+    res.cookie('token', finalToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -701,10 +834,121 @@ app.post('/api/auth/login', async (req, res) => {
       message: 'Login successful',
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('2FA verification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to login',
+      error: 'Failed to verify code',
+      message: error.message,
+    });
+  }
+});
+
+// Resend 2FA code endpoint
+app.post('/api/auth/resend-2fa', async (req, res) => {
+  try {
+    const { tempToken } = req.body;
+
+    if (!tempToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token is required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token. Please try logging in again.',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Get user details
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Generate new 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create new 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Verification code sent successfully. Please check your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Resend 2FA error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to resend verification code',
       message: error.message,
     });
   }

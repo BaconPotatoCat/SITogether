@@ -10,6 +10,28 @@ jest.mock('next/router', () => ({
 // Mock fetch
 global.fetch = jest.fn()
 
+// Mock sessionStorage
+const sessionStorageMock = (() => {
+  let store: { [key: string]: string } = {}
+
+  return {
+    getItem: jest.fn((key: string) => store[key] || null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value.toString()
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: jest.fn(() => {
+      store = {}
+    }),
+  }
+})()
+
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
+})
+
 describe('Auth Page', () => {
   const mockPush = jest.fn()
   const mockRouter = {
@@ -19,6 +41,7 @@ describe('Auth Page', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    sessionStorageMock.clear()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     ;(global.fetch as jest.Mock).mockClear()
     // Default mock implementation to prevent unhandled fetch calls
@@ -268,6 +291,45 @@ describe('Auth Page', () => {
       jest.advanceTimersByTime(500)
 
       expect(mockPush).toHaveBeenCalledWith('/')
+
+      jest.useRealTimers()
+    })
+
+    it('should redirect to 2FA page when requiresTwoFactor is true', async () => {
+      jest.useFakeTimers()
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          message: 'Please check your email for the verification code',
+          requiresTwoFactor: true,
+          tempToken: 'mock-temp-token-12345',
+        }),
+      })
+
+      render(<Auth />)
+
+      const emailInput = screen.getByLabelText(/email/i)
+      const passwordInput = screen.getByLabelText(/password/i)
+      const loginButton = screen.getByRole('button', { name: /sign in/i })
+
+      fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
+      fireEvent.change(passwordInput, { target: { value: 'password123' } })
+      fireEvent.click(loginButton)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/please check your email for the verification code/i)
+        ).toBeInTheDocument()
+      })
+
+      // Verify tempToken is stored in sessionStorage
+      expect(sessionStorageMock.setItem).toHaveBeenCalledWith('tempToken', 'mock-temp-token-12345')
+
+      // Fast-forward time to trigger redirect
+      jest.advanceTimersByTime(500)
+
+      expect(mockPush).toHaveBeenCalledWith('/verify-2fa')
 
       jest.useRealTimers()
     })

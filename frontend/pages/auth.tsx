@@ -142,12 +142,21 @@ export default function Auth() {
 
       if (result.success) {
         if (isLogin) {
-          showToast('Login successful!', 'success')
-
-          // Redirect to home page after a brief delay
-          setTimeout(() => {
-            router.push('/')
-          }, 500)
+          // Check if 2FA is required
+          if (result.requiresTwoFactor) {
+            // Store tempToken in sessionStorage and redirect to 2FA page
+            sessionStorage.setItem('tempToken', result.tempToken)
+            showToast('Please check your email for the verification code', 'success')
+            setTimeout(() => {
+              router.push('/verify-2fa')
+            }, 500)
+          } else {
+            showToast('Login successful!', 'success')
+            // Redirect to home page after a brief delay
+            setTimeout(() => {
+              router.push('/')
+            }, 500)
+          }
         } else {
           showToast(
             'Registration successful! Please check your email for the verification link.',
