@@ -8,7 +8,8 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./lib/email');
+const { sendVerificationEmail, sendResetPasswordEmail } = require('./lib/email');
+const { authenticateAdmin } = require('./middleware/admin');
 require('dotenv').config();
 
 const app = express();

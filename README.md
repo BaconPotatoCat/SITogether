@@ -9,8 +9,11 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
 - **Account Verification**: Email verification system for user accounts
+- **Password Reset**: Secure token-based password reset functionality
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
+- **Admin Panel**: Comprehensive admin interface for user and report management
+- **User Reporting**: System for reporting inappropriate user behavior
 - **Containerization**: Docker Compose for easy development
 - **Modern UI**: Clean and responsive design with toast notifications
 
@@ -120,7 +123,125 @@ function MyComponent() {
 - `session.user` - User data (id, email, name, age, gender, role, etc.)
 - `session.expires` - Token expiration timestamp
 
-### Database Seeding
+### Password Reset
+
+The application provides secure password reset functionality for both users and administrators:
+
+#### User-Initiated Password Reset
+
+Authenticated users can request a password reset for their own account:
+
+- **Request Reset**: Users can request a password reset link via the authenticated API endpoint
+- **Email Delivery**: A secure reset token is generated and sent to the user's email
+- **Token Expiration**: Reset tokens expire after 1 hour for security
+- **Single-Use Tokens**: Each reset token can only be used once
+- **Secure Reset**: Tokens are cryptographically secure (32-byte random hex strings)
+
+**API Endpoint:**
+- `POST /api/auth/reset-password-request` (requires authentication)
+
+#### Admin-Initiated Password Reset
+
+Administrators can send password reset links to any user account:
+
+- **Admin Panel**: Accessible from the Admin Panel's user management interface
+- **One-Click Reset**: Admins can send reset links with a single click
+- **User Notification**: Reset link is sent directly to the user's email
+- **Same Security**: Uses the same secure token-based system as user-initiated resets
+
+**API Endpoint:**
+- `POST /api/admin/users/:id/reset-password` (admin only)
+
+#### Resetting Password
+
+Users reset their password using the token from the email:
+
+1. Click the reset link in the email (contains the reset token)
+2. Navigate to `/reset-password?token=<reset_token>`
+3. Enter and confirm new password (minimum 6 characters)
+4. Submit to complete the reset
+5. Token is automatically invalidated after use
+
+**API Endpoint:**
+- `POST /api/auth/reset-password` (public, requires valid token)
+
+### Admin Panel
+
+The application includes a comprehensive admin panel for managing users and handling reports. Accessible at `/admin`, the panel provides:
+
+#### User Management
+
+- **View All Users**: Complete list of all registered users with detailed information
+- **User Search**: Search users by name or email address
+- **Status Filtering**: Filter users by status (All, Active, Banned)
+- **User Information**: View user details including:
+  - Name, email, age, gender
+  - Role (User/Admin)
+  - Verification status
+  - Ban status and ban date
+  - Number of reports received
+  - Account creation date
+
+#### User Actions
+
+- **Ban/Unban Users**: Administrators can ban or unban user accounts
+  - Banned users cannot log in or access the application
+  - Admin users cannot be banned for security
+  - Ban timestamps are tracked
+- **Reset User Passwords**: Send password reset links to any user account
+- **Real-time Updates**: User list refreshes automatically after actions
+
+#### Report Management
+
+- **View Reports**: Comprehensive list of all user reports
+- **Report Filtering**: Filter reports by status:
+  - **Pending**: New reports awaiting review
+  - **Reviewed**: Reports that have been reviewed
+  - **Resolved**: Reports that have been resolved
+- **Report Details**: View complete report information including:
+  - Reported user information
+  - Reporter email
+  - Reason and description
+  - Report status
+  - Creation and update timestamps
+- **Status Updates**: Update report status (Pending → Reviewed → Resolved)
+- **Quick Actions**: Ban users directly from report view
+
+#### Access Control
+
+- **Admin-Only Access**: Only users with `Admin` role can access the panel
+- **Automatic Redirect**: Non-admin users are redirected to the home page
+- **Authentication Required**: Users must be logged in to access admin features
+- **Protected Routes**: All admin API endpoints are protected by admin middleware
+
+**Admin Panel Features:**
+- Responsive design with modern UI
+- Real-time loading states and error handling
+- Success/error message notifications
+- Tabbed interface for easy navigation between Users and Reports
+
+### User Reporting System
+
+The application includes a user reporting system to help maintain a safe community:
+
+#### Reporting Users
+
+- **Report Reasons**: Users can report others for various reasons
+- **Report Description**: Optional detailed description of the incident
+- **Report Tracking**: All reports are tracked with timestamps
+- **Anonymous Reporting**: Reports are tracked with reporter email for accountability
+
+#### Report Status Workflow
+
+Reports go through a defined status workflow:
+
+1. **Pending**: New reports awaiting admin review
+2. **Reviewed**: Reports that have been reviewed by an admin
+3. **Resolved**: Reports that have been resolved (e.g., user banned, issue addressed)
+
+Admins can update report status through the Admin Panel.
+
+#### Database Seeding
 
 The application includes a seed script that populates the database with sample user data for development and testing purposes.
 
@@ -196,24 +317,6 @@ npm run format
 # Security audit
 npm run security:audit
 ```
-
-### Test Coverage
-
-### What Gets Tested
-
-**Backend:**
-- ✅ Authentication middleware (JWT validation, token expiry)
-- ✅ Registration API (validation, duplicate users, password hashing)
-- ✅ Login API (credentials validation, account verification)
-- ✅ Users API (authorization, filtering verified users)
-- ✅ Security checks (SQL injection, XSS prevention)
-
-**Frontend:**
-- ✅ Custom hooks (useToast, useSession)
-- ✅ Components (LoadingSpinner, ToastContainer)
-- ✅ API utilities (fetchWithAuth, error handling)
-- ✅ TypeScript type checking
-- ✅ Next.js build validation
 
 ### CI/CD Pipeline
 
