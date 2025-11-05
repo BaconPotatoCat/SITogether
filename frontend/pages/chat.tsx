@@ -61,7 +61,7 @@ export default function Chat() {
                 />
                 <div className="chat-body">
                   <div className="chat-head">
-                    <h3 className={c.isLocked ? 'chat-name-blurred' : ''}>
+                    <h3>
                       {c.otherUser.name} {c.isLocked ? '🔒' : ''}
                     </h3>
                     <span className="time">
