@@ -1635,13 +1635,14 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           select: { id: true, name: true, avatarUrl: true },
         });
         // Hide name and avatar when conversation is locked (before match)
-        const sanitizedOtherUser = c.isLocked && otherUser
-          ? {
-              id: otherUser.id,
-              name: 'Hidden User',
-              avatarUrl: null,
-            }
-          : otherUser;
+        const sanitizedOtherUser =
+          c.isLocked && otherUser
+            ? {
+                id: otherUser.id,
+                name: 'Hidden User',
+                avatarUrl: null,
+              }
+            : otherUser;
         return {
           id: c.id,
           isLocked: c.isLocked,
@@ -1693,13 +1694,14 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     const me = userA && userA.id === userId ? userA : userB;
     // Hide other user's name and avatar when conversation is locked (before match)
     const other = userA && userA.id === userId ? userB : userA;
-    const sanitizedOther = conversation.isLocked && other
-      ? {
-          id: other.id,
-          name: 'Hidden User',
-          avatarUrl: null,
-        }
-      : other;
+    const sanitizedOther =
+      conversation.isLocked && other
+        ? {
+            id: other.id,
+            name: 'Hidden User',
+            avatarUrl: null,
+          }
+        : other;
 
     res.json({
       success: true,
