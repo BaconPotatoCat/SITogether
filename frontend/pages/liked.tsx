@@ -12,6 +12,7 @@ interface Profile {
   interests: string[]
   bio: string
   avatarUrl: string
+  hasIntro?: boolean
 }
 
 export default function LikedProfiles() {
@@ -23,7 +24,7 @@ export default function LikedProfiles() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [pendingLikeUserId, setPendingLikeUserId] = useState<string | null>(null)
 
-  // Fetch liked profiles without intro messages
+  // Fetch liked profiles with hasIntro flag
   useEffect(() => {
     const fetchLikedProfiles = async () => {
       try {
@@ -61,7 +62,7 @@ export default function LikedProfiles() {
   }
 
   const handleSendIntro = () => {
-    if (selectedProfile) {
+    if (selectedProfile && !selectedProfile.hasIntro) {
       setPendingLikeUserId(selectedProfile.id)
       setIsProfileModalOpen(false)
       setIsIntroOpen(true)
@@ -89,12 +90,32 @@ export default function LikedProfiles() {
       const result = await response.json()
 
       if (result.success) {
-        // Refresh the list to update (profiles with intro will still show, but user can see they've sent intro)
-        // Optionally, you could filter them out client-side if needed
+        // Refresh the list to update hasIntro flags
+        const refreshResponse = await fetchWithAuth('/api/likes/all')
+        if (refreshResponse.ok) {
+          const refreshResult = await refreshResponse.json()
+          if (refreshResult.success) {
+            setProfiles(refreshResult.data || [])
+          }
+        }
         setSelectedProfile(null)
+        alert('Introduction sent successfully!')
       } else {
-        console.error('Failed to send introduction:', result.error)
-        alert(`Failed to send introduction: ${result.error || 'Unknown error'}`)
+        // Handle 409 Conflict (intro already sent)
+        if (response.status === 409) {
+          alert('You have already sent an introduction message to this user.')
+          // Refresh the list to update hasIntro flags
+          const refreshResponse = await fetchWithAuth('/api/likes/all')
+          if (refreshResponse.ok) {
+            const refreshResult = await refreshResponse.json()
+            if (refreshResult.success) {
+              setProfiles(refreshResult.data || [])
+            }
+          }
+        } else {
+          console.error('Failed to send introduction:', result.error)
+          alert(`Failed to send introduction: ${result.error || 'Unknown error'}`)
+        }
       }
     } catch (error) {
       console.error('Error sending introduction:', error)
@@ -410,13 +431,28 @@ export default function LikedProfiles() {
                       )}
                     </div>
                   </div>
-                  <button
-                    className="btn primary"
-                    onClick={handleSendIntro}
-                    style={{ width: '100%', padding: '12px' }}
-                  >
-                    Send an Introduction
-                  </button>
+                  {selectedProfile.hasIntro ? (
+                    <button
+                      className="btn"
+                      disabled
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        opacity: 0.6,
+                        cursor: 'not-allowed',
+                      }}
+                    >
+                      Introduction Already Sent ✓
+                    </button>
+                  ) : (
+                    <button
+                      className="btn primary"
+                      onClick={handleSendIntro}
+                      style={{ width: '100%', padding: '12px' }}
+                    >
+                      Send an Introduction
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

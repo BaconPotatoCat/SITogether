@@ -1174,17 +1174,42 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
-    // Format the response
-    const likedProfiles = likes.map((like) => ({
-      id: like.liked.id,
-      name: like.liked.name,
-      age: like.liked.age,
-      gender: like.liked.gender,
-      course: like.liked.course,
-      bio: like.liked.bio,
-      interests: like.liked.interests,
-      avatarUrl: like.liked.avatarUrl,
-    }));
+    // Format the response and check if intro message exists for each profile
+    const likedProfiles = await Promise.all(
+      likes.map(async (like) => {
+        const likedId = like.liked.id;
+        // Find conversation between the two users
+        const userAId = likerId < likedId ? likerId : likedId;
+        const userBId = likerId < likedId ? likedId : likerId;
+
+        const conversation = await prisma.conversation.findUnique({
+          where: { userAId_userBId: { userAId, userBId } },
+          include: {
+            messages: {
+              where: {
+                senderId: likerId,
+              },
+              take: 1,
+            },
+          },
+        });
+
+        // Check if intro message exists (conversation exists and has at least one message from liker)
+        const hasIntro = !!conversation && conversation.messages.length > 0;
+
+        return {
+          id: like.liked.id,
+          name: like.liked.name,
+          age: like.liked.age,
+          gender: like.liked.gender,
+          course: like.liked.course,
+          bio: like.liked.bio,
+          interests: like.liked.interests,
+          avatarUrl: like.liked.avatarUrl,
+          hasIntro,
+        };
+      })
+    );
 
     res.json({
       success: true,
