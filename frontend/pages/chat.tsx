@@ -39,6 +39,12 @@ export default function Chat() {
         <h1>Chats</h1>
         {loading ? (
           <p>Loading…</p>
+        ) : conversations.length === 0 ? (
+          <div className="chat-empty-state">
+            <div className="chat-empty-icon">💬</div>
+            <h2>No chats yet</h2>
+            <p>Start swiping to find matches and begin chatting!</p>
+          </div>
         ) : (
           <div className="chat-list">
             {conversations.map((c) => (
