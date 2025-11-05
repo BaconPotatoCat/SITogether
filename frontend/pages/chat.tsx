@@ -55,13 +55,13 @@ export default function Chat() {
                 style={{ cursor: 'pointer' }}
               >
                 <img
-                  className="chat-avatar"
+                  className={`chat-avatar ${c.isLocked ? 'blurred' : ''}`}
                   src={c.otherUser.avatarUrl || '/avatar.png'}
-                  alt={`${c.otherUser.name} avatar`}
+                  alt={`${c.isLocked ? 'Hidden' : c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">
                   <div className="chat-head">
-                    <h3>
+                    <h3 className={c.isLocked ? 'chat-name-blurred' : ''}>
                       {c.otherUser.name} {c.isLocked ? '🔒' : ''}
                     </h3>
                     <span className="time">

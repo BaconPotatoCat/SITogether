@@ -143,18 +143,19 @@ export default function ConversationPage() {
                 const isMine = currentUserId && m.senderId === currentUserId
                 const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
                 const name = isMine ? me?.name : other?.name
+                const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
-                        alt={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        alt={`${shouldBlur ? 'Hidden' : name || 'User'} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                       />
                     ) : (
                       <div
-                        aria-label={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        aria-label={`${shouldBlur ? 'Hidden' : name || 'User'} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                         style={{
                           background: '#eee',
                           color: '#555',
