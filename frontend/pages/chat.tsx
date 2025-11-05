@@ -56,7 +56,7 @@ export default function Chat() {
               >
                 <img
                   className={`chat-avatar ${c.isLocked ? 'blurred' : ''}`}
-                  src={c.otherUser.avatarUrl || '/avatar.png'}
+                  src={c.isLocked ? '/avatar.png' : c.otherUser.avatarUrl || '/avatar.png'}
                   alt={`${c.isLocked ? 'Hidden' : c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">

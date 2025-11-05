@@ -144,21 +144,23 @@ export default function ConversationPage() {
                 const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
                 const name = isMine ? me?.name : other?.name
                 const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
+                const displayName = shouldBlur ? 'Hidden User' : name || 'User'
+                const displayAvatarUrl = shouldBlur ? null : avatarUrl
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
-                    {avatarUrl ? (
+                    {displayAvatarUrl ? (
                       <img
-                        src={avatarUrl}
-                        alt={`${shouldBlur ? 'Hidden' : name || 'User'} avatar`}
+                        src={displayAvatarUrl}
+                        alt={`${displayName} avatar`}
                         className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                       />
                     ) : (
                       <div
-                        aria-label={`${shouldBlur ? 'Hidden' : name || 'User'} avatar`}
+                        aria-label={`${displayName} avatar`}
                         className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                         style={{
-                          background: '#eee',
-                          color: '#555',
+                          background: shouldBlur ? '#ccc' : '#eee',
+                          color: shouldBlur ? '#999' : '#555',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -166,7 +168,7 @@ export default function ConversationPage() {
                           fontSize: 12,
                         }}
                       >
-                        {(name || 'U').charAt(0).toUpperCase()}
+                        {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="chat-bubble-wrap">
