@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import dynamic from 'next/dynamic'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 import { validatePassword } from '../utils/passwordValidation'
+
+// Dynamically import ReCAPTCHA to avoid SSR issues (it's a client-only library)
+const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => mod.default), {
+  ssr: false,
+})
 
 export default function Auth() {
   const router = useRouter()
@@ -15,6 +21,8 @@ export default function Auth() {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
+  const [recaptchaKey, setRecaptchaKey] = useState(0)
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -113,6 +121,12 @@ export default function Auth() {
         showToast('Age must be between 18 and 65.', 'error')
         return
       }
+
+      // reCAPTCHA validation for registration
+      if (!recaptchaToken) {
+        showToast('Please complete the reCAPTCHA verification.', 'error')
+        return
+      }
     }
 
     setIsLoading(true)
@@ -128,6 +142,7 @@ export default function Auth() {
             age: formData.age ? parseInt(formData.age) : null,
             gender: formData.gender,
             course: formData.course,
+            recaptchaToken,
           }
 
       const response = await fetch(endpoint, {
@@ -175,6 +190,8 @@ export default function Auth() {
           })
           setPasswordError('')
           setConfirmPasswordError('')
+          setRecaptchaToken(null)
+          setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA by changing key
 
           // Switch to login form after successful registration
           setIsLogin(true)
@@ -264,6 +281,8 @@ export default function Auth() {
     setEmailError('')
     setUnverifiedEmail(null)
     setShowForgotPassword(false)
+    setRecaptchaToken(null)
+    setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA by changing key
     setFormData({
       email: '',
       password: '',
@@ -273,6 +292,10 @@ export default function Auth() {
       gender: '',
       course: '',
     })
+  }
+
+  const handleRecaptchaChange = (token: string | null) => {
+    setRecaptchaToken(token)
   }
 
   return (
@@ -442,6 +465,21 @@ export default function Auth() {
                   {confirmPasswordError && (
                     <span className="error-message">{confirmPasswordError}</span>
                   )}
+                </div>
+              )}
+
+              {!isLogin && (
+                <div className="form-group">
+                  <ReCAPTCHA
+                    key={recaptchaKey}
+                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ''}
+                    onChange={handleRecaptchaChange}
+                    onExpired={() => setRecaptchaToken(null)}
+                    onError={() => {
+                      setRecaptchaToken(null)
+                      showToast('reCAPTCHA error. Please try again.', 'error')
+                    }}
+                  />
                 </div>
               )}
 

@@ -309,16 +309,66 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Authentication routes
+// Helper function to verify reCAPTCHA token
+async function verifyRecaptcha(token) {
+  if (!token) {
+    return { success: false, error: 'reCAPTCHA token is missing' };
+  }
+
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secretKey) {
+    console.warn('RECAPTCHA_SECRET_KEY is not set. Skipping reCAPTCHA verification.');
+    return { success: true }; // Skip verification if secret key is not configured
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        secret: secretKey,
+        response: token,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: 'reCAPTCHA verification failed',
+        errorCodes: data['error-codes'] || [],
+      };
+    }
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error);
+    return { success: false, error: 'Failed to verify reCAPTCHA' };
+  }
+}
+
 // Register endpoint
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name, age, gender, course } = req.body;
+    const { email, password, name, age, gender, course, recaptchaToken } = req.body;
 
     // Validate required fields
     if (!email || !password || !name || !age || !gender) {
       return res.status(400).json({
         success: false,
         error: 'Email, password, name, age, and gender are required',
+      });
+    }
+
+    // Verify reCAPTCHA token
+    const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+    if (!recaptchaVerification.success) {
+      return res.status(400).json({
+        success: false,
+        error: recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
       });
     }
 
