@@ -411,29 +411,6 @@ export default function Home() {
                           >
                             View Profile
                           </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              handleReportClick(topCard.id)
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            title="Report user"
-                            type="button"
-                            style={{
-                              padding: '8px 16px',
-                              backgroundColor: '#dc3545',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontSize: '14px',
-                              fontWeight: 500,
-                            }}
-                          >
-                            🚩 Report
-                          </button>
                         </div>
                       </div>
                     </article>
@@ -466,6 +443,33 @@ export default function Home() {
                 </button>
                 <button className="btn primary" onClick={onLike}>
                   Like
+                </button>
+                <button
+                  className="btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    if (topCard) {
+                      handleReportClick(topCard.id)
+                    }
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  title="Report user"
+                  type="button"
+                  style={{
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#c82333'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#dc3545'
+                  }}
+                >
+                  🚩 Report
                 </button>
               </div>
             </>

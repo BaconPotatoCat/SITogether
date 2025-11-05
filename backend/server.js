@@ -1511,6 +1511,7 @@ app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
 app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const { newPassword } = req.body;
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -1529,63 +1530,74 @@ app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, r
       });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    // Update user with reset token
-    try {
-      await prisma.user.update({
-        where: { id },
-        data: {
-          resetToken,
-          resetTokenExpires,
-        },
-      });
-    } catch (dbError) {
-      console.error('Error sending reset password email: Error: Database error');
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to generate reset token',
-      });
+    // Generate a secure random password if not provided
+    let passwordToSet = newPassword;
+    if (!passwordToSet) {
+      // Generate a secure random password (at least 8 characters to meet NIST 2025 guidelines)
+      // Using 12 random bytes = 24 hex characters (more than enough, guaranteed to pass validation)
+      passwordToSet = crypto.randomBytes(12).toString('hex');
     }
 
-    // Send reset email
+    // Validate password according to NIST 2025 guidelines
     try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
-
-      res.json({
-        success: true,
-        message: `Password reset link sent to ${user.email}`,
-        data: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
-      });
-    } catch (emailError) {
-      console.error('Error sending reset password email:', emailError);
-
-      // Clear the token if email sending fails
-      await prisma.user.update({
-        where: { id },
-        data: {
-          resetToken: null,
-          resetTokenExpires: null,
-        },
-      });
-
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to send reset password email',
-      });
+      const passwordValidation = await validatePassword(passwordToSet);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join('; '),
+        });
+      }
+    } catch (validationError) {
+      console.error('Password validation error:', validationError);
+      // If validation fails due to external API issues, still allow the reset
+      // but log the error for monitoring
+      // The generated password is secure enough (24 hex characters)
     }
+
+    // Hash the new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(passwordToSet, saltRounds);
+
+    // Update user password directly
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword },
+    });
+
+    res.json({
+      success: true,
+      message: `Password has been reset successfully for ${user.email}`,
+      data: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        // Only include the generated password if it was auto-generated
+        ...(newPassword ? {} : { temporaryPassword: passwordToSet }),
+      },
+    });
   } catch (error) {
-    console.error('Password reset error:', error);
+    console.error('Admin password reset error:', error);
+    
+    // Provide more specific error messages
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        error: 'Database constraint violation',
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
-      error: 'Failed to send password reset link',
-      message: error.message,
+      error: 'Failed to reset password',
+      message: error.message || 'An unexpected error occurred',
     });
   }
 });

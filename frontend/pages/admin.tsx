@@ -117,8 +117,18 @@ export default function AdminPanel() {
   }
 
   const handleUserAction = async (userId: string, action: 'ban' | 'unban' | 'reset-password') => {
-    if (!confirm(`Are you sure you want to ${action} this user?`)) {
-      return
+    if (action === 'reset-password') {
+      if (
+        !confirm(
+          'Are you sure you want to reset this user\'s password? A new temporary password will be generated and displayed.'
+        )
+      ) {
+        return
+      }
+    } else {
+      if (!confirm(`Are you sure you want to ${action} this user?`)) {
+        return
+      }
     }
 
     try {
@@ -131,7 +141,17 @@ export default function AdminPanel() {
       const result = await response.json()
 
       if (result.success) {
-        showMessage('success', result.message)
+        if (action === 'reset-password' && result.data?.temporaryPassword) {
+          const tempPassword = result.data.temporaryPassword
+          showMessage(
+            'success',
+            `${result.message}\n\nTemporary password: ${tempPassword}\n\nPlease copy this password and share it securely with the user.`
+          )
+          // Also log to console for easy copying
+          console.log(`Temporary password for ${result.data.email}: ${tempPassword}`)
+        } else {
+          showMessage('success', result.message)
+        }
         fetchUsers()
       } else {
         showMessage('error', result.error || 'Action failed')
