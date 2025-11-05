@@ -142,11 +142,16 @@ export default function ConversationPage() {
             <div className="chat-thread">
               {messages.map((m) => {
                 const isMine = currentUserId && m.senderId === currentUserId
-                const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
-                const name = isMine ? me?.name : other?.name
                 const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
-                const displayName = shouldBlur ? 'Hidden User' : name || 'User'
-                const displayAvatarUrl = shouldBlur ? null : avatarUrl
+                // Always use "Hidden User" when locked to prevent any name leakage
+                const displayName = shouldBlur
+                  ? 'Hidden User'
+                  : (isMine ? me?.name : other?.name) || 'User'
+                const displayAvatarUrl = shouldBlur
+                  ? null
+                  : isMine
+                    ? me?.avatarUrl
+                    : other?.avatarUrl
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {displayAvatarUrl ? (
