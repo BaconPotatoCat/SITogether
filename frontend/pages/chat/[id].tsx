@@ -53,8 +53,9 @@ export default function ConversationPage() {
     load()
   }, [id])
 
-  // Enrich avatars from profile API if missing
+  // Enrich avatars from profile API if missing (only if conversation is unlocked)
   useEffect(() => {
+    if (isLocked) return // Don't enrich when locked to preserve privacy
     const enrich = async () => {
       try {
         if (other && !other.avatarUrl) {
@@ -74,7 +75,7 @@ export default function ConversationPage() {
       } catch {}
     }
     enrich()
-  }, [me, other])
+  }, [me, other, isLocked])
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault()

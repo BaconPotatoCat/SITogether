@@ -1635,9 +1635,9 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           select: { id: true, name: true, avatarUrl: true },
         });
         // Hide name and avatar when conversation is locked (before match)
-        const sanitizedOtherUser = c.isLocked
+        const sanitizedOtherUser = c.isLocked && otherUser
           ? {
-              id: otherUser?.id || '',
+              id: otherUser.id,
               name: 'Hidden User',
               avatarUrl: null,
             }
