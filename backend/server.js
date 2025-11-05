@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./lib/email');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('./lib/email');
 require('dotenv').config();
 
 const app = express();
@@ -1210,7 +1210,7 @@ app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, r
 
     // Send reset email
     try {
-      await sendResetPasswordEmail(user.email, user.name, resetToken);
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
 
       res.json({
         success: true,

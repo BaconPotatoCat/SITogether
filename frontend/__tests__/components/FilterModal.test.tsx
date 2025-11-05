@@ -4,47 +4,51 @@ import '@testing-library/jest-dom'
 import FilterModal from '../../components/FilterModal'
 
 // Mock MUI Slider
-jest.mock('@mui/material/Slider', () => {
-  return function MockSlider({
-    value,
-    onChange,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    valueLabelDisplay,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    disableSwap,
-    ...props
-  }: {
-    value: number[]
-    onChange: (event: unknown, value: number | number[], activeThumb: number) => void
-    valueLabelDisplay?: string
-    disableSwap?: boolean
-    [key: string]: unknown
-  }) {
-    return (
-      <div data-testid="mock-slider" {...props}>
-        <input
-          type="range"
-          min={18}
-          max={100}
-          value={value[0]}
-          onChange={(e) => onChange(e, [parseInt(e.target.value), value[1]], 0)}
-          data-testid="slider-min"
-        />
-        <input
-          type="range"
-          min={18}
-          max={100}
-          value={value[1]}
-          onChange={(e) => onChange(e, [value[0], parseInt(e.target.value)], 1)}
-          data-testid="slider-max"
-        />
-        {/* Test button to trigger non-array value */}
-        <button
-          data-testid="test-non-array"
-          onClick={() => onChange(null, 25, 0)} // Pass non-array value
-        />
-      </div>
-    )
+jest.mock('@mui/material', () => {
+  const actual = jest.requireActual('@mui/material')
+  return {
+    ...actual,
+    Slider: function MockSlider({
+      value,
+      onChange,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      valueLabelDisplay,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      disableSwap,
+      ...props
+    }: {
+      value: number[]
+      onChange: (event: unknown, value: number | number[], activeThumb: number) => void
+      valueLabelDisplay?: string
+      disableSwap?: boolean
+      [key: string]: unknown
+    }) {
+      return (
+        <div data-testid="mock-slider" {...props}>
+          <input
+            type="range"
+            min={18}
+            max={100}
+            value={value[0]}
+            onChange={(e) => onChange(e, [parseInt(e.target.value), value[1]], 0)}
+            data-testid="slider-min"
+          />
+          <input
+            type="range"
+            min={18}
+            max={100}
+            value={value[1]}
+            onChange={(e) => onChange(e, [value[0], parseInt(e.target.value)], 1)}
+            data-testid="slider-max"
+          />
+          {/* Test button to trigger non-array value */}
+          <button
+            data-testid="test-non-array"
+            onClick={() => onChange(null, 25, 0)} // Pass non-array value
+          />
+        </div>
+      )
+    },
   }
 })
 

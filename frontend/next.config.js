@@ -7,11 +7,6 @@ const nextConfig = {
     // Disable ESLint during production builds since we have a separate lint script
     ignoreDuringBuilds: true,
   },
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
   // Set outputFileTracingRoot to frontend directory to silence monorepo lockfile warning
   outputFileTracingRoot: path.resolve(__dirname),
 }

@@ -14,7 +14,7 @@ const authenticateAdmin = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Get user and check if admin
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -71,5 +71,3 @@ const authenticateAdmin = async (req, res, next) => {
 };
 
 module.exports = { authenticateAdmin };
-
-

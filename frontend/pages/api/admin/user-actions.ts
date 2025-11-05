@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
       process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
       'http://localhost:5000'
-    
+
     // Get token from cookies
     const token = req.cookies.token
 
@@ -21,9 +21,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { userId, action } = req.body
 
     if (!userId || !action) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User ID and action are required' 
+      return res.status(400).json({
+        success: false,
+        error: 'User ID and action are required',
       })
     }
 
@@ -39,9 +39,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endpoint = `/api/admin/users/${userId}/reset-password`
         break
       default:
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Invalid action' 
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid action',
         })
     }
 
@@ -70,5 +70,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
-
-

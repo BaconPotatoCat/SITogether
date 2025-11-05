@@ -1,21 +1,40 @@
 const request = require('supertest');
 const express = require('express');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../../middleware/auth');
 
-// Mock Prisma client
-const mockPrismaClient = {
-  user: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-  },
-};
+// Mock JWT
+jest.mock('jsonwebtoken', () => {
+  const mockJwt = {
+    verify: jest.fn(),
+    sign: jest.fn(),
+  };
+  return mockJwt;
+});
 
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => mockPrismaClient),
-}));
+const jwt = require('jsonwebtoken');
+
+// Mock lib/prisma first (it's used by @prisma/client)
+jest.mock('../../lib/prisma', () => {
+  const mockPrismaClient = {
+    user: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+  return mockPrismaClient;
+});
+
+jest.mock('@prisma/client', () => {
+  // Require lib/prisma to get the mocked instance
+  const libPrisma = require('../../lib/prisma');
+  return {
+    PrismaClient: jest.fn(() => libPrisma),
+  };
+});
+
+const mockPrismaClient = require('../../lib/prisma');
 
 // Mock bcrypt for faster tests
 jest.mock('bcrypt');
@@ -268,10 +287,55 @@ describe('Auth API Endpoints', () => {
         });
       }
     });
+
+    // Set up JWT mocks
+    jwt.sign.mockImplementation((payload, _secret, _options) => {
+      return `mock-token-${payload.userId}`;
+    });
+
+    jwt.verify.mockImplementation((token, _secret) => {
+      // eslint-disable-next-line security/detect-possible-timing-attacks
+      if (token && typeof token === 'string' && token.startsWith('mock-token-')) {
+        const userId = token.replace('mock-token-', '');
+        return { userId };
+      }
+      throw new Error('Invalid token');
+    });
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Re-setup JWT mocks (cleared by clearAllMocks)
+    jwt.sign.mockImplementation((payload, _secret, _options) => {
+      return `mock-token-${payload.userId}`;
+    });
+
+    jwt.verify.mockImplementation((token, _secret) => {
+      // eslint-disable-next-line security/detect-possible-timing-attacks
+      if (token && typeof token === 'string' && token.startsWith('mock-token-')) {
+        const userId = token.replace('mock-token-', '');
+        return { userId };
+      }
+      throw new Error('Invalid token');
+    });
+
+    // Mock user lookup for authentication middleware
+    mockPrismaClient.user.findUnique.mockImplementation((query) => {
+      const userId = query.where?.id;
+      const isAuthCheck = query.select && query.select.banned !== undefined;
+
+      // For authentication checks, always return valid user unless explicitly mocked
+      if (isAuthCheck) {
+        return Promise.resolve({
+          id: userId,
+          banned: false,
+        });
+      }
+
+      // For other queries, return null by default (tests will override)
+      return Promise.resolve(null);
+    });
   });
 
   describe('POST /api/auth/register', () => {
@@ -473,7 +537,19 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 404 if user not found', async () => {
-      mockPrismaClient.user.findUnique.mockResolvedValue(null);
+      // Mock the route handler's user lookup, but keep auth check working
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user for authentication
+          return Promise.resolve({
+            id: query.where.id,
+            banned: false,
+          });
+        }
+        // Route handler check - return null to test 404
+        return Promise.resolve(null);
+      });
 
       const token = jwt.sign({ userId: 'nonexistent-user' }, process.env.JWT_SECRET);
 
@@ -488,15 +564,27 @@ describe('Auth API Endpoints', () => {
 
   describe('POST /api/auth/change-password', () => {
     const userId = 'user-123';
-    const token = jwt.sign({ userId }, process.env.JWT_SECRET);
 
     it('should successfully change password with valid credentials', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const mockUser = {
         id: userId,
         password: 'hashed_old_password',
       };
 
-      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      // Mock both auth check and route handler check
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user
+          return Promise.resolve({
+            id: userId,
+            banned: false,
+          });
+        }
+        // Route handler check - return user with password
+        return Promise.resolve(mockUser);
+      });
       bcrypt.compare.mockResolvedValue(true);
       bcrypt.hash.mockResolvedValue('hashed_new_password');
       mockPrismaClient.user.update.mockResolvedValue({
@@ -524,6 +612,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 400 when current password is missing', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -537,6 +626,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 400 when new password is missing', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -550,6 +640,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 400 when new password is too short', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -564,12 +655,25 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 401 when current password is incorrect', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const mockUser = {
         id: userId,
         password: 'hashed_old_password',
       };
 
-      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      // Mock both auth check and route handler check
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user
+          return Promise.resolve({
+            id: userId,
+            banned: false,
+          });
+        }
+        // Route handler check - return user with password
+        return Promise.resolve(mockUser);
+      });
       bcrypt.compare.mockResolvedValue(false); // Wrong password
 
       const response = await request(app)
@@ -588,8 +692,21 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 404 when user is not found', async () => {
-      mockPrismaClient.user.findUnique.mockResolvedValue(null);
+      // Mock auth check to work, but route handler check to return null
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user for authentication
+          return Promise.resolve({
+            id: userId,
+            banned: false,
+          });
+        }
+        // Route handler check - return null to test 404
+        return Promise.resolve(null);
+      });
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -619,11 +736,24 @@ describe('Auth API Endpoints', () => {
         password: 'hashed_old_password',
       };
 
-      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      // Mock both auth check and route handler check
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user
+          return Promise.resolve({
+            id: userId,
+            banned: false,
+          });
+        }
+        // Route handler check - return user with password
+        return Promise.resolve(mockUser);
+      });
       bcrypt.compare.mockResolvedValue(true);
       bcrypt.hash.mockResolvedValue('hashed_new_password');
       mockPrismaClient.user.update.mockRejectedValue(new Error('Database error'));
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -643,7 +773,19 @@ describe('Auth API Endpoints', () => {
         password: 'hashed_old_password',
       };
 
-      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      // Mock both auth check and route handler check
+      mockPrismaClient.user.findUnique.mockImplementation((query) => {
+        const isAuthCheck = query.select && query.select.banned !== undefined;
+        if (isAuthCheck) {
+          // Auth check - return valid user
+          return Promise.resolve({
+            id: userId,
+            banned: false,
+          });
+        }
+        // Route handler check - return user with password
+        return Promise.resolve(mockUser);
+      });
       bcrypt.compare.mockResolvedValue(true);
       bcrypt.hash.mockResolvedValue('hashed_new_password');
       mockPrismaClient.user.update.mockResolvedValue({
@@ -651,6 +793,7 @@ describe('Auth API Endpoints', () => {
         password: 'hashed_new_password',
       });
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])

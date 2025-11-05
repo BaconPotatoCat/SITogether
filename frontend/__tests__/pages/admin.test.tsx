@@ -39,10 +39,12 @@ const mockSession = {
 const mockUseSession = jest.fn(() => ({
   session: mockSession,
   status: 'authenticated' as const,
-})) as jest.MockedFunction<() => {
-  session: typeof mockSession | null
-  status: 'loading' | 'authenticated' | 'unauthenticated'
-}>
+})) as jest.MockedFunction<
+  () => {
+    session: typeof mockSession | null
+    status: 'loading' | 'authenticated' | 'unauthenticated'
+  }
+>
 
 jest.mock('../../contexts/AuthContext', () => ({
   useSession: () => mockUseSession(),
@@ -388,8 +390,8 @@ describe('AdminPanel', () => {
       fireEvent.change(filterSelect, { target: { value: 'Reviewed' } })
 
       await waitFor(() => {
-        const reportsCalls = mockFetchWithAuth.mock.calls.filter(
-          (call) => call[0]?.startsWith('/api/admin/reports')
+        const reportsCalls = mockFetchWithAuth.mock.calls.filter((call) =>
+          call[0]?.startsWith('/api/admin/reports')
         )
         expect(reportsCalls.length).toBeGreaterThan(0)
         const lastCall = reportsCalls[reportsCalls.length - 1]
@@ -457,5 +459,3 @@ describe('AdminPanel', () => {
     })
   })
 })
-
-

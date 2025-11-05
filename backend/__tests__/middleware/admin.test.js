@@ -1,9 +1,11 @@
 // Mock JWT
 jest.mock('jsonwebtoken', () => ({
   verify: jest.fn((token, _secret) => {
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (token === 'valid-admin-token') {
       return { userId: 'admin-user-id' };
     }
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (token === 'expired-token') {
       const error = new Error('Token expired');
       error.name = 'TokenExpiredError';
@@ -177,5 +179,3 @@ describe('Admin Middleware', () => {
     });
   });
 });
-
-

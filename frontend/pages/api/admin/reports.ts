@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
       'http://localhost:5000'
     const backendUrl = `${baseUrl}/api/admin/reports`
-    
+
     // Get token from cookies
     const token = req.cookies.token
 
@@ -47,5 +47,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
   }
 }
-
-

@@ -1,26 +1,48 @@
 const request = require('supertest');
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../../middleware/auth');
 
-// Mock Prisma client
-const mockPrismaClient = {
-  userLikes: {
-    findUnique: jest.fn(),
-  },
-  conversation: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
-  },
-  message: {
-    findFirst: jest.fn(),
-    create: jest.fn(),
-  },
-};
+// Mock JWT
+jest.mock('jsonwebtoken', () => {
+  const mockJwt = {
+    verify: jest.fn(),
+    sign: jest.fn(),
+  };
+  return mockJwt;
+});
 
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => mockPrismaClient),
-}));
+const jwt = require('jsonwebtoken');
+
+// Mock lib/prisma first (it's used by @prisma/client)
+jest.mock('../../lib/prisma', () => {
+  const mockPrismaClient = {
+    user: {
+      findUnique: jest.fn(),
+    },
+    userLikes: {
+      findUnique: jest.fn(),
+    },
+    conversation: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    message: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+  };
+  return mockPrismaClient;
+});
+
+jest.mock('@prisma/client', () => {
+  // Require lib/prisma to get the mocked instance
+  const libPrisma = require('../../lib/prisma');
+  return {
+    PrismaClient: jest.fn(() => libPrisma),
+  };
+});
+
+const mockPrismaClient = require('../../lib/prisma');
 
 // Mock message validation utility
 const mockValidateUserId = jest.fn();
@@ -143,11 +165,31 @@ describe('Introduction Message API Endpoints', () => {
     // Generate mock tokens
     mockLikerId = '123e4567-e89b-12d3-a456-426614174000';
     mockLikedId = '223e4567-e89b-12d3-a456-426614174000';
+
+    // Set up JWT mocks - sign returns a token, verify decodes it
+    jwt.sign.mockImplementation((payload, _secret, _options) => {
+      return `mock-token-${payload.userId}`;
+    });
+
+    jwt.verify.mockImplementation((token, _secret) => {
+      // eslint-disable-next-line security/detect-possible-timing-attacks
+      if (token && typeof token === 'string' && token.startsWith('mock-token-')) {
+        const userId = token.replace('mock-token-', '');
+        return { userId };
+      }
+      throw new Error('Invalid token');
+    });
+
     mockAuthToken = jwt.sign({ userId: mockLikerId }, process.env.JWT_SECRET || 'test-secret-key');
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock user lookup for authentication middleware
+    mockPrismaClient.user.findUnique.mockResolvedValue({
+      id: mockLikerId,
+      banned: false,
+    });
   });
 
   describe('POST /api/likes/:userId/intro', () => {

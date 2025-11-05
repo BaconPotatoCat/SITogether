@@ -53,7 +53,9 @@ export default function AdminPanel() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'banned' | 'active'>('all')
-  const [reportFilterStatus, setReportFilterStatus] = useState<'all' | 'Pending' | 'Reviewed' | 'Resolved'>('all')
+  const [reportFilterStatus, setReportFilterStatus] = useState<
+    'all' | 'Pending' | 'Reviewed' | 'Resolved'
+  >('all')
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -147,15 +149,15 @@ export default function AdminPanel() {
   }
 
   const filteredUsers = users.filter((user) => {
-    const matchesSearch = 
+    const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesFilter = 
+
+    const matchesFilter =
       filterStatus === 'all' ||
       (filterStatus === 'banned' && user.banned) ||
       (filterStatus === 'active' && !user.banned)
-    
+
     return matchesSearch && matchesFilter
   })
 
@@ -179,9 +181,7 @@ export default function AdminPanel() {
         <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           <div style={{ marginBottom: '2rem' }}>
             <h1 style={{ marginBottom: '0.5rem' }}>Admin Panel</h1>
-            <p style={{ color: '#6b7280', margin: 0 }}>
-              Manage users and review reported accounts
-            </p>
+            <p style={{ color: '#6b7280', margin: 0 }}>Manage users and review reported accounts</p>
           </div>
 
           {message && (
@@ -233,7 +233,8 @@ export default function AdminPanel() {
                 cursor: 'pointer',
                 fontWeight: 600,
                 color: activeTab === 'reports' ? '#6366f1' : '#6b7280',
-                borderBottom: activeTab === 'reports' ? '2px solid #6366f1' : '2px solid transparent',
+                borderBottom:
+                  activeTab === 'reports' ? '2px solid #6366f1' : '2px solid transparent',
                 marginBottom: '-2px',
                 fontSize: '1rem',
               }}
@@ -466,7 +467,14 @@ export default function AdminPanel() {
                         }}
                       >
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              marginBottom: '0.5rem',
+                            }}
+                          >
                             <h3 style={{ margin: 0, color: '#111827', fontSize: '1.125rem' }}>
                               {report.reportedUser?.name || 'Unknown User'}
                             </h3>
@@ -500,14 +508,14 @@ export default function AdminPanel() {
                                 report.status === 'Pending'
                                   ? '#fef3c7'
                                   : report.status === 'Reviewed'
-                                  ? '#e0e7ff'
-                                  : '#d1fae5',
+                                    ? '#e0e7ff'
+                                    : '#d1fae5',
                               color:
                                 report.status === 'Pending'
                                   ? '#92400e'
                                   : report.status === 'Reviewed'
-                                  ? '#3730a3'
-                                  : '#065f46',
+                                    ? '#3730a3'
+                                    : '#065f46',
                             }}
                           >
                             {report.status}
@@ -536,7 +544,8 @@ export default function AdminPanel() {
                         }}
                       >
                         <div style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-                          Reported on {new Date(report.createdAt).toLocaleDateString()} by {report.reportedBy}
+                          Reported on {new Date(report.createdAt).toLocaleDateString()} by{' '}
+                          {report.reportedBy}
                         </div>
                         {report.reportedUser && (
                           <button
@@ -551,7 +560,10 @@ export default function AdminPanel() {
                               fontWeight: 600,
                               borderRadius: '6px',
                               border: 'none',
-                              cursor: actionLoading === report.reportedUser.id ? 'not-allowed' : 'pointer',
+                              cursor:
+                                actionLoading === report.reportedUser.id
+                                  ? 'not-allowed'
+                                  : 'pointer',
                               backgroundColor: report.reportedUser.banned ? '#10b981' : '#ef4444',
                               color: '#fff',
                               opacity: actionLoading === report.reportedUser.id ? 0.5 : 1,
@@ -592,5 +604,3 @@ const tableCellStyle: React.CSSProperties = {
   fontSize: '0.9375rem',
   color: '#111827',
 }
-
-

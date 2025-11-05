@@ -14,7 +14,7 @@ jest.mock('next/head', () => {
       React.useEffect(() => {
         const childrenArray = React.Children.toArray(children)
         const titleElement = childrenArray.find(
-          child => React.isValidElement(child) && child.type === 'title'
+          (child) => React.isValidElement(child) && child.type === 'title'
         )
         if (titleElement && React.isValidElement(titleElement)) {
           // Handle both string and array children
@@ -34,4 +34,3 @@ process.env.NEXT_PUBLIC_BACKEND_INTERNALURL = 'http://sitogether-backend:5000'
 process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL = 'http://localhost:5000'
 process.env.NEXT_PUBLIC_FRONTEND_INTERNALURL = 'http://sitogether-frontend:3000'
 process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL = 'http://localhost:3000'
-

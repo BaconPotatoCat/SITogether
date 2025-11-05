@@ -4,6 +4,7 @@ const express = require('express');
 // Mock JWT
 jest.mock('jsonwebtoken', () => ({
   verify: jest.fn((token, _secret) => {
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (token === 'admin-token') {
       return { userId: 'admin-user-id' };
     }
@@ -542,7 +543,12 @@ describe('Admin API Endpoints', () => {
         {
           id: 'report-1',
           status: 'Pending',
-          reportedUser: { id: 'user-1', email: 'user1@example.com', name: 'User One', banned: false },
+          reportedUser: {
+            id: 'user-1',
+            email: 'user1@example.com',
+            name: 'User One',
+            banned: false,
+          },
         },
       ];
 
@@ -622,5 +628,3 @@ describe('Admin API Endpoints', () => {
     });
   });
 });
-
-

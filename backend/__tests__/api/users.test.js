@@ -4,9 +4,11 @@ const express = require('express');
 // Mock JWT
 jest.mock('jsonwebtoken', () => ({
   verify: jest.fn((token, _secret) => {
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (token === 'valid-user-token') {
       return { userId: 'test-user' };
     }
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (token === 'invalid-token') {
       throw new Error('Invalid token');
     }
