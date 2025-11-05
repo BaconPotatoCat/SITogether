@@ -128,10 +128,6 @@ function MyComponent() {
 - `authenticated` - User is logged in
 - `unauthenticated` - No valid session
 
-**Session object includes:**
-- `session.user` - User data (id, name, age, role, course, bio, interests, avatarUrl)
-- `session.expires` - Token expiration timestamp
-
 ### Database Seeding
 
 The application includes a seed script that populates the database with sample user data for development and testing purposes.

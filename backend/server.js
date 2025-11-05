@@ -1036,7 +1036,6 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
         id: true,
         name: true,
         age: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,

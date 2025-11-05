@@ -5,7 +5,6 @@ interface User {
   id: string
   name: string
   age: number
-  role: string
   course?: string
   bio?: string
   interests?: string[]
