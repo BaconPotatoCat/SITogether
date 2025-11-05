@@ -8,7 +8,8 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./lib/email');
+const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
+const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
 require('dotenv').config();
 
 const app = express();
@@ -60,8 +61,13 @@ app.get('/api', (req, res) => {
         verify: 'GET /api/auth/verify?token=<verification_token>',
         resendVerification: 'POST /api/auth/resend-verification',
         login: 'POST /api/auth/login',
+        verify2fa: 'POST /api/auth/verify-2fa',
+        resend2fa: 'POST /api/auth/resend-2fa',
         logout: 'POST /api/auth/logout',
+        changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
+        forgotPassword: 'POST /api/auth/forgot-password',
+        resetPassword: 'POST /api/auth/reset-password',
       },
       points: {
         getPoints: 'GET /api/points (protected)',
@@ -334,6 +340,15 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = await validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+
     // Validate SIT student email format
     // TODO: Uncomment to enforce SIT email validation
     // const sitEmailRegex = /^\d{7}@sit\.singaporetech\.edu\.sg$/;
@@ -377,9 +392,10 @@ app.post('/api/auth/register', async (req, res) => {
         bio: null,
         interests: [],
         verified: false,
-        verificationTokens: {
+        tokens: {
           create: {
             token: verificationToken,
+            type: 'EMAIL_VERIFICATION',
             expiresAt: verificationTokenExpires,
           },
         },
@@ -452,8 +468,11 @@ app.get('/api/auth/verify', async (req, res) => {
     }
 
     // Find verification token with user
-    const verificationToken = await prisma.verificationToken.findUnique({
-      where: { token },
+    const verificationToken = await prisma.token.findFirst({
+      where: {
+        token,
+        type: 'EMAIL_VERIFICATION',
+      },
       include: { user: true },
     });
 
@@ -467,7 +486,7 @@ app.get('/api/auth/verify', async (req, res) => {
     // Check if token has expired
     if (new Date() > verificationToken.expiresAt) {
       // Delete expired token
-      await prisma.verificationToken.delete({
+      await prisma.token.delete({
         where: { id: verificationToken.id },
       });
       return res.status(400).json({
@@ -479,7 +498,7 @@ app.get('/api/auth/verify', async (req, res) => {
     // Check if user is already verified
     if (verificationToken.user.verified) {
       // Delete token since user is already verified
-      await prisma.verificationToken.delete({
+      await prisma.token.delete({
         where: { id: verificationToken.id },
       });
       return res.status(200).json({
@@ -494,7 +513,7 @@ app.get('/api/auth/verify', async (req, res) => {
         where: { id: verificationToken.userId },
         data: { verified: true },
       }),
-      prisma.verificationToken.delete({
+      prisma.token.delete({
         where: { id: verificationToken.id },
       }),
     ]);
@@ -550,13 +569,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     // Delete any existing tokens for this user and create new one in a transaction
-    await prisma.$transaction([
-      prisma.verificationToken.deleteMany({
-        where: { userId: user.id },
+    const [, createdToken] = await prisma.$transaction([
+      prisma.token.deleteMany({
+        where: {
+          userId: user.id,
+          type: 'EMAIL_VERIFICATION',
+        },
       }),
-      prisma.verificationToken.create({
+      prisma.token.create({
         data: {
           token: verificationToken,
+          type: 'EMAIL_VERIFICATION',
           userId: user.id,
           expiresAt: verificationTokenExpires,
         },
@@ -572,6 +595,17 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Error sending verification email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up verification token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
       res.status(500).json({
         success: false,
         error: 'Failed to send verification email. Please try again later.',
@@ -649,15 +683,146 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id },
+    // Generate 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
+    const tempToken = jwt.sign(
+      { userId: user.id, requiresTwoFactor: true },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' } // Token expires in 1 hour
+      { expiresIn: '10m' }
     );
 
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Please check your email for the verification code',
+        requiresTwoFactor: true,
+        tempToken: tempToken,
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to login',
+      message: error.message,
+    });
+  }
+});
+
+// Verify 2FA code and complete login
+app.post('/api/auth/verify-2fa', async (req, res) => {
+  try {
+    const { tempToken, code } = req.body;
+
+    if (!tempToken || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token and verification code are required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Find 2FA token
+    const twoFactorToken = await prisma.token.findFirst({
+      where: {
+        token: code,
+        type: 'TWO_FACTOR_AUTH',
+        userId: userId,
+      },
+    });
+
+    if (!twoFactorToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid verification code',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > twoFactorToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: twoFactorToken.id },
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Verification code has expired. Please try logging in again.',
+      });
+    }
+
+    // Delete the used 2FA token
+    await prisma.token.delete({
+      where: { id: twoFactorToken.id },
+    });
+
+    // Generate final JWT token
+    const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
     // Set cookie with token
-    res.cookie('token', token, {
+    res.cookie('token', finalToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -669,10 +834,121 @@ app.post('/api/auth/login', async (req, res) => {
       message: 'Login successful',
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('2FA verification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to login',
+      error: 'Failed to verify code',
+      message: error.message,
+    });
+  }
+});
+
+// Resend 2FA code endpoint
+app.post('/api/auth/resend-2fa', async (req, res) => {
+  try {
+    const { tempToken } = req.body;
+
+    if (!tempToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token is required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token. Please try logging in again.',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Get user details
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Generate new 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create new 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Verification code sent successfully. Please check your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Resend 2FA error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to resend verification code',
       message: error.message,
     });
   }
@@ -685,6 +961,71 @@ app.post('/api/auth/logout', (req, res) => {
     success: true,
     message: 'Logged out successfully',
   });
+});
+
+// Change password endpoint (protected)
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate password change according to NIST 2025 guidelines
+    const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+
+    // Find user by ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        password: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user password
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to change password',
+      message: error.message,
+    });
+  }
 });
 
 // Session endpoint (protected)
@@ -724,6 +1065,196 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve session',
+      message: error.message,
+    });
+  }
+});
+
+// Forgot password endpoint (request password reset)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    // Always return success to prevent email enumeration attacks
+    // Even if user doesn't exist, we say we sent the email
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    }
+
+    // Check if user is verified
+    if (!user.verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please verify your email address before resetting your password.',
+        requiresVerification: true,
+      });
+    }
+
+    // Generate password reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Delete any existing password reset tokens for this email
+    await prisma.token.deleteMany({
+      where: {
+        email,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    // Create new password reset token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: resetToken,
+        type: 'PASSWORD_RESET',
+        email: user.email,
+        userId: user.id,
+        expiresAt: resetTokenExpires,
+      },
+    });
+
+    // Send password reset email
+    const { sendPasswordResetEmail } = require('./lib/email');
+    try {
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
+
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up password reset token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send password reset email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request',
+      message: error.message,
+    });
+  }
+});
+
+// Reset password endpoint (verify token and update password)
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and new password are required',
+      });
+    }
+
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = await validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+
+    // Find password reset token
+    const resetToken = await prisma.token.findFirst({
+      where: {
+        token,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired password reset token',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > resetToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: resetToken.id },
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Password reset token has expired. Please request a new one.',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: resetToken.email },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user password
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword },
+    });
+
+    // Delete the used reset token
+    await prisma.token.delete({
+      where: { id: resetToken.id },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now log in with your new password.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password',
       message: error.message,
     });
   }
