@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { fetchWithAuth } from '../utils/api'
 import IntroMessageModal from '../components/IntroMessageModal'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface Profile {
   id: string
@@ -23,6 +25,7 @@ export default function LikedProfiles() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [pendingLikeUserId, setPendingLikeUserId] = useState<string | null>(null)
+  const { toasts, showToast, removeToast } = useToast()
 
   // Fetch liked profiles with hasIntro flag
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function LikedProfiles() {
     }
 
     if (!message || message.trim().length === 0) {
-      alert('Please enter an introduction message')
+      showToast('Please enter an introduction message', 'warning')
       return
     }
 
@@ -99,11 +102,11 @@ export default function LikedProfiles() {
           }
         }
         setSelectedProfile(null)
-        alert('Introduction sent successfully!')
+        showToast('Introduction sent successfully!', 'success')
       } else {
         // Handle 409 Conflict (intro already sent)
         if (response.status === 409) {
-          alert('You have already sent an introduction message to this user.')
+          showToast('You have already sent an introduction message to this user.', 'warning')
           // Refresh the list to update hasIntro flags
           const refreshResponse = await fetchWithAuth('/api/likes/all')
           if (refreshResponse.ok) {
@@ -114,12 +117,12 @@ export default function LikedProfiles() {
           }
         } else {
           console.error('Failed to send introduction:', result.error)
-          alert(`Failed to send introduction: ${result.error || 'Unknown error'}`)
+          showToast(`Failed to send introduction: ${result.error || 'Unknown error'}`, 'error')
         }
       }
     } catch (error) {
       console.error('Error sending introduction:', error)
-      alert('Failed to send introduction. Please try again.')
+      showToast('Failed to send introduction. Please try again.', 'error')
     } finally {
       setIsIntroOpen(false)
       setPendingLikeUserId(null)
@@ -459,6 +462,8 @@ export default function LikedProfiles() {
           )}
         </section>
       </main>
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }
