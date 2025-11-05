@@ -1928,13 +1928,30 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       const validation = validateAndSanitizeMessage(introMessage);
 
       if (validation.isValid) {
-        createdIntroMessage = await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            senderId: likerId,
-            content: validation.sanitized,
-          },
-        });
+        // Encrypt intro message content before storing (application-level encryption)
+        const { encryptData } = require('./utils/pgcrypto');
+        const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+        
+        if (ENCRYPTION_KEY) {
+          const encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: encryptedContent, // Store encrypted content
+            },
+          });
+        } else {
+          console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+          // Fallback: create without encryption if key is not configured
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: validation.sanitized,
+            },
+          });
+        }
       }
       // If validation fails, we silently ignore the intro message (it's optional)
     }
@@ -2129,12 +2146,24 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create the intro message with sanitized content
+    // Encrypt intro message content before storing (application-level encryption)
+    const { encryptData } = require('./utils/pgcrypto');
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    
+    let encryptedContent;
+    if (ENCRYPTION_KEY) {
+      encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+    } else {
+      console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+      encryptedContent = validation.sanitized; // Fallback to unencrypted
+    }
+
+    // Create the intro message with encrypted content
     const createdIntroMessage = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderId: likerId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
@@ -2172,6 +2201,10 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt lastMessage content if present (application-level decryption)
+    const { decryptData } = require('./utils/pgcrypto');
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
     const result = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
@@ -2179,10 +2212,26 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           where: { id: otherUserId },
           select: { id: true, name: true, avatarUrl: true },
         });
+        
+        // Decrypt lastMessage if it exists
+        let lastMessage = c.messages[0] || null;
+        if (lastMessage && ENCRYPTION_KEY) {
+          try {
+            const decryptedContent = await decryptData(lastMessage.content, ENCRYPTION_KEY);
+            lastMessage = {
+              ...lastMessage,
+              content: decryptedContent,
+            };
+          } catch (error) {
+            // If decryption fails, assume message is not encrypted (legacy data)
+            console.warn(`Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`, error.message);
+          }
+        }
+        
         return {
           id: c.id,
           isLocked: c.isLocked,
-          lastMessage: c.messages[0] || null,
+          lastMessage,
           otherUser,
         };
       })
@@ -2216,6 +2265,32 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       orderBy: { createdAt: 'asc' },
     });
 
+    // Decrypt message content (application-level decryption)
+    const { decryptData } = require('./utils/pgcrypto');
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    
+    const decryptedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        try {
+          // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
+          if (ENCRYPTION_KEY) {
+            const decryptedContent = await decryptData(msg.content, ENCRYPTION_KEY);
+            return {
+              ...msg,
+              content: decryptedContent,
+            };
+          } else {
+            // No encryption key configured, return as-is
+            return msg;
+          }
+        } catch (error) {
+          // If decryption fails, assume message is not encrypted (legacy data)
+          console.warn(`Failed to decrypt message ${msg.id}, assuming unencrypted:`, error.message);
+          return msg;
+        }
+      })
+    );
+
     // Include lightweight participant details to render avatars in chat UI
     const [userA, userB] = await Promise.all([
       prisma.user.findUnique({
@@ -2233,7 +2308,7 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     res.json({
       success: true,
       isLocked: conversation.isLocked,
-      messages,
+      messages: decryptedMessages,
       participants: { me, other },
       currentUserId: userId,
     });
@@ -2277,18 +2352,36 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
       return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
     }
 
+    // Encrypt message content before storing (application-level encryption)
+    const { encryptData } = require('./utils/pgcrypto');
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    if (!ENCRYPTION_KEY) {
+      console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
+      return res.status(500).json({ success: false, error: 'Encryption key not configured' });
+    }
+
+    const encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+
     const message = await prisma.message.create({
       data: {
         conversationId: id,
         senderId: userId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
     // touch conversation updatedAt
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
-    res.status(201).json({ success: true, message });
+    // Return message with decrypted content for client
+    const { decryptData } = require('./utils/pgcrypto');
+    const decryptedContent = await decryptData(message.content, ENCRYPTION_KEY);
+    const messageResponse = {
+      ...message,
+      content: decryptedContent, // Return decrypted content to client
+    };
+
+    res.status(201).json({ success: true, message: messageResponse });
   } catch (error) {
     console.error('Send message error:', error);
     res

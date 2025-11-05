@@ -83,6 +83,16 @@ cp frontend/env.example frontend/.env
 
 **Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
 
+**Important:** Add the encryption key to your `.env` file:
+
+```bash
+# Generate a strong key
+openssl rand -base64 32
+
+# Add to .env
+ENCRYPTION_KEY=your-generated-key-here
+```
+
 ### Authentication & Security
 
 The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js-style session management system:

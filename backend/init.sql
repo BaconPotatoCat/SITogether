@@ -3,6 +3,7 @@
 
 -- Create extensions if needed
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create a basic users table (example)
 CREATE TABLE IF NOT EXISTS users (
