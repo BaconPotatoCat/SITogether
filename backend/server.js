@@ -10,10 +10,27 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
-require('dotenv').config();
-
+const {
+  loginLimiter,
+  passwordResetLimiter,
+  registerLimiter,
+  otpLimiter,
+  resendOtpLimiter,
+  resendVerificationLimiter,
+  sensitiveDataLimiter,
+} = require('./middleware/rateLimiter');
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Trust proxy configuration
+// If your app is behind a reverse proxy (e.g., Nginx, AWS ELB, Heroku), set TRUST_PROXY to the number of proxies
+// Set to 1 if behind a single proxy, or a specific number based on your deployment
+// Default is 0 (no trust proxy) for local development
+// Rate limiters use custom keyGenerator for secure IP handling regardless of trust proxy setting
+const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
+if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
+  app.set('trust proxy', trustProxyCount);
+}
 
 // Middleware
 app.use(helmet());
@@ -90,7 +107,7 @@ app.get('/api', (req, res) => {
 });
 
 // Users API route (protected)
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.userId;
 
@@ -310,7 +327,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 
 // Authentication routes
 // Register endpoint
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, name, age, gender, course } = req.body;
 
@@ -533,7 +550,7 @@ app.get('/api/auth/verify', async (req, res) => {
 });
 
 // Resend verification email endpoint
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -622,7 +639,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -753,7 +770,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Verify 2FA code and complete login
-app.post('/api/auth/verify-2fa', async (req, res) => {
+app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
   try {
     const { tempToken, code } = req.body;
 
@@ -844,7 +861,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
 });
 
 // Resend 2FA code endpoint
-app.post('/api/auth/resend-2fa', async (req, res) => {
+app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
   try {
     const { tempToken } = req.body;
 
@@ -1071,7 +1088,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
 });
 
 // Forgot password endpoint (request password reset)
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -1172,7 +1189,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Reset password endpoint (verify token and update password)
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
