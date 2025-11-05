@@ -924,6 +924,97 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
+// Request password reset (for authenticated users)
+app.post('/api/auth/reset-password-request', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Find user by ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Check if user is verified
+    if (!user.verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please verify your email address before resetting your password.',
+        requiresVerification: true,
+      });
+    }
+
+    // Generate password reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Delete any existing password reset tokens for this email
+    await prisma.token.deleteMany({
+      where: {
+        email: user.email,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    // Create new password reset token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: resetToken,
+        type: 'PASSWORD_RESET',
+        email: user.email,
+        userId: user.id,
+        expiresAt: resetTokenExpires,
+      },
+    });
+
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
+
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up password reset token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send password reset email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Reset password request error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request',
+      message: error.message,
+    });
+  }
+});
+
 // Reset password endpoint (verify token and update password)
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
@@ -1248,6 +1339,76 @@ app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, r
   }
 });
 
+// Create a report (Authenticated users)
+app.post('/api/reports', authenticateToken, async (req, res) => {
+  try {
+    const reporterId = req.user.userId;
+    const { reportedId, reason, description } = req.body;
+
+    // Validation
+    if (!reportedId || !reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'reportedId and reason are required',
+      });
+    }
+
+    // Cannot report yourself
+    if (reporterId === reportedId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot report yourself',
+      });
+    }
+
+    // Check if reported user exists
+    const reportedUser = await prisma.user.findUnique({
+      where: { id: reportedId },
+      select: { id: true },
+    });
+
+    if (!reportedUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Create report
+    const report = await prisma.report.create({
+      data: {
+        reportedId,
+        reportedBy: reporterId,
+        reason,
+        description: description || null,
+        status: 'Pending',
+      },
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Report submitted successfully',
+      data: report,
+    });
+  } catch (error) {
+    console.error('Create report error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create report',
+      message: error.message,
+    });
+  }
+});
+
 // Get all reports (Admin only)
 app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
   try {
@@ -1380,7 +1541,7 @@ app.get('/api/points', authenticateToken, async (req, res) => {
             dailyLikeClaimedDate: true,
           },
         });
-        console.log(`✓ Created UserPoints record for user ${userId}`);
+        console.log(`âœ“ Created UserPoints record for user ${userId}`);
       } catch (createError) {
         console.error(`Failed to create UserPoints for user ${userId}:`, createError);
         return res.status(500).json({
@@ -2570,6 +2731,6 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`ðŸš€ SITogether Backend server is running on port ${PORT}`);
+  console.log(`ðŸ“¡ Environment: ${process.env.NODE_ENV || 'development'}`);
 });

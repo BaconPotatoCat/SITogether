@@ -24,6 +24,7 @@ export default function MyProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isRequestingReset, setIsRequestingReset] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -204,6 +205,40 @@ export default function MyProfilePage() {
 
   const handleLogout = async () => {
     await signOut()
+  }
+
+  const handleRequestPasswordReset = async () => {
+    if (!session?.user?.email) {
+      showToast('Unable to retrieve your email address', 'error')
+      return
+    }
+
+    setIsRequestingReset(true)
+    try {
+      const response = await fetch('/api/auth/reset-password-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast(
+          `Password reset link has been sent to ${session.user.email}. Please check your email.`,
+          'success'
+        )
+      } else {
+        showToast(result.error || 'Failed to send password reset email', 'error')
+      }
+    } catch (error) {
+      console.error('Error requesting password reset:', error)
+      showToast('An error occurred while requesting password reset', 'error')
+    } finally {
+      setIsRequestingReset(false)
+    }
   }
 
   const handleAvatarClick = () => {
@@ -412,6 +447,59 @@ export default function MyProfilePage() {
                 >
                   <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
+              </button>
+
+              <button
+                className="profile-menu-item"
+                onClick={handleRequestPasswordReset}
+                disabled={isRequestingReset}
+              >
+                <div className="menu-item-icon" style={{ backgroundColor: '#fef3c7' }}>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
+                  </svg>
+                </div>
+                <span className="menu-item-text">
+                  {isRequestingReset ? 'Sending Reset Link...' : 'Send Password Reset Email'}
+                </span>
+                {isRequestingReset ? (
+                  <svg
+                    className="menu-item-arrow spinner-icon"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                  </svg>
+                ) : (
+                  <svg
+                    className="menu-item-arrow"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                )}
               </button>
 
               <div className="profile-menu-item">
