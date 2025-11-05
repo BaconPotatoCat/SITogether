@@ -136,6 +136,25 @@ describe('Reset Password Page', () => {
       expect(screen.getByRole('button', { name: /reset password/i })).toBeInTheDocument()
     })
 
+    it('should have password inputs with minLength 8 and maxLength 64', () => {
+      mockRouter.query = { token: 'valid-token-abc123' }
+      mockRouter.isReady = true
+
+      render(<ResetPassword />)
+
+      const newPasswordInput = screen.getByLabelText('New Password')
+      const confirmPasswordInput = screen.getByLabelText(/confirm new password/i)
+
+      expect(newPasswordInput).toHaveAttribute('minLength', '8')
+      expect(newPasswordInput).toHaveAttribute('maxLength', '64')
+      expect(newPasswordInput).toHaveAttribute(
+        'placeholder',
+        'Enter your new password (min 8 characters)'
+      )
+      expect(confirmPasswordInput).toHaveAttribute('minLength', '8')
+      expect(confirmPasswordInput).toHaveAttribute('maxLength', '64')
+    })
+
     it('should not show invalid link page when token exists', () => {
       mockRouter.query = { token: 'some-token' }
       mockRouter.isReady = true

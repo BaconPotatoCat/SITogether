@@ -71,6 +71,16 @@ describe('Auth API Endpoints', () => {
           });
         }
 
+        // Validate password according to NIST 2025 guidelines
+        const { validatePassword } = require('../../utils/passwordValidation');
+        const passwordValidation = await validatePassword(password);
+        if (!passwordValidation.isValid) {
+          return res.status(400).json({
+            success: false,
+            error: passwordValidation.errors.join('; '),
+          });
+        }
+
         // Check if user exists
         const existingUser = await mockPrismaClient.user.findUnique({
           where: { email },
@@ -232,11 +242,13 @@ describe('Auth API Endpoints', () => {
           });
         }
 
-        // Validate password length
-        if (newPassword.length < 6) {
+        // Validate password according to NIST 2025 guidelines
+        const { validatePasswordChange } = require('../../utils/passwordValidation');
+        const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
+        if (!passwordValidation.isValid) {
           return res.status(400).json({
             success: false,
-            error: 'New password must be at least 6 characters long',
+            error: passwordValidation.errors.join('; '),
           });
         }
 
@@ -303,6 +315,9 @@ describe('Auth API Endpoints', () => {
     });
   });
 
+  let consoleWarnSpy;
+  let consoleLogSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -336,10 +351,51 @@ describe('Auth API Endpoints', () => {
       // For other queries, return null by default (tests will override)
       return Promise.resolve(null);
     });
+
+    // Suppress console output during tests
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   describe('POST /api/auth/register', () => {
     it('should register a new user with valid data', async () => {
+      // Mock HIBP API to return empty (password not found)
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
       mockPrismaClient.user.findUnique.mockResolvedValue(null);
       mockPrismaClient.user.create.mockResolvedValue({
         id: 'user-1',
@@ -353,12 +409,15 @@ describe('Auth API Endpoints', () => {
 
       const response = await request(app).post('/api/auth/register').send({
         email: 'test@example.com',
-        password: 'password123',
+        password: 'validpass123', // 12 characters, meets requirements
         name: 'Test User',
         age: 25,
         gender: 'Male',
         course: 'CS',
       });
+
+      // Wait for async operations
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
@@ -390,6 +449,39 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 409 if user already exists', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      // Mock user existence check - user already exists
       mockPrismaClient.user.findUnique.mockResolvedValue({
         id: 'existing-user',
         email: 'test@example.com',
@@ -397,14 +489,86 @@ describe('Auth API Endpoints', () => {
 
       const response = await request(app).post('/api/auth/register').send({
         email: 'test@example.com',
-        password: 'password123',
+        password: 'validpass123',
         name: 'Test User',
         age: 25,
         gender: 'Male',
       });
 
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       expect(response.status).toBe(409);
       expect(response.body.error).toContain('already exists');
+    });
+
+    it('should return 400 if password is too short (less than 8 characters)', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn(),
+        end: jest.fn(),
+      };
+      mockRequest.on.mockReturnValue(mockRequest);
+      https.request = jest.fn().mockReturnValue(mockRequest);
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'test@example.com',
+        password: 'short', // Less than 8 characters
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('at least 8 characters');
+    });
+
+    it('should return 400 if password is found in data breaches', async () => {
+      // Mock HIBP API to return compromised password
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, _callback) => {
+          if (event === 'error') {
+            // No error
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            // Password "password" is compromised
+            setTimeout(() => callback('1E4C9B93F3F0682250B6CF8331B7EE68FD8:26230667\n'), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'test@example.com',
+        password: 'password', // Known compromised password
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('This password has been found in data breaches');
     });
   });
 
@@ -417,7 +581,10 @@ describe('Auth API Endpoints', () => {
         verified: true,
       };
 
+      // Explicitly reset and set up mocks
+      mockPrismaClient.user.findUnique.mockReset();
       mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockReset();
       bcrypt.compare.mockResolvedValue(true);
 
       const response = await request(app).post('/api/auth/login').send({
@@ -639,19 +806,113 @@ describe('Auth API Endpoints', () => {
       expect(response.body.error).toBe('Current password and new password are required');
     });
 
-    it('should return 400 when new password is too short', async () => {
+    it('should return 400 when new password is too short (less than 8 characters)', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn(),
+        end: jest.fn(),
+      };
+      mockRequest.on.mockReturnValue(mockRequest);
+      https.request = jest.fn().mockReturnValue(mockRequest);
+
       const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
         .send({
           currentPassword: 'oldpass123',
-          newPassword: '12345', // Less than 6 characters
+          newPassword: '12345', // Less than 8 characters
         });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('New password must be at least 6 characters long');
+      expect(response.body.error).toContain('Password must be at least 8 characters long');
+    });
+
+    it('should return 400 when new password is too long (more than 64 characters)', async () => {
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn(),
+        end: jest.fn(),
+      };
+      mockRequest.on.mockReturnValue(mockRequest);
+      https.request = jest.fn().mockReturnValue(mockRequest);
+
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
+      const longPassword = 'a'.repeat(65);
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', [`token=${token}`])
+        .send({
+          currentPassword: 'oldpass123',
+          newPassword: longPassword,
+        });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('Password must be no more than 64 characters long');
+    });
+
+    it('should return 400 when new password is found in data breaches', async () => {
+      // Mock HIBP API to return compromised password
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, _callback) => {
+          if (event === 'error') {
+            // No error
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            // Password "password" is compromised
+            setTimeout(() => callback('1E4C9B93F3F0682250B6CF8331B7EE68FD8:26230667\n'), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      const mockUser = {
+        id: userId,
+        password: 'hashed_old_password',
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', [`token=${token}`])
+        .send({
+          currentPassword: 'oldpass123',
+          newPassword: 'password', // Known compromised password
+        });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('This password has been found in data breaches');
     });
 
     it('should return 401 when current password is incorrect', async () => {
