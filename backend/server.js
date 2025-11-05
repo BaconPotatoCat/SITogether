@@ -23,10 +23,6 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Trust proxy configuration
-// If your app is behind a reverse proxy (e.g., Nginx, AWS ELB, Heroku), set TRUST_PROXY to the number of proxies
-// Set to 1 if behind a single proxy, or a specific number based on your deployment
-// Default is 0 (no trust proxy) for local development
-// Rate limiters use custom keyGenerator for secure IP handling regardless of trust proxy setting
 const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
 if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
   app.set('trust proxy', trustProxyCount);
