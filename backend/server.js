@@ -10,16 +10,31 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
-require('dotenv').config();
+const config = require('./lib/config');
 
+const {
+  loginLimiter,
+  passwordResetLimiter,
+  registerLimiter,
+  otpLimiter,
+  resendOtpLimiter,
+  resendVerificationLimiter,
+  sensitiveDataLimiter,
+} = require('./middleware/rateLimiter');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
+
+// Trust proxy configuration
+const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
+if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
+  app.set('trust proxy', trustProxyCount);
+}
 
 // Middleware
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    origin: config.frontend.externalUrl,
     credentials: true,
   })
 );
@@ -89,7 +104,7 @@ app.get('/api', (req, res) => {
 });
 
 // Users API route (protected)
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.userId;
 
@@ -309,7 +324,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 
 // Authentication routes
 // Register endpoint
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, name, age, gender, course } = req.body;
 
@@ -532,7 +547,7 @@ app.get('/api/auth/verify', async (req, res) => {
 });
 
 // Resend verification email endpoint
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -621,7 +636,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -707,11 +722,9 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
-    const tempToken = jwt.sign(
-      { userId: user.id, requiresTwoFactor: true },
-      process.env.JWT_SECRET,
-      { expiresIn: '10m' }
-    );
+    const tempToken = jwt.sign({ userId: user.id, requiresTwoFactor: true }, config.jwtSecret, {
+      expiresIn: '10m',
+    });
 
     // Send 2FA email
     try {
@@ -752,7 +765,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Verify 2FA code and complete login
-app.post('/api/auth/verify-2fa', async (req, res) => {
+app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
   try {
     const { tempToken, code } = req.body;
 
@@ -766,7 +779,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -818,12 +831,12 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     });
 
     // Generate final JWT token
-    const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
     // Set cookie with token
     res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.isProduction,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -843,7 +856,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
 });
 
 // Resend 2FA code endpoint
-app.post('/api/auth/resend-2fa', async (req, res) => {
+app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
   try {
     const { tempToken } = req.body;
 
@@ -857,7 +870,7 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -1035,16 +1048,13 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       where: { id: req.user.userId },
       select: {
         id: true,
-        email: true,
         name: true,
         age: true,
-        gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
         avatarUrl: true,
-        verified: true,
+        role: true,
       },
     });
 
@@ -1069,17 +1079,144 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
   }
 });
 
-// Reset password endpoint (authenticated users only)
-app.post('/api/auth/reset-password', authenticateToken, async (req, res) => {
+// Forgot password endpoint (request password reset)
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
-    const { newPassword } = req.body;
-    const userId = req.user.userId;
+    const { email } = req.body;
 
-    // Validate password is provided
-    if (!newPassword) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        error: 'New password is required',
+        error: 'Email is required',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    // Always return success to prevent email enumeration attacks
+    // Even if user doesn't exist, we say we sent the email
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    }
+
+    // Check if user is verified
+    if (!user.verified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please verify your email address before resetting your password.',
+        requiresVerification: true,
+      });
+    }
+
+    // Generate password reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Delete any existing password reset tokens for this email
+    await prisma.token.deleteMany({
+      where: {
+        email,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    // Create new password reset token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: resetToken,
+        type: 'PASSWORD_RESET',
+        email: user.email,
+        userId: user.id,
+        expiresAt: resetTokenExpires,
+      },
+    });
+
+    // Send password reset email
+    const { sendPasswordResetEmail } = require('./lib/email');
+    try {
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
+
+      res.json({
+        success: true,
+        message: 'Password reset link has been sent to your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+
+      // Delete the token since email failed - user can't access it anyway
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up password reset token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send password reset email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request',
+      message: error.message,
+    });
+  }
+});
+
+// Reset password endpoint (verify token and update password)
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token and new password are required',
+      });
+    }
+
+    // Find password reset token with user
+    const resetToken = await prisma.token.findFirst({
+      where: {
+        token,
+        type: 'PASSWORD_RESET',
+      },
+      include: { user: true },
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid or expired reset token',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > resetToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: resetToken.id },
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Reset token has expired. Please request a new password reset.',
       });
     }
 
@@ -1092,31 +1229,20 @@ app.post('/api/auth/reset-password', authenticateToken, async (req, res) => {
       });
     }
 
-    // Find user by ID
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
     // Hash new password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    // Update user password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword },
-    });
+    // Update user password and delete the token in a transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.token.delete({
+        where: { id: resetToken.id },
+      }),
+    ]);
 
     res.json({
       success: true,
@@ -1137,6 +1263,14 @@ app.post('/api/auth/reset-password', authenticateToken, async (req, res) => {
 // ============================================
 
 const { authenticateAdmin } = require('./middleware/admin');
+
+// Admin check endpoint (returns 403 if not admin)
+app.get('/api/auth/admin-check', authenticateAdmin, async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Admin access granted',
+  });
+});
 
 // Get all users (Admin only)
 app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
@@ -1285,100 +1419,6 @@ app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Send password reset link (Admin only)
-app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { newPassword } = req.body;
-
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    // Generate a secure random password if not provided
-    let passwordToSet = newPassword;
-    if (!passwordToSet) {
-      // Generate a secure random password (at least 8 characters to meet NIST 2025 guidelines)
-      // Using 12 random bytes = 24 hex characters (more than enough, guaranteed to pass validation)
-      passwordToSet = crypto.randomBytes(12).toString('hex');
-    }
-
-    // Validate password according to NIST 2025 guidelines
-    try {
-      const passwordValidation = await validatePassword(passwordToSet);
-      if (!passwordValidation.isValid) {
-        return res.status(400).json({
-          success: false,
-          error: passwordValidation.errors.join('; '),
-        });
-      }
-    } catch (validationError) {
-      console.error('Password validation error:', validationError);
-      // If validation fails due to external API issues, still allow the reset
-      // but log the error for monitoring
-      // The generated password is secure enough (24 hex characters)
-    }
-
-    // Hash the new password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(passwordToSet, saltRounds);
-
-    // Update user password directly
-    await prisma.user.update({
-      where: { id },
-      data: { password: hashedPassword },
-    });
-
-    res.json({
-      success: true,
-      message: `Password has been reset successfully for ${user.email}`,
-      data: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        // Only include the generated password if it was auto-generated
-        ...(newPassword ? {} : { temporaryPassword: passwordToSet }),
-      },
-    });
-  } catch (error) {
-    console.error('Admin password reset error:', error);
-
-    // Provide more specific error messages
-    if (error.code === 'P2025') {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    if (error.code === 'P2002') {
-      return res.status(400).json({
-        success: false,
-        error: 'Database constraint violation',
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to reset password',
-      message: error.message || 'An unexpected error occurred',
-    });
-  }
-});
 
 // Create a report (Authenticated users)
 app.post('/api/reports', authenticateToken, async (req, res) => {
@@ -2052,17 +2092,42 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
-    // Format the response
-    const likedProfiles = likes.map((like) => ({
-      id: like.liked.id,
-      name: like.liked.name,
-      age: like.liked.age,
-      gender: like.liked.gender,
-      course: like.liked.course,
-      bio: like.liked.bio,
-      interests: like.liked.interests,
-      avatarUrl: like.liked.avatarUrl,
-    }));
+    // Format the response and check if intro message exists for each profile
+    const likedProfiles = await Promise.all(
+      likes.map(async (like) => {
+        const likedId = like.liked.id;
+        // Find conversation between the two users
+        const userAId = likerId < likedId ? likerId : likedId;
+        const userBId = likerId < likedId ? likedId : likerId;
+
+        const conversation = await prisma.conversation.findUnique({
+          where: { userAId_userBId: { userAId, userBId } },
+          include: {
+            messages: {
+              where: {
+                senderId: likerId,
+              },
+              take: 1,
+            },
+          },
+        });
+
+        // Check if intro message exists (conversation exists and has at least one message from liker)
+        const hasIntro = !!conversation && conversation.messages.length > 0;
+
+        return {
+          id: like.liked.id,
+          name: like.liked.name,
+          age: like.liked.age,
+          gender: like.liked.gender,
+          course: like.liked.course,
+          bio: like.liked.bio,
+          interests: like.liked.interests,
+          avatarUrl: like.liked.avatarUrl,
+          hasIntro,
+        };
+      })
+    );
 
     res.json({
       success: true,
@@ -2512,11 +2577,19 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           where: { id: otherUserId },
           select: { id: true, name: true, avatarUrl: true },
         });
+        // Hide name, avatar, and ID when conversation is locked (before match)
+        const sanitizedOtherUser =
+          c.isLocked && otherUser
+            ? {
+                name: 'Hidden User',
+                avatarUrl: null,
+              }
+            : otherUser;
         return {
           id: c.id,
           isLocked: c.isLocked,
           lastMessage: c.messages[0] || null,
-          otherUser,
+          otherUser: sanitizedOtherUser,
         };
       })
     );
@@ -2561,13 +2634,21 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       }),
     ]);
     const me = userA && userA.id === userId ? userA : userB;
+    // Hide other user's name, avatar, and ID when conversation is locked (before match)
     const other = userA && userA.id === userId ? userB : userA;
+    const sanitizedOther =
+      conversation.isLocked && other
+        ? {
+            name: 'Hidden User',
+            avatarUrl: null,
+          }
+        : other;
 
     res.json({
       success: true,
       isLocked: conversation.isLocked,
       messages,
-      participants: { me, other },
+      participants: { me, other: sanitizedOther },
       currentUserId: userId,
     });
   } catch (error) {
@@ -2759,7 +2840,7 @@ app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    error: config.isDevelopment ? err.message : 'Internal server error',
   });
 });
 
@@ -2772,6 +2853,6 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`ðŸš€ SITogether Backend server is running on port ${PORT}`);
-  console.log(`ðŸ“¡ Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
+  console.log(`📡 Environment: ${config.nodeEnv}`);
 });

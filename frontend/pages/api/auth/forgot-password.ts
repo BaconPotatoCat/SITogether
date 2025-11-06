@@ -7,29 +7,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${config.backendInternalUrl}/api/auth/resend-2fa`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/forgot-password`
 
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
       body: JSON.stringify(req.body),
     })
 
     const data = await response.json()
 
-    if (response.ok) {
-      res.status(200).json(data)
-    } else {
-      res.status(response.status).json(data)
-    }
+    // Pass through the backend response
+    res.status(response.status).json(data)
   } catch (error) {
-    console.error('Resend 2FA failed:', error)
+    console.error('Forgot password request failed:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to resend code: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Failed to process request: ${error instanceof Error ? error.message : 'Unknown error'}`,
       message: 'Backend container may not be running or accessible',
     })
   }

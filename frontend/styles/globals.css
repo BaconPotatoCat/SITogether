@@ -770,6 +770,23 @@ html.dark .chat-item {
   object-fit: cover;
 }
 
+.chat-avatar.blurred {
+  filter: blur(8px);
+  -webkit-filter: blur(8px);
+}
+
+.chat-avatar-sm.blurred {
+  filter: blur(6px);
+  -webkit-filter: blur(6px);
+}
+
+.chat-name-blurred {
+  filter: blur(4px);
+  -webkit-filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
+
 .chat-body .chat-head {
   display: flex;
   justify-content: space-between;

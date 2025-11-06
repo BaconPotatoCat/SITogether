@@ -20,11 +20,15 @@ jest.mock('../../lib/prisma', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
+      findMany: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
     },
     userPoints: {
+      findUnique: jest.fn(),
+    },
+    conversation: {
       findUnique: jest.fn(),
     },
   };
@@ -208,6 +212,79 @@ describe('Likes API Endpoints', () => {
         return { userId };
       }
       throw new Error('Invalid token');
+    });
+
+    app.get('/api/likes', authenticateToken, async (req, res) => {
+      try {
+        const likerId = req.user.userId;
+
+        const likes = await mockPrismaClient.userLikes.findMany({
+          where: {
+            likerId: likerId,
+          },
+          include: {
+            liked: {
+              select: {
+                id: true,
+                name: true,
+                age: true,
+                gender: true,
+                course: true,
+                bio: true,
+                interests: true,
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        });
+
+        const likedProfiles = await Promise.all(
+          likes.map(async (like) => {
+            const likedId = like.liked.id;
+            const userAId = likerId < likedId ? likerId : likedId;
+            const userBId = likerId < likedId ? likedId : likerId;
+
+            const conversation = await mockPrismaClient.conversation.findUnique({
+              where: { userAId_userBId: { userAId, userBId } },
+              include: {
+                messages: {
+                  where: {
+                    senderId: likerId,
+                  },
+                  take: 1,
+                },
+              },
+            });
+
+            const hasIntro = !!conversation && conversation.messages.length > 0;
+
+            return {
+              id: like.liked.id,
+              name: like.liked.name,
+              age: like.liked.age,
+              gender: like.liked.gender,
+              course: like.liked.course,
+              bio: like.liked.bio,
+              interests: like.liked.interests,
+              avatarUrl: like.liked.avatarUrl,
+              hasIntro,
+            };
+          })
+        );
+
+        res.json({
+          success: true,
+          data: likedProfiles,
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to get liked profiles',
+        });
+      }
     });
   });
 
@@ -404,6 +481,118 @@ describe('Likes API Endpoints', () => {
 
     it('should return 401 when not authenticated', async () => {
       const response = await request(app).delete('/api/likes/user-2');
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/likes', () => {
+    it('should return liked profiles with hasIntro flag set to false when no intro message exists', async () => {
+      const mockLikes = [
+        {
+          liked: {
+            id: 'user-2',
+            name: 'Test User',
+            age: 25,
+            gender: 'Male',
+            course: 'Computer Science',
+            bio: 'Test bio',
+            interests: ['coding'],
+            avatarUrl: 'https://example.com/avatar.jpg',
+          },
+        },
+      ];
+
+      mockPrismaClient.userLikes.findMany.mockResolvedValue(mockLikes);
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(null);
+
+      const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
+
+      const response = await request(app)
+        .get('/api/likes')
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].hasIntro).toBe(false);
+      expect(response.body.data[0].id).toBe('user-2');
+    });
+
+    it('should return liked profiles with hasIntro flag set to true when intro message exists', async () => {
+      const mockLikes = [
+        {
+          liked: {
+            id: 'user-2',
+            name: 'Test User',
+            age: 25,
+            gender: 'Male',
+            course: 'Computer Science',
+            bio: 'Test bio',
+            interests: ['coding'],
+            avatarUrl: 'https://example.com/avatar.jpg',
+          },
+        },
+      ];
+
+      const mockConversation = {
+        id: 'conv-1',
+        messages: [{ id: 'msg-1', senderId: 'user-1', content: 'Hello!' }],
+      };
+
+      mockPrismaClient.userLikes.findMany.mockResolvedValue(mockLikes);
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(mockConversation);
+
+      const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
+
+      const response = await request(app)
+        .get('/api/likes')
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].hasIntro).toBe(true);
+      expect(response.body.data[0].id).toBe('user-2');
+    });
+
+    it('should return hasIntro false when conversation exists but has no messages from liker', async () => {
+      const mockLikes = [
+        {
+          liked: {
+            id: 'user-2',
+            name: 'Test User',
+            age: 25,
+            gender: 'Male',
+            course: 'Computer Science',
+            bio: 'Test bio',
+            interests: ['coding'],
+            avatarUrl: 'https://example.com/avatar.jpg',
+          },
+        },
+      ];
+
+      const mockConversation = {
+        id: 'conv-1',
+        messages: [], // No messages from liker
+      };
+
+      mockPrismaClient.userLikes.findMany.mockResolvedValue(mockLikes);
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(mockConversation);
+
+      const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
+
+      const response = await request(app)
+        .get('/api/likes')
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data[0].hasIntro).toBe(false);
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      const response = await request(app).get('/api/likes');
 
       expect(response.status).toBe(401);
     });

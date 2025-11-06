@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -6,11 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
-      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
-      'http://localhost:5000'
-    const backendUrl = `${baseUrl}/api/auth/logout`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/logout`
 
     const response = await fetch(backendUrl, {
       method: 'POST',

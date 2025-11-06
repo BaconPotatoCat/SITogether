@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const config = require('./config');
 
 /**
  * Create Gmail email transporter
@@ -13,8 +14,8 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD, // Use App Password for Gmail
+      user: config.email.user,
+      pass: config.email.password, // Use App Password for Gmail
     },
   });
 };
@@ -29,7 +30,7 @@ const createTransporter = () => {
 const sendVerificationEmail = async (email, name, verificationToken) => {
   const transporter = createTransporter();
 
-  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL;
+  const frontendUrl = config.frontend.externalUrl;
   const verificationUrl = `${frontendUrl}/verify?token=${verificationToken}`;
 
   // Calculate expiration time (1 hour from now)
@@ -42,7 +43,7 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
   });
 
   const mailOptions = {
-    from: `"SITogether" <${process.env.EMAIL_USER}>`,
+    from: `"SITogether" <${config.email.user}>`,
     to: email,
     subject: 'Verify Your SITogether Account',
     html: `
@@ -158,7 +159,7 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
 const sendPasswordResetEmail = async (email, name, resetToken) => {
   const transporter = createTransporter();
 
-  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL;
+  const frontendUrl = config.frontend.externalUrl;
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   // Calculate expiration time (1 hour from now)
@@ -171,7 +172,7 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
   });
 
   const mailOptions = {
-    from: `"SITogether" <${process.env.EMAIL_USER}>`,
+    from: `"SITogether" <${config.email.user}>`,
     to: email,
     subject: 'Reset Your SITogether Password',
     html: `
@@ -307,7 +308,7 @@ const sendTwoFactorEmail = async (email, name, code) => {
   });
 
   const mailOptions = {
-    from: `"SITogether" <${process.env.EMAIL_USER}>`,
+    from: `"SITogether" <${config.email.user}>`,
     to: email,
     subject: 'Your SITogether Login Code',
     html: `
