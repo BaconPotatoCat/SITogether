@@ -1,21 +1,16 @@
-import handler from '../../../../pages/api/auth/change-password'
-import { fetchWithAuthSSR } from '../../../../utils/api'
 import type { NextApiRequest, NextApiResponse } from 'next'
+
+// Mock the config module - Jest will use __mocks__/utils/config.ts automatically
+jest.mock('../../../../utils/config')
 
 // Mock the API utility
 jest.mock('../../../../utils/api', () => ({
   fetchWithAuthSSR: jest.fn(),
 }))
 
-// Mock the config module
-jest.mock('../../../../utils/config', () => ({
-  config: {
-    backendInternalUrl: 'http://localhost:5000',
-    nodeEnv: 'test',
-    isDevelopment: false,
-    isProduction: false,
-  },
-}))
+// Import handler after mocks are set up
+import handler from '../../../../pages/api/auth/change-password'
+import { fetchWithAuthSSR } from '../../../../utils/api'
 
 // Mock environment variable
 const originalEnv = process.env

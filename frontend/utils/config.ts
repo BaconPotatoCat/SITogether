@@ -3,10 +3,13 @@
  * Validates required variables and provides a single source of truth
  */
 
+const isTest = process.env.NODE_ENV === 'test'
+
 const requiredEnvVars: string[] = ['NEXT_PUBLIC_BACKEND_INTERNALURL']
 
 // Validate required environment variables (only in server-side code)
-if (typeof window === 'undefined') {
+// Skip validation in test mode
+if (typeof window === 'undefined' && !isTest) {
   const missingVars = requiredEnvVars.filter((varName) => !process.env[varName])
 
   if (missingVars.length > 0) {
@@ -15,16 +18,25 @@ if (typeof window === 'undefined') {
       console.error(`   - ${varName}`)
     })
     console.error('\nPlease set these variables in your .env file.')
-    // In production, we might want to exit, but in development we'll just warn
+    // In production, exit; in development, just warn
     if (process.env.NODE_ENV === 'production') {
       process.exit(1)
     }
   }
 }
 
+// In test mode, provide defaults for missing variables
+if (isTest) {
+  process.env.NEXT_PUBLIC_BACKEND_INTERNALURL =
+    process.env.NEXT_PUBLIC_BACKEND_INTERNALURL || 'http://localhost:5000'
+}
+
 export const config = {
-  // Backend API URL
-  backendInternalUrl: process.env.NEXT_PUBLIC_BACKEND_INTERNALURL || '',
+  // Backend API URL (internal URL for server-to-server communication)
+  backendInternalUrl: process.env.NEXT_PUBLIC_BACKEND_INTERNALURL,
+
+  // Frontend URL (external URL for client-side)
+  frontendExternalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
 
   // Environment
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -32,4 +44,5 @@ export const config = {
   // Validation helpers
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
+  isTest: process.env.NODE_ENV === 'test',
 } as const
