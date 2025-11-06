@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 import { validatePassword } from '../utils/passwordValidation'
 import { useSession } from '../contexts/AuthContext'
+import { config } from '../utils/config'
 
 // Dynamically import ReCAPTCHA to avoid SSR issues (it's a client-only library)
 const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => mod.default), {
@@ -124,8 +125,8 @@ export default function Auth() {
         return
       }
 
-      // reCAPTCHA validation for registration
-      if (!recaptchaToken) {
+      // reCAPTCHA validation for registration (only if sitekey is configured)
+      if (config.recaptchaSiteKey && !recaptchaToken) {
         showToast('Please complete the reCAPTCHA verification.', 'error')
         return
       }
@@ -472,20 +473,23 @@ export default function Auth() {
                 </div>
               )}
 
-              {!isLogin && (
-                <div className="form-group">
-                  <ReCAPTCHA
-                    key={recaptchaKey}
-                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ''}
-                    onChange={handleRecaptchaChange}
-                    onExpired={() => setRecaptchaToken(null)}
-                    onError={() => {
-                      setRecaptchaToken(null)
-                      showToast('reCAPTCHA error. Please try again.', 'error')
-                    }}
-                  />
-                </div>
-              )}
+              {!isLogin &&
+                config.recaptchaSiteKey &&
+                typeof config.recaptchaSiteKey === 'string' &&
+                config.recaptchaSiteKey.trim() !== '' && (
+                  <div className="form-group">
+                    <ReCAPTCHA
+                      key={recaptchaKey}
+                      sitekey={config.recaptchaSiteKey}
+                      onChange={handleRecaptchaChange}
+                      onExpired={() => setRecaptchaToken(null)}
+                      onError={() => {
+                        setRecaptchaToken(null)
+                        showToast('reCAPTCHA error. Please try again.', 'error')
+                      }}
+                    />
+                  </div>
+                )}
 
               <button type="submit" className="btn primary auth-submit" disabled={isLoading}>
                 {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}

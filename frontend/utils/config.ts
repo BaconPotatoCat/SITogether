@@ -20,6 +20,9 @@ export const config = {
   // Frontend URL (external URL for client-side)
   frontendExternalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
 
+  // reCAPTCHA Configuration
+  recaptchaSiteKey: process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY,
+
   // Environment
   nodeEnv: process.env.NODE_ENV || 'development',
 
