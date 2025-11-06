@@ -3,14 +3,18 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
+import { validatePassword } from '../utils/passwordValidation'
 
 export default function Auth() {
   const router = useRouter()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
+  const [confirmPasswordError, setConfirmPasswordError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -41,14 +45,38 @@ export default function Auth() {
     // }
 
     // Real-time password validation for registration
-    if (!isLogin && (name === 'password' || name === 'confirmPassword')) {
-      const password = name === 'password' ? value : formData.password
-      const confirmPassword = name === 'confirmPassword' ? value : formData.confirmPassword
+    if (!isLogin) {
+      if (name === 'password') {
+        const validation = validatePassword(value)
+        if (!validation.isValid) {
+          setPasswordError(validation.errors[0])
+        } else {
+          setPasswordError('')
+          if (formData.confirmPassword && value === formData.confirmPassword) {
+            setConfirmPasswordError('')
+          } else if (formData.confirmPassword) {
+            setConfirmPasswordError('Passwords do not match')
+          }
+        }
+      } else if (name === 'confirmPassword') {
+        const password = formData.password
+        const confirmPassword = value
 
-      if (confirmPassword && password !== confirmPassword) {
-        setPasswordError('Passwords do not match')
-      } else {
-        setPasswordError('')
+        // Only validate mismatch if password field has a value
+        if (password) {
+          if (confirmPassword && password !== confirmPassword) {
+            setConfirmPasswordError('Passwords do not match')
+          } else if (confirmPassword) {
+            const validation = validatePassword(password)
+            if (!validation.isValid) {
+              setConfirmPasswordError('')
+            } else {
+              setConfirmPasswordError('')
+            }
+          } else {
+            setConfirmPasswordError('')
+          }
+        }
       }
     }
   }
@@ -64,9 +92,18 @@ export default function Auth() {
     // }
 
     // Password validation for registration
-    if (!isLogin && passwordError) {
-      showToast('Please fix the password mismatch before submitting.', 'error')
-      return
+    if (!isLogin) {
+      // Final validation before submission
+      const passwordValidation = validatePassword(formData.password)
+      if (!passwordValidation.isValid) {
+        showToast(passwordValidation.errors[0], 'error')
+        return
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        showToast('Passwords do not match', 'error')
+        return
+      }
     }
 
     // Age validation for registration
@@ -105,12 +142,21 @@ export default function Auth() {
 
       if (result.success) {
         if (isLogin) {
-          showToast('Login successful!', 'success')
-
-          // Redirect to home page after a brief delay
-          setTimeout(() => {
-            router.push('/')
-          }, 500)
+          // Check if 2FA is required
+          if (result.requiresTwoFactor) {
+            // Store tempToken in sessionStorage and redirect to 2FA page
+            sessionStorage.setItem('tempToken', result.tempToken)
+            showToast('Please check your email for the verification code', 'success')
+            setTimeout(() => {
+              router.push('/verify-2fa')
+            }, 500)
+          } else {
+            showToast('Login successful!', 'success')
+            // Redirect to home page after a brief delay
+            setTimeout(() => {
+              router.push('/')
+            }, 500)
+          }
         } else {
           showToast(
             'Registration successful! Please check your email for the verification link.',
@@ -128,6 +174,7 @@ export default function Auth() {
             course: '',
           })
           setPasswordError('')
+          setConfirmPasswordError('')
 
           // Switch to login form after successful registration
           setIsLogin(true)
@@ -177,11 +224,46 @@ export default function Auth() {
     }
   }
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!forgotPasswordEmail) {
+      showToast('Please enter your email address', 'error')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast('Password reset instructions have been sent to your email!', 'success')
+        setShowForgotPassword(false)
+        setForgotPasswordEmail('')
+      } else {
+        showToast(result.error || 'Failed to send reset email', 'error')
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error)
+      showToast('An error occurred. Please try again.', 'error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setPasswordError('')
+    setConfirmPasswordError('')
     setEmailError('')
     setUnverifiedEmail(null)
+    setShowForgotPassword(false)
     setFormData({
       email: '',
       password: '',
@@ -323,9 +405,23 @@ export default function Auth() {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  placeholder="Enter your password"
-                  minLength={6}
+                  placeholder="Enter your password (min 8 characters)"
+                  minLength={8}
+                  maxLength={64}
+                  className={passwordError ? 'input-error' : ''}
                 />
+                {passwordError && <span className="error-message">{passwordError}</span>}
+                {isLogin && (
+                  <div style={{ textAlign: 'right', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(true)}
+                      className="forgot-password-link"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
               </div>
 
               {!isLogin && (
@@ -339,10 +435,13 @@ export default function Auth() {
                     onChange={handleInputChange}
                     required={!isLogin}
                     placeholder="Confirm your password"
-                    minLength={6}
-                    className={passwordError ? 'input-error' : ''}
+                    minLength={8}
+                    maxLength={64}
+                    className={confirmPasswordError ? 'input-error' : ''}
                   />
-                  {passwordError && <span className="error-message">{passwordError}</span>}
+                  {confirmPasswordError && (
+                    <span className="error-message">{confirmPasswordError}</span>
+                  )}
                 </div>
               )}
 
@@ -379,6 +478,54 @@ export default function Auth() {
             </div>
           </div>
         </div>
+
+        {/* Forgot Password Modal */}
+        {showForgotPassword && (
+          <div className="modal-overlay" onClick={() => setShowForgotPassword(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Reset Password</h2>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setShowForgotPassword(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="modal-description">
+                Enter your email address and we&apos;ll send you a link to reset your password.
+              </p>
+              <form onSubmit={handleForgotPassword} className="modal-form">
+                <div className="form-group">
+                  <label htmlFor="forgot-email">Email Address</label>
+                  <input
+                    type="email"
+                    id="forgot-email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    required
+                    placeholder="Enter your email"
+                    autoFocus
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="btn secondary"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn primary" disabled={isLoading}>
+                    {isLoading ? 'Sending...' : 'Send Reset Link'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Toast Container */}

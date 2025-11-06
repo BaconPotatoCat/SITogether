@@ -239,7 +239,10 @@ export default function LikedProfiles() {
                   }}
                 >
                   <img
-                    src={profile.avatarUrl}
+                    src={
+                      profile.avatarUrl ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                    }
                     alt={`${profile.name} avatar`}
                     style={{
                       width: '80px',
@@ -357,7 +360,10 @@ export default function LikedProfiles() {
               >
                 <div style={{ position: 'relative' }}>
                   <img
-                    src={selectedProfile.avatarUrl}
+                    src={
+                      selectedProfile.avatarUrl ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedProfile.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                    }
                     alt={`${selectedProfile.name} avatar`}
                     style={{
                       width: '100%',

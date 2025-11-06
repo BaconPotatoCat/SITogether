@@ -335,7 +335,10 @@ export default function Home() {
                       >
                         <img
                           className="card-img"
-                          src={p.avatarUrl}
+                          src={
+                            p.avatarUrl ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                          }
                           alt={`${p.name} avatar`}
                           draggable={false}
                         />
@@ -398,7 +401,10 @@ export default function Home() {
                       </div>
                       <img
                         className="card-img"
-                        src={topCard.avatarUrl}
+                        src={
+                          topCard.avatarUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(topCard.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                        }
                         alt={`${topCard.name} avatar`}
                         draggable={false}
                       />
