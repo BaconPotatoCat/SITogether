@@ -11,7 +11,7 @@ interface Message {
 }
 
 interface Participant {
-  id: string
+  id?: string
   name: string
   avatarUrl: string | null
 }
@@ -58,7 +58,7 @@ export default function ConversationPage() {
     if (isLocked) return // Don't enrich when locked to preserve privacy
     const enrich = async () => {
       try {
-        if (other && !other.avatarUrl) {
+        if (other && !other.avatarUrl && other.id) {
           const res = await fetch(`/api/users/${other.id}`)
           const data = await res.json()
           if (data?.success && data?.user?.avatarUrl) {
