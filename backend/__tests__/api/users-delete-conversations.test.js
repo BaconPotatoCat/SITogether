@@ -12,6 +12,7 @@ const mockPrismaClient = {
   conversation: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
+    deleteMany: jest.fn(),
   },
   message: {
     findMany: jest.fn(),
@@ -55,7 +56,35 @@ describe('User Account Deletion - Conversations and Messages Preservation', () =
           });
         }
 
-        // Delete user - conversations and messages should be preserved via SET NULL
+        // Before deleting the user, find and delete conversations where both users are deleted
+        const conversationsToDelete = await mockPrismaClient.conversation.findMany({
+          where: {
+            OR: [
+              { userAId: id, userBId: null },
+              { userAId: null, userBId: id },
+            ],
+          },
+          select: { id: true },
+        });
+
+        // Delete conversations where both users are deleted (messages will be cascade deleted)
+        if (conversationsToDelete.length > 0) {
+          await mockPrismaClient.conversation.deleteMany({
+            where: {
+              id: { in: conversationsToDelete.map((c) => c.id) },
+            },
+          });
+        }
+
+        // Also clean up any orphaned conversations (where both user IDs are already null)
+        await mockPrismaClient.conversation.deleteMany({
+          where: {
+            userAId: null,
+            userBId: null,
+          },
+        });
+
+        // Delete user - conversations and messages should be preserved via SET NULL for remaining conversations
         await mockPrismaClient.user.delete({
           where: { id: id },
         });
@@ -79,37 +108,21 @@ describe('User Account Deletion - Conversations and Messages Preservation', () =
     jest.clearAllMocks();
   });
 
-  describe('Conversations Preservation', () => {
-    it('should preserve conversations when user is deleted (userAId becomes null)', async () => {
+  describe('Conversations Preservation and Deletion', () => {
+    it('should preserve conversations when only one user is deleted (userAId becomes null)', async () => {
       const userId = 'user-123';
-      const otherUserId = 'user-456';
-      const conversationId = 'conv-123';
 
       // Mock user exists
       mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
 
-      // Mock conversations before deletion
-      mockPrismaClient.conversation.findMany.mockResolvedValue([
-        {
-          id: conversationId,
-          userAId: userId,
-          userBId: otherUserId,
-          isLocked: false,
-        },
-      ]);
+      // Mock: no conversations where both users are deleted (other user still exists)
+      mockPrismaClient.conversation.findMany.mockResolvedValue([]);
+
+      // Mock: cleanup of orphaned conversations (none exist)
+      mockPrismaClient.conversation.deleteMany.mockResolvedValue({ count: 0 });
 
       // Mock user deletion
       mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
-
-      // After deletion, conversation should still exist with userAId = null
-      mockPrismaClient.conversation.findMany.mockResolvedValue([
-        {
-          id: conversationId,
-          userAId: null, // Preserved with null userAId
-          userBId: otherUserId,
-          isLocked: false,
-        },
-      ]);
 
       const token = jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret');
 
@@ -123,40 +136,40 @@ describe('User Account Deletion - Conversations and Messages Preservation', () =
         where: { id: userId },
       });
 
-      // Verify conversation still exists (would be checked in actual implementation)
-      const conversations = await mockPrismaClient.conversation.findMany();
-      expect(conversations).toHaveLength(1);
-      expect(conversations[0].userAId).toBeNull();
-      expect(conversations[0].userBId).toBe(otherUserId);
+      // Verify that conversations with both users deleted are checked
+      expect(mockPrismaClient.conversation.findMany).toHaveBeenCalled();
+      // Verify cleanup of orphaned conversations is called
+      expect(mockPrismaClient.conversation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userAId: null,
+          userBId: null,
+        },
+      });
     });
 
-    it('should preserve conversations when user is deleted (userBId becomes null)', async () => {
-      const userId = 'user-456';
-      const otherUserId = 'user-123';
+    it('should delete conversations when both users are deleted', async () => {
+      const userId = 'user-123';
       const conversationId = 'conv-123';
 
+      // Mock user exists
       mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
 
+      // Mock: conversation where this user is userA and userB is already deleted (null)
       mockPrismaClient.conversation.findMany.mockResolvedValue([
         {
           id: conversationId,
-          userAId: otherUserId,
-          userBId: userId,
-          isLocked: false,
+          userAId: userId,
+          userBId: null, // Other user already deleted
         },
       ]);
 
+      // Mock: delete the conversation
+      mockPrismaClient.conversation.deleteMany
+        .mockResolvedValueOnce({ count: 1 }) // Delete conversation with both users deleted
+        .mockResolvedValueOnce({ count: 0 }); // Cleanup orphaned conversations
+
+      // Mock user deletion
       mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
-
-      // After deletion
-      mockPrismaClient.conversation.findMany.mockResolvedValue([
-        {
-          id: conversationId,
-          userAId: otherUserId,
-          userBId: null, // Preserved with null userBId
-          isLocked: false,
-        },
-      ]);
 
       const token = jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret');
 
@@ -165,32 +178,98 @@ describe('User Account Deletion - Conversations and Messages Preservation', () =
         .set('Cookie', [`token=${token}`]);
 
       expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
 
-      const conversations = await mockPrismaClient.conversation.findMany();
-      expect(conversations).toHaveLength(1);
-      expect(conversations[0].userAId).toBe(otherUserId);
-      expect(conversations[0].userBId).toBeNull();
+      // Verify conversation was deleted
+      expect(mockPrismaClient.conversation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [conversationId] },
+        },
+      });
+    });
+
+    it('should preserve conversations when only one user is deleted (userBId becomes null)', async () => {
+      const userId = 'user-456';
+
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
+
+      // Mock: no conversations where both users are deleted (other user still exists)
+      mockPrismaClient.conversation.findMany.mockResolvedValue([]);
+
+      // Mock: cleanup of orphaned conversations (none exist)
+      mockPrismaClient.conversation.deleteMany.mockResolvedValue({ count: 0 });
+
+      mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
+
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret');
+
+      const response = await request(app)
+        .delete(`/api/users/${userId}`)
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify cleanup is called
+      expect(mockPrismaClient.conversation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userAId: null,
+          userBId: null,
+        },
+      });
+    });
+
+    it('should delete conversation when second user is deleted (userA was already deleted)', async () => {
+      const userId = 'user-456';
+      const conversationId = 'conv-123';
+
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
+
+      // Mock: conversation where this user is userB and userA is already deleted (null)
+      mockPrismaClient.conversation.findMany.mockResolvedValue([
+        {
+          id: conversationId,
+          userAId: null, // Other user already deleted
+          userBId: userId,
+        },
+      ]);
+
+      // Mock: delete the conversation
+      mockPrismaClient.conversation.deleteMany
+        .mockResolvedValueOnce({ count: 1 }) // Delete conversation with both users deleted
+        .mockResolvedValueOnce({ count: 0 }); // Cleanup orphaned conversations
+
+      mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
+
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret');
+
+      const response = await request(app)
+        .delete(`/api/users/${userId}`)
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify conversation was deleted
+      expect(mockPrismaClient.conversation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [conversationId] },
+        },
+      });
     });
   });
 
-  describe('Messages Preservation', () => {
-    it('should preserve messages when user is deleted (senderId becomes null)', async () => {
+  describe('Messages Preservation and Deletion', () => {
+    it('should preserve messages when only one user is deleted (senderId becomes null)', async () => {
       const userId = 'user-123';
       const conversationId = 'conv-123';
       const messageId = 'msg-123';
 
       mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
 
-      // Mock messages before deletion
-      mockPrismaClient.message.findMany.mockResolvedValue([
-        {
-          id: messageId,
-          conversationId: conversationId,
-          senderId: userId,
-          content: 'Hello, this is a test message',
-          createdAt: new Date(),
-        },
-      ]);
+      // Mock: no conversations where both users are deleted
+      mockPrismaClient.conversation.findMany.mockResolvedValue([]);
+      mockPrismaClient.conversation.deleteMany.mockResolvedValue({ count: 0 });
 
       mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
 
@@ -213,14 +292,45 @@ describe('User Account Deletion - Conversations and Messages Preservation', () =
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+    });
 
-      // Verify messages still exist
-      const messages = await mockPrismaClient.message.findMany({
-        where: { conversationId },
+    it('should delete messages when both users are deleted (conversation is deleted)', async () => {
+      const userId = 'user-123';
+      const conversationId = 'conv-123';
+
+      mockPrismaClient.user.findUnique.mockResolvedValue({ id: userId });
+
+      // Mock: conversation where both users are deleted
+      mockPrismaClient.conversation.findMany.mockResolvedValue([
+        {
+          id: conversationId,
+          userAId: userId,
+          userBId: null, // Other user already deleted
+        },
+      ]);
+
+      // Mock: delete the conversation (messages will be cascade deleted)
+      mockPrismaClient.conversation.deleteMany
+        .mockResolvedValueOnce({ count: 1 }) // Delete conversation
+        .mockResolvedValueOnce({ count: 0 }); // Cleanup orphaned
+
+      mockPrismaClient.user.delete.mockResolvedValue({ id: userId });
+
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET || 'test-secret');
+
+      const response = await request(app)
+        .delete(`/api/users/${userId}`)
+        .set('Cookie', [`token=${token}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify conversation was deleted (messages are cascade deleted)
+      expect(mockPrismaClient.conversation.deleteMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: [conversationId] },
+        },
       });
-      expect(messages).toHaveLength(1);
-      expect(messages[0].senderId).toBeNull();
-      expect(messages[0].content).toBe('Hello, this is a test message');
     });
   });
 });

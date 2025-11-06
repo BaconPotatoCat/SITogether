@@ -349,6 +349,37 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Before deleting the user, find and delete conversations where both users are deleted
+    // (i.e., conversations where this user is involved AND the other user ID is already null)
+    const conversationsToDelete = await prisma.conversation.findMany({
+      where: {
+        OR: [
+          { userAId: id, userBId: null }, // This user is userA, userB is already deleted
+          { userAId: null, userBId: id }, // This user is userB, userA is already deleted
+        ],
+      },
+      select: { id: true },
+    });
+
+    // Delete conversations where both users are deleted (messages will be cascade deleted)
+    if (conversationsToDelete.length > 0) {
+      await prisma.conversation.deleteMany({
+        where: {
+          id: { in: conversationsToDelete.map((c) => c.id) },
+        },
+      });
+    }
+
+    // Also clean up any orphaned conversations (where both user IDs are already null)
+    // This handles edge cases where both users might have been deleted simultaneously
+    await prisma.conversation.deleteMany({
+      where: {
+        userAId: null,
+        userBId: null,
+      },
+    });
+
+    // Delete the user (this will set userAId/userBId to null for remaining conversations)
     await prisma.user.delete({
       where: { id: id },
     });
