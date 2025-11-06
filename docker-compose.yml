@@ -41,7 +41,7 @@ services:
       - ./backend:/app
       - /app/node_modules
     command: >
-      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then npx prisma migrate deploy && npm start; else npx prisma db push && npm run dev; fi"
+      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then (npx prisma migrate deploy || npx prisma db push) && npm start; else npx prisma db push && npm run dev; fi"
     networks:
       - sitogether-frontend-network
       - sitogether-backend-network
