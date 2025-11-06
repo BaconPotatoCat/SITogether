@@ -10,6 +10,14 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
+const {
+  hashEmail,
+  prepareEmailForStorage,
+  encryptField,
+  decryptField,
+  decryptUserFields,
+  decryptUsersFields,
+} = require('./utils/fieldEncryption');
 const config = require('./lib/config');
 
 const {
@@ -25,9 +33,8 @@ const app = express();
 const PORT = config.port;
 
 // Trust proxy configuration
-const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
-if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
-  app.set('trust proxy', trustProxyCount);
+if (!isNaN(config.trustProxy) && config.trustProxy > 0) {
+  app.set('trust proxy', config.trustProxy);
 }
 
 // Middleware
@@ -43,6 +50,20 @@ app.use(morgan('combined'));
 // Increase body size limit to 10MB for image uploads
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Error handler for JSON parsing errors (must be after json/urlencoded middleware)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    // Log detailed error for debugging
+    console.error('JSON parsing error:', err.message);
+    // Return generic error message to user
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid request. Please try again.',
+    });
+  }
+  next(err);
+});
 
 // Basic route
 app.get('/', (req, res) => {
@@ -180,10 +201,13 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
       },
     });
 
+    // Decrypt all user fields for response
+    const decryptedUsers = await decryptUsersFields(users);
+
     res.json({
       success: true,
-      data: users,
-      count: users.length,
+      data: decryptedUsers,
+      count: decryptedUsers.length,
     });
   } catch (error) {
     console.error('Prisma query error:', error);
@@ -228,9 +252,14 @@ app.get('/api/users/:id', async (req, res) => {
       });
     }
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
-      data: user,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -272,13 +301,24 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedCourse, encryptedBio, encryptedInterests] = await Promise.all([
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(course || null),
+      encryptField(bio || null),
+      encryptField(Array.isArray(interests) ? interests : [], (value) => {
+        if (!Array.isArray(value) || value.length === 0) return null;
+        return JSON.stringify(value);
+      }),
+    ]);
+
     // Prepare update data
     const updateData = {
       name,
-      age: ageNum,
-      course: course || null,
-      bio: bio || null,
-      interests: Array.isArray(interests) ? interests : [],
+      age: encryptedAge,
+      course: encryptedCourse,
+      bio: encryptedBio,
+      interests: encryptedInterests,
     };
 
     // Only update avatarUrl if provided
@@ -309,10 +349,15 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(updatedUser.email);
+    const decryptedUser = await decryptUserFields(updatedUser);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: updatedUser,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -463,9 +508,12 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
     //   });
     // }
 
-    // Check if user already exists
+    // Prepare email for storage (encrypt and hash)
+    const { emailHash, encryptedEmail } = await prepareEmailForStorage(email);
+
+    // Check if user already exists by emailHash
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (existingUser) {
@@ -479,6 +527,13 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedGender, encryptedCourse] = await Promise.all([
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(gender),
+      encryptField(course || null),
+    ]);
+
     // Generate verification token and expiration (1 hour from now)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -486,15 +541,16 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
     // Create user and verification token in a transaction
     const user = await prisma.user.create({
       data: {
-        email,
+        email: encryptedEmail,
+        emailHash: emailHash,
         password: hashedPassword,
         name,
-        age: ageNum,
-        gender,
+        age: encryptedAge,
+        gender: encryptedGender,
         role: 'User',
-        course,
+        course: encryptedCourse,
         bio: null,
-        interests: [],
+        interests: null,
         verified: false,
         tokens: {
           create: {
@@ -520,6 +576,11 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response (client doesn't need to see encrypted values)
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     // Create UserPoints record for the new user
     await prisma.userPoints.create({
       data: {
@@ -535,7 +596,7 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
       res.status(201).json({
         success: true,
         message: 'User registered successfully. Please check your email to verify your account.',
-        data: user,
+        data: userResponse,
       });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
@@ -545,7 +606,7 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
         success: true,
         message:
           'User registered successfully, but verification email could not be sent. Please contact support.',
-        data: user,
+        data: userResponse,
         warning: 'Verification email not sent',
       });
     }
@@ -648,9 +709,12 @@ app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req,
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (!user) {
@@ -667,6 +731,9 @@ app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req,
         error: 'Account is already verified. You can log in now.',
       });
     }
+
+    // Decrypt email for sending verification email
+    const decryptedEmail = await decryptField(user.email);
 
     // Generate new verification token and expiration
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -692,7 +759,7 @@ app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req,
 
     // Send verification email
     try {
-      await sendVerificationEmail(user.email, user.name, verificationToken);
+      await sendVerificationEmail(decryptedEmail, user.name, verificationToken);
       res.status(200).json({
         success: true,
         message: 'Verification email sent successfully. Please check your email.',
@@ -738,9 +805,12 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -776,6 +846,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       });
     }
 
+    // Decrypt email for use in response and email sending
+    const decryptedEmail = await decryptField(user.email);
+
     // Check if account is verified
     if (!user.verified) {
       return res.status(403).json({
@@ -783,7 +856,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         error:
           'Account not verified. Please check your email and verify your account before logging in.',
         requiresVerification: true,
-        email: user.email,
+        email: decryptedEmail,
       });
     }
 
@@ -818,7 +891,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -996,6 +1069,9 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
       });
     }
 
+    // Decrypt email for sending 2FA email
+    const decryptedEmail = await decryptField(user.email);
+
     // Generate new 6-digit 2FA code
     const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -1022,7 +1098,7 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -1154,9 +1230,14 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       });
     }
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
-      user: user,
+      user: userResponse,
     });
   } catch (error) {
     console.error('Session error:', error);
@@ -1180,9 +1261,12 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -1209,24 +1293,26 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
       });
     }
 
+    // Decrypt email for sending password reset email
+    const decryptedEmail = await decryptField(user.email);
+
     // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Delete any existing password reset tokens for this email
+    // Delete any existing password reset tokens for this user
     await prisma.token.deleteMany({
       where: {
-        email,
+        userId: user.id,
         type: 'PASSWORD_RESET',
       },
     });
 
-    // Create new password reset token
+    // Create new password reset token (using userId instead of email)
     const createdToken = await prisma.token.create({
       data: {
         token: resetToken,
         type: 'PASSWORD_RESET',
-        email: user.email,
         userId: user.id,
         expiresAt: resetTokenExpires,
       },
@@ -1235,7 +1321,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
     // Send password reset email
     const { sendPasswordResetEmail } = require('./lib/email');
     try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
+      await sendPasswordResetEmail(decryptedEmail, user.name, resetToken);
 
       res.json({
         success: true,
@@ -1317,9 +1403,16 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Find user by userId (from token)
+    if (!resetToken.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid password reset token',
+      });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: resetToken.email },
+      where: { id: resetToken.userId },
     });
 
     if (!user) {
@@ -2072,13 +2165,27 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       const validation = validateAndSanitizeMessage(introMessage);
 
       if (validation.isValid) {
-        createdIntroMessage = await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            senderId: likerId,
-            content: validation.sanitized,
-          },
-        });
+        // Encrypt intro message content before storing (application-level encryption)
+        if (config.encryptionKey) {
+          const encryptedContent = await encryptField(validation.sanitized);
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: encryptedContent, // Store encrypted content
+            },
+          });
+        } else {
+          console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+          // Fallback: create without encryption if key is not configured
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: validation.sanitized,
+            },
+          });
+        }
       }
       // If validation fails, we silently ignore the intro message (it's optional)
     }
@@ -2273,12 +2380,21 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create the intro message with sanitized content
+    // Encrypt intro message content before storing (application-level encryption)
+    let encryptedContent;
+    if (config.encryptionKey) {
+      encryptedContent = await encryptField(validation.sanitized);
+    } else {
+      console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+      encryptedContent = validation.sanitized; // Fallback to unencrypted
+    }
+
+    // Create the intro message with encrypted content
     const createdIntroMessage = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderId: likerId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
@@ -2316,6 +2432,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt lastMessage content if present (application-level decryption)
     const result = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
@@ -2326,6 +2443,25 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
               select: { id: true, name: true, avatarUrl: true },
             })
           : null;
+
+        // Decrypt lastMessage if it exists
+        let lastMessage = c.messages[0] || null;
+        if (lastMessage && config.encryptionKey) {
+          try {
+            const decryptedContent = await decryptField(lastMessage.content);
+            lastMessage = {
+              ...lastMessage,
+              content: decryptedContent,
+            };
+          } catch (error) {
+            // If decryption fails, assume message is not encrypted (legacy data)
+            console.warn(
+              `Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`,
+              error.message
+            );
+          }
+        }
+
         // Hide name, avatar, and ID when conversation is locked (before match) or when user is deleted
         const sanitizedOtherUser =
           otherUser && c.isLocked
@@ -2340,7 +2476,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         return {
           id: c.id,
           isLocked: c.isLocked,
-          lastMessage: c.messages[0] || null,
+          lastMessage,
           otherUser: sanitizedOtherUser,
         };
       })
@@ -2378,6 +2514,29 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       orderBy: { createdAt: 'asc' },
     });
 
+    // Decrypt message content (application-level decryption)
+    const decryptedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        try {
+          // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
+          if (config.encryptionKey) {
+            const decryptedContent = await decryptField(msg.content);
+            return {
+              ...msg,
+              content: decryptedContent,
+            };
+          } else {
+            // No encryption key configured, return as-is
+            return msg;
+          }
+        } catch (error) {
+          // If decryption fails, assume message is not encrypted (legacy data)
+          console.warn(`Failed to decrypt message ${msg.id}, assuming unencrypted:`, error.message);
+          return msg;
+        }
+      })
+    );
+
     // Include lightweight participant details to render avatars in chat UI
     // Handle null user IDs when a user has been deleted
     const [userA, userB] = await Promise.all([
@@ -2411,7 +2570,7 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     res.json({
       success: true,
       isLocked: conversation.isLocked,
-      messages,
+      messages: decryptedMessages,
       participants: { me, other: sanitizedOther },
       currentUserId: userId,
     });
@@ -2465,18 +2624,33 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
       return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
     }
 
+    // Encrypt message content before storing (application-level encryption)
+    if (!config.encryptionKey) {
+      console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
+      return res.status(500).json({ success: false, error: 'Encryption key not configured' });
+    }
+
+    const encryptedContent = await encryptField(validation.sanitized);
+
     const message = await prisma.message.create({
       data: {
         conversationId: id,
         senderId: userId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
     // touch conversation updatedAt
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
-    res.status(201).json({ success: true, message });
+    // Return message with decrypted content for client
+    const decryptedContent = await decryptField(message.content);
+    const messageResponse = {
+      ...message,
+      content: decryptedContent, // Return decrypted content to client
+    };
+
+    res.status(201).json({ success: true, message: messageResponse });
   } catch (error) {
     console.error('Send message error:', error);
     res
