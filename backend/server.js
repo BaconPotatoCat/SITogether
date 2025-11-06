@@ -10,6 +10,8 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
+const config = require('./lib/config');
+
 const {
   loginLimiter,
   passwordResetLimiter,
@@ -20,7 +22,7 @@ const {
   sensitiveDataLimiter,
 } = require('./middleware/rateLimiter');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 
 // Trust proxy configuration
 const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
@@ -32,7 +34,7 @@ if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    origin: config.frontend.externalUrl,
     credentials: true,
   })
 );
@@ -721,11 +723,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     });
 
     // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
-    const tempToken = jwt.sign(
-      { userId: user.id, requiresTwoFactor: true },
-      process.env.JWT_SECRET,
-      { expiresIn: '10m' }
-    );
+    const tempToken = jwt.sign({ userId: user.id, requiresTwoFactor: true }, config.jwtSecret, {
+      expiresIn: '10m',
+    });
 
     // Send 2FA email
     try {
@@ -780,7 +780,7 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -832,12 +832,12 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
     });
 
     // Generate final JWT token
-    const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
     // Set cookie with token
     res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.isProduction,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -871,7 +871,7 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -1049,16 +1049,12 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       where: { id: req.user.userId },
       select: {
         id: true,
-        email: true,
         name: true,
         age: true,
-        gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
         avatarUrl: true,
-        verified: true,
       },
     });
 
@@ -2441,7 +2437,7 @@ app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    error: config.isDevelopment ? err.message : 'Internal server error',
   });
 });
 
@@ -2455,5 +2451,5 @@ app.use('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 Environment: ${config.nodeEnv}`);
 });
