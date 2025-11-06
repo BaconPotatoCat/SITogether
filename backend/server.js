@@ -1937,15 +1937,18 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
           conversation.userAId !== null &&
           conversation.userBId !== null;
 
+        // Decrypt all user fields (including interests)
+        const decryptedUser = await decryptUserFields(like.liked);
+
         return {
-          id: like.liked.id,
-          name: like.liked.name,
-          age: like.liked.age,
-          gender: like.liked.gender,
-          course: like.liked.course,
-          bio: like.liked.bio,
-          interests: like.liked.interests,
-          avatarUrl: like.liked.avatarUrl,
+          id: decryptedUser.id,
+          name: decryptedUser.name,
+          age: decryptedUser.age,
+          gender: decryptedUser.gender,
+          course: decryptedUser.course,
+          bio: decryptedUser.bio,
+          interests: decryptedUser.interests || [], // Ensure interests is always an array
+          avatarUrl: decryptedUser.avatarUrl,
           hasIntro,
         };
       })
