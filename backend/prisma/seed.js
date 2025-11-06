@@ -1,6 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { prepareEmailForStorage } = require('../utils/emailEncryption');
+const {
+  encryptAge,
+  encryptGender,
+  encryptCourse,
+  encryptBio,
+  encryptInterests,
+} = require('../utils/userFieldEncryption');
 
 const prisma = new PrismaClient();
 
@@ -94,22 +101,35 @@ async function main() {
     },
   ];
 
-  // Prepare emails for storage (encrypt and hash)
-  console.log('🔒 Encrypting and hashing emails...');
-  const usersWithEncryptedEmails = await Promise.all(
+  // Prepare emails and user fields for storage (encrypt and hash)
+  console.log('🔒 Encrypting emails and user fields...');
+  const usersWithEncryptedData = await Promise.all(
     userData.map(async (user) => {
       const { emailHash, encryptedEmail } = await prepareEmailForStorage(user.email);
+      const [encryptedAge, encryptedGender, encryptedCourse, encryptedBio, encryptedInterests] =
+        await Promise.all([
+          encryptAge(user.age),
+          encryptGender(user.gender),
+          encryptCourse(user.course || null),
+          encryptBio(user.bio || null),
+          encryptInterests(user.interests || []),
+        ]);
       return {
         ...user,
         email: encryptedEmail,
         emailHash: emailHash,
+        age: encryptedAge,
+        gender: encryptedGender,
+        course: encryptedCourse,
+        bio: encryptedBio,
+        interests: encryptedInterests,
       };
     })
   );
 
   // Create sample users
   const users = await prisma.user.createMany({
-    data: usersWithEncryptedEmails,
+    data: usersWithEncryptedData,
   });
 
   console.log(`✅ Created ${users.count} users`);

@@ -8,16 +8,16 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Create a basic users table (example)
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) NOT NULL,  -- Encrypted email data at rest (not unique - emailHash is used for uniqueness)
+    email TEXT NOT NULL,  -- Encrypted email data at rest (not unique - emailHash is used for uniqueness)
     email_hash VARCHAR(255) UNIQUE NOT NULL,  -- Hash for authentication/lookup
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    age INTEGER NOT NULL,
-    gender VARCHAR(50) NOT NULL,
+    age TEXT NOT NULL,  -- Encrypted age data at rest (stored as encrypted string)
+    gender TEXT NOT NULL,  -- Encrypted gender data at rest
     role VARCHAR(50) DEFAULT 'User' NOT NULL,
-    course VARCHAR(10),
-    bio TEXT,
-    interests TEXT[],
+    course TEXT,  -- Encrypted course data at rest (nullable)
+    bio TEXT,  -- Encrypted bio data at rest (nullable)
+    interests TEXT,  -- Encrypted interests data at rest (stored as encrypted JSON string, nullable)
     avatar_url TEXT,
     verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

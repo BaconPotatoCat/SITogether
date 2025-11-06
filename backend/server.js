@@ -11,6 +11,15 @@ const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
 const { hashEmail, prepareEmailForStorage, decryptEmail } = require('./utils/emailEncryption');
+const {
+  encryptAge,
+  encryptGender,
+  encryptCourse,
+  encryptBio,
+  encryptInterests,
+  decryptUserFields,
+  decryptUsersFields,
+} = require('./utils/userFieldEncryption');
 require('dotenv').config();
 
 const app = express();
@@ -180,10 +189,13 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt all user fields for response
+    const decryptedUsers = await decryptUsersFields(users);
+
     res.json({
       success: true,
-      data: users,
-      count: users.length,
+      data: decryptedUsers,
+      count: decryptedUsers.length,
     });
   } catch (error) {
     console.error('Prisma query error:', error);
@@ -228,9 +240,10 @@ app.get('/api/users/:id', async (req, res) => {
       });
     }
 
-    // Decrypt email for response
+    // Decrypt all fields for response
     const decryptedEmail = await decryptEmail(user.email);
-    const userResponse = { ...user, email: decryptedEmail };
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
 
     res.json({
       success: true,
@@ -276,13 +289,21 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedCourse, encryptedBio, encryptedInterests] = await Promise.all([
+      encryptAge(ageNum),
+      encryptCourse(course || null),
+      encryptBio(bio || null),
+      encryptInterests(Array.isArray(interests) ? interests : []),
+    ]);
+
     // Prepare update data
     const updateData = {
       name,
-      age: ageNum,
-      course: course || null,
-      bio: bio || null,
-      interests: Array.isArray(interests) ? interests : [],
+      age: encryptedAge,
+      course: encryptedCourse,
+      bio: encryptedBio,
+      interests: encryptedInterests,
     };
 
     // Only update avatarUrl if provided
@@ -313,10 +334,15 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptEmail(updatedUser.email);
+    const decryptedUser = await decryptUserFields(updatedUser);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: updatedUser,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -397,6 +423,13 @@ app.post('/api/auth/register', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedGender, encryptedCourse] = await Promise.all([
+      encryptAge(ageNum),
+      encryptGender(gender),
+      encryptCourse(course || null),
+    ]);
+
     // Generate verification token and expiration (1 hour from now)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -408,12 +441,12 @@ app.post('/api/auth/register', async (req, res) => {
         emailHash: emailHash,
         password: hashedPassword,
         name,
-        age: ageNum,
-        gender,
+        age: encryptedAge,
+        gender: encryptedGender,
         role: 'User',
-        course,
+        course: encryptedCourse,
         bio: null,
-        interests: [],
+        interests: null,
         verified: false,
         tokens: {
           create: {
@@ -439,9 +472,10 @@ app.post('/api/auth/register', async (req, res) => {
       },
     });
 
-    // Decrypt email for response (client doesn't need to see encrypted value)
+    // Decrypt all fields for response (client doesn't need to see encrypted values)
     const decryptedEmail = await decryptEmail(user.email);
-    const userResponse = { ...user, email: decryptedEmail };
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
 
     // Create UserPoints record for the new user
     await prisma.userPoints.create({
@@ -573,7 +607,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 
     // Hash email to find user by emailHash
     const emailHash = hashEmail(email);
-    
+
     // Find user by emailHash
     const user = await prisma.user.findUnique({
       where: { emailHash },
@@ -669,7 +703,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Hash email to find user by emailHash
     const emailHash = hashEmail(email);
-    
+
     // Find user by emailHash
     const user = await prisma.user.findUnique({
       where: { emailHash },
@@ -1098,9 +1132,10 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       });
     }
 
-    // Decrypt email for response
+    // Decrypt all fields for response
     const decryptedEmail = await decryptEmail(user.email);
-    const userResponse = { ...user, email: decryptedEmail };
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
 
     res.json({
       success: true,
@@ -1130,7 +1165,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     // Hash email to find user by emailHash
     const emailHash = hashEmail(email);
-    
+
     // Find user by emailHash
     const user = await prisma.user.findUnique({
       where: { emailHash },
@@ -1975,7 +2010,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
         // Encrypt intro message content before storing (application-level encryption)
         const { encryptData } = require('./utils/pgcrypto');
         const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-        
+
         if (ENCRYPTION_KEY) {
           const encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
           createdIntroMessage = await prisma.message.create({
@@ -2193,7 +2228,7 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
     // Encrypt intro message content before storing (application-level encryption)
     const { encryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    
+
     let encryptedContent;
     if (ENCRYPTION_KEY) {
       encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
@@ -2256,7 +2291,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           where: { id: otherUserId },
           select: { id: true, name: true, avatarUrl: true },
         });
-        
+
         // Decrypt lastMessage if it exists
         let lastMessage = c.messages[0] || null;
         if (lastMessage && ENCRYPTION_KEY) {
@@ -2268,10 +2303,13 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
             };
           } catch (error) {
             // If decryption fails, assume message is not encrypted (legacy data)
-            console.warn(`Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`, error.message);
+            console.warn(
+              `Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`,
+              error.message
+            );
           }
         }
-        
+
         return {
           id: c.id,
           isLocked: c.isLocked,
@@ -2312,7 +2350,7 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     // Decrypt message content (application-level decryption)
     const { decryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    
+
     const decryptedMessages = await Promise.all(
       messages.map(async (msg) => {
         try {

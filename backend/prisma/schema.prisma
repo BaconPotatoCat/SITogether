@@ -16,12 +16,12 @@ model User {
   emailHash String      @unique @map("email_hash") // Hash for authentication/lookup
   password  String
   name      String
-  age       Int
-  gender    String
+  age       String       // Encrypted age data at rest (stored as encrypted string)
+  gender    String       // Encrypted gender data at rest
   role      String       @default("User")
-  course    String?
-  bio       String?
-  interests String[]
+  course    String?      // Encrypted course data at rest (nullable)
+  bio       String?      // Encrypted bio data at rest (nullable)
+  interests String?      // Encrypted interests data at rest (stored as encrypted JSON string, nullable)
   avatarUrl String?      @map("avatar_url")
   verified  Boolean      @default(false)
   createdAt DateTime     @default(now()) @map("created_at")
