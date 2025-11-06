@@ -7,8 +7,10 @@ const config = require('./config');
  */
 const createTransporter = () => {
   // Validate email credentials
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    throw new Error('Email credentials (EMAIL_USER and EMAIL_PASSWORD) are required');
+  if (!config.email.user || !config.email.password) {
+    throw new Error(
+      'Email credentials (EMAIL_USER and EMAIL_PASSWORD) are required. Please set these environment variables.'
+    );
   }
 
   return nodemailer.createTransport({

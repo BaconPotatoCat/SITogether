@@ -68,18 +68,16 @@ export default function AdminPanel() {
     onConfirm: () => {},
   })
 
-  // Redirect if not authenticated or not admin
+  // Redirect if not authenticated (admin check is handled by middleware)
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth')
-    } else if (status === 'authenticated' && session?.user?.role !== 'Admin') {
-      router.push('/')
     }
-  }, [status, session, router])
+  }, [status, router])
 
-  // Fetch data when tab changes
+  // Fetch data when tab changes (middleware ensures only admins can access)
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.role === 'Admin') {
+    if (status === 'authenticated') {
       if (activeTab === 'users') {
         fetchUsers()
       } else {
@@ -87,7 +85,7 @@ export default function AdminPanel() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, status, session])
+  }, [activeTab, status])
 
   const fetchUsers = async () => {
     try {
@@ -131,17 +129,14 @@ export default function AdminPanel() {
     }
   }
 
-  const handleUserAction = async (userId: string, action: 'ban' | 'unban' | 'reset-password') => {
+  const handleUserAction = async (userId: string, action: 'ban' | 'unban') => {
     // Show confirmation modal instead of using confirm()
-    const confirmMessage =
-      action === 'reset-password'
-        ? "Are you sure you want to reset this user's password? A new temporary password will be generated and displayed."
-        : `Are you sure you want to ${action} this user?`
+    const confirmMessage = `Are you sure you want to ${action} this user?`
 
     setConfirmModal({
       isOpen: true,
       message: confirmMessage,
-      type: action === 'ban' || action === 'reset-password' ? 'danger' : 'warning',
+      type: action === 'ban' ? 'danger' : 'warning',
       onConfirm: async () => {
         setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })
 
@@ -155,15 +150,7 @@ export default function AdminPanel() {
           const result = await response.json()
 
           if (result.success) {
-            if (action === 'reset-password' && result.data?.temporaryPassword) {
-              const tempPassword = result.data.temporaryPassword
-              showMessage(
-                'success',
-                `${result.message}\n\nTemporary password: ${tempPassword}\n\nPlease copy this password and share it securely with the user.`
-              )
-            } else {
-              showMessage('success', result.message)
-            }
+            showMessage('success', result.message)
             fetchUsers()
           } else {
             showMessage('error', result.error || 'Action failed')
@@ -195,12 +182,10 @@ export default function AdminPanel() {
     return matchesSearch && matchesFilter
   })
 
-  if (status === 'loading') {
+  // Middleware handles admin check, so if we reach here, user is authenticated
+  // Just show loading if session is not yet loaded
+  if (status === 'loading' || !session) {
     return <LoadingSpinner message="Loading admin panel..." />
-  }
-
-  if (!session || session.user.role !== 'Admin') {
-    return null
   }
 
   return (
@@ -441,23 +426,6 @@ export default function AdminPanel() {
                                   {user.banned ? 'Unban' : 'Ban'}
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleUserAction(user.id, 'reset-password')}
-                                disabled={actionLoading === user.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.875rem',
-                                  fontWeight: 600,
-                                  borderRadius: '6px',
-                                  border: '1px solid #d1d5db',
-                                  cursor: actionLoading === user.id ? 'not-allowed' : 'pointer',
-                                  backgroundColor: '#fff',
-                                  color: '#374151',
-                                  opacity: actionLoading === user.id ? 0.5 : 1,
-                                }}
-                              >
-                                Reset Password
-                              </button>
                             </div>
                           </td>
                         </tr>

@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -6,10 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BACKEND_EXTERNALURL ||
-      process.env.NEXT_PUBLIC_BACKEND_INTERNALURL ||
-      'http://localhost:5000'
+    const baseUrl = config.backendInternalUrl
 
     // Get token from cookies
     const token = req.cookies.token
@@ -34,9 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break
       case 'unban':
         endpoint = `/api/admin/users/${userId}/unban`
-        break
-      case 'reset-password':
-        endpoint = `/api/admin/users/${userId}/reset-password`
         break
       default:
         return res.status(400).json({

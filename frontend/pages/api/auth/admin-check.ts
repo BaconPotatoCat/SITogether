@@ -7,16 +7,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${config.backendInternalUrl}/api/admin/users`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/admin-check`
 
-    // Get token from cookies
+    // Get token from cookie
     const token = req.cookies.token
 
     if (!token) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' })
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      })
     }
 
-    // Forward the request to the backend
+    // Forward request to backend with cookie
     const response = await fetch(backendUrl, {
       method: 'GET',
       headers: {
@@ -27,16 +30,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const data = await response.json()
 
-    if (!response.ok) {
-      return res.status(response.status).json(data)
-    }
-
-    return res.status(200).json(data)
+    // Return the same status code from backend
+    return res.status(response.status).json(data)
   } catch (error) {
-    console.error('Admin users API error:', error)
+    console.error('Admin check failed:', error)
     return res.status(500).json({
       success: false,
-      error: 'Failed to fetch users',
+      error: 'Failed to check admin status',
       message: error instanceof Error ? error.message : 'Unknown error',
     })
   }

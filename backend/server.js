@@ -1419,7 +1419,6 @@ app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
   }
 });
 
-
 // Create a report (Authenticated users)
 app.post('/api/reports', authenticateToken, async (req, res) => {
   try {
@@ -1442,6 +1441,19 @@ app.post('/api/reports', authenticateToken, async (req, res) => {
       });
     }
 
+    // Get reporter's email
+    const reporter = await prisma.user.findUnique({
+      where: { id: reporterId },
+      select: { id: true, email: true },
+    });
+
+    if (!reporter) {
+      return res.status(401).json({
+        success: false,
+        error: 'Reporter not found',
+      });
+    }
+
     // Check if reported user exists
     const reportedUser = await prisma.user.findUnique({
       where: { id: reportedId },
@@ -1459,7 +1471,7 @@ app.post('/api/reports', authenticateToken, async (req, res) => {
     const report = await prisma.report.create({
       data: {
         reportedId,
-        reportedBy: reporterId,
+        reportedBy: reporter.email,
         reason,
         description: description || null,
         status: 'Pending',

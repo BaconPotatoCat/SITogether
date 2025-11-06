@@ -49,4 +49,3 @@ process.prependListener('unhandledRejection', (reason, promise) => {
   // Tests will verify component behavior instead
   // The rejection is caught and handled gracefully
 })
-

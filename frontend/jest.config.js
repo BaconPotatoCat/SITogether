@@ -32,10 +32,7 @@ const customJestConfig = {
       statements: 80,
     },
   },
-  testMatch: [
-    '**/__tests__/**/*.test.{ts,tsx}',
-    '**/*.test.{ts,tsx}'
-  ],
+  testMatch: ['**/__tests__/**/*.test.{ts,tsx}', '**/*.test.{ts,tsx}'],
   // Suppress unhandled rejection warnings for tests
   // Components using try-finally without catch will have unhandled rejections
   // but handle them gracefully in production
