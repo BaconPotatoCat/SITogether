@@ -39,6 +39,12 @@ export default function Chat() {
         <h1>Chats</h1>
         {loading ? (
           <p>Loading…</p>
+        ) : conversations.length === 0 ? (
+          <div className="chat-empty-state">
+            <div className="chat-empty-icon">💬</div>
+            <h2>No chats yet</h2>
+            <p>Start swiping to find matches and begin chatting!</p>
+          </div>
         ) : (
           <div className="chat-list">
             {conversations.map((c) => (
@@ -50,7 +56,10 @@ export default function Chat() {
               >
                 <img
                   className="chat-avatar"
-                  src={c.otherUser.avatarUrl || '/avatar.png'}
+                  src={
+                    c.otherUser.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(c.otherUser.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                  }
                   alt={`${c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">

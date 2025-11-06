@@ -143,11 +143,14 @@ export default function ConversationPage() {
                 const isMine = currentUserId && m.senderId === currentUserId
                 const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
                 const name = isMine ? me?.name : other?.name
+                const defaultAvatarUrl = name
+                  ? `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                  : null
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
-                    {avatarUrl ? (
+                    {avatarUrl || defaultAvatarUrl ? (
                       <img
-                        src={avatarUrl}
+                        src={avatarUrl || defaultAvatarUrl || ''}
                         alt={`${name || 'User'} avatar`}
                         className="chat-avatar-sm"
                       />
