@@ -55,9 +55,12 @@ export default function Chat() {
                 style={{ cursor: 'pointer' }}
               >
                 <img
-                  className={`chat-avatar ${c.isLocked ? 'blurred' : ''}`}
-                  src={c.isLocked ? '/avatar.png' : c.otherUser.avatarUrl || '/avatar.png'}
-                  alt={`${c.isLocked ? 'Hidden' : c.otherUser.name} avatar`}
+                  className="chat-avatar"
+                  src={
+                    c.otherUser.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(c.otherUser.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                  }
+                  alt={`${c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">
                   <div className="chat-head">

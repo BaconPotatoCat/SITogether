@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/login`
+    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/resend-2fa`
 
     const response = await fetch(backendUrl, {
       method: 'POST',
@@ -20,23 +20,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const data = await response.json()
 
     if (response.ok) {
-      // Forward the Set-Cookie header from backend to client
-      const setCookieHeader = response.headers.get('set-cookie')
-      if (setCookieHeader) {
-        res.setHeader('Set-Cookie', setCookieHeader)
-      }
-
-      // Pass through the full response to handle 2FA
       res.status(200).json(data)
     } else {
-      // Pass through the backend response directly
       res.status(response.status).json(data)
     }
   } catch (error) {
-    console.error('Login failed:', error)
+    console.error('Resend 2FA failed:', error)
     res.status(500).json({
       success: false,
-      error: `Failed to login: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `Failed to resend code: ${error instanceof Error ? error.message : 'Unknown error'}`,
       message: 'Backend container may not be running or accessible',
     })
   }

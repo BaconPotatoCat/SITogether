@@ -8,7 +8,7 @@ async function main() {
 
   // Hash a common password for all seeded users
   const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash('wasd12', saltRounds);
+  const hashedPassword = await bcrypt.hash('catsixseven', saltRounds);
   console.log('🔐 Generated hashed password for seeded users');
 
   // Create sample users
@@ -96,7 +96,7 @@ async function main() {
   });
 
   console.log(`✅ Created ${users.count} users`);
-  console.log('🔑 All seeded users have password: "wasd12"');
+  console.log('🔑 All seeded users have password: "catsixseven"');
   console.log('✅ All seeded users are verified');
 
   // Get all created users to create points entries

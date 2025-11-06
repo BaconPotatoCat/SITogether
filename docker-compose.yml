@@ -10,7 +10,7 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -21,7 +21,7 @@ services:
       - /app/node_modules
       - /app/.next
     command: >
-      sh -c "npm run dev"
+      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then npm run build && npm start; else npm run dev; fi"
     networks:
       - sitogether-frontend-network
 
@@ -34,14 +34,14 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
       DATABASE_URL: ${DATABASE_URL}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app
       - /app/node_modules
     command: >
-      sh -c "npx prisma db push && npm run dev"
+      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then (npx prisma migrate deploy || npx prisma db push) && npm start; else npx prisma db push && npm run dev; fi"
     networks:
       - sitogether-frontend-network
       - sitogether-backend-network
@@ -74,7 +74,7 @@ services:
     env_file:
       - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
       DATABASE_URL: ${DATABASE_URL}
     ports:
       - "5555:5555"

@@ -1,7 +1,12 @@
 import type { NextApiRequest } from 'next'
 
 // Utility function to make authenticated API calls (client-side)
-export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+// @param redirectOn401 - If true (default), redirects to /auth on 401. If false, returns the response for custom handling.
+export const fetchWithAuth = async (
+  url: string,
+  options: RequestInit = {},
+  redirectOn401: boolean = true
+) => {
   const defaultOptions: RequestInit = {
     ...options,
     credentials: 'include', // Include cookies in requests
@@ -14,8 +19,8 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   try {
     const response = await fetch(url, defaultOptions)
 
-    // If unauthorized, redirect to login
-    if (response.status === 401) {
+    // If unauthorized, redirect to login (unless redirectOn401 is false)
+    if (response.status === 401 && redirectOn401) {
       window.location.href = '/auth'
       throw new Error('Unauthorized')
     }
