@@ -1,13 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-const { prepareEmailForStorage } = require('../utils/emailEncryption');
-const {
-  encryptAge,
-  encryptGender,
-  encryptCourse,
-  encryptBio,
-  encryptInterests,
-} = require('../utils/userFieldEncryption');
+const { prepareEmailForStorage, encryptField } = require('../utils/fieldEncryption');
 
 const prisma = new PrismaClient();
 
@@ -108,11 +101,14 @@ async function main() {
       const { emailHash, encryptedEmail } = await prepareEmailForStorage(user.email);
       const [encryptedAge, encryptedGender, encryptedCourse, encryptedBio, encryptedInterests] =
         await Promise.all([
-          encryptAge(user.age),
-          encryptGender(user.gender),
-          encryptCourse(user.course || null),
-          encryptBio(user.bio || null),
-          encryptInterests(user.interests || []),
+          encryptField(user.age, (value) => value.toString()),
+          encryptField(user.gender),
+          encryptField(user.course || null),
+          encryptField(user.bio || null),
+          encryptField(user.interests || [], (value) => {
+            if (!Array.isArray(value) || value.length === 0) return null;
+            return JSON.stringify(value);
+          }),
         ]);
       return {
         ...user,

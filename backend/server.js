@@ -10,16 +10,14 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
-const { hashEmail, prepareEmailForStorage, decryptEmail } = require('./utils/emailEncryption');
 const {
-  encryptAge,
-  encryptGender,
-  encryptCourse,
-  encryptBio,
-  encryptInterests,
+  hashEmail,
+  prepareEmailForStorage,
+  encryptField,
+  decryptField,
   decryptUserFields,
   decryptUsersFields,
-} = require('./utils/userFieldEncryption');
+} = require('./utils/fieldEncryption');
 require('dotenv').config();
 
 const app = express();
@@ -241,7 +239,7 @@ app.get('/api/users/:id', async (req, res) => {
     }
 
     // Decrypt all fields for response
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
     const decryptedUser = await decryptUserFields(user);
     const userResponse = { ...decryptedUser, email: decryptedEmail };
 
@@ -291,10 +289,13 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 
     // Encrypt user fields for storage
     const [encryptedAge, encryptedCourse, encryptedBio, encryptedInterests] = await Promise.all([
-      encryptAge(ageNum),
-      encryptCourse(course || null),
-      encryptBio(bio || null),
-      encryptInterests(Array.isArray(interests) ? interests : []),
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(course || null),
+      encryptField(bio || null),
+      encryptField(Array.isArray(interests) ? interests : [], (value) => {
+        if (!Array.isArray(value) || value.length === 0) return null;
+        return JSON.stringify(value);
+      }),
     ]);
 
     // Prepare update data
@@ -335,7 +336,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     });
 
     // Decrypt all fields for response
-    const decryptedEmail = await decryptEmail(updatedUser.email);
+    const decryptedEmail = await decryptField(updatedUser.email);
     const decryptedUser = await decryptUserFields(updatedUser);
     const userResponse = { ...decryptedUser, email: decryptedEmail };
 
@@ -425,9 +426,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Encrypt user fields for storage
     const [encryptedAge, encryptedGender, encryptedCourse] = await Promise.all([
-      encryptAge(ageNum),
-      encryptGender(gender),
-      encryptCourse(course || null),
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(gender),
+      encryptField(course || null),
     ]);
 
     // Generate verification token and expiration (1 hour from now)
@@ -473,7 +474,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
 
     // Decrypt all fields for response (client doesn't need to see encrypted values)
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
     const decryptedUser = await decryptUserFields(user);
     const userResponse = { ...decryptedUser, email: decryptedEmail };
 
@@ -629,7 +630,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     }
 
     // Decrypt email for sending verification email
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
 
     // Generate new verification token and expiration
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -743,7 +744,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Decrypt email for use in response and email sending
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
 
     // Check if account is verified
     if (!user.verified) {
@@ -968,7 +969,7 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
     }
 
     // Decrypt email for sending 2FA email
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
 
     // Generate new 6-digit 2FA code
     const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1133,7 +1134,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
     }
 
     // Decrypt all fields for response
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
     const decryptedUser = await decryptUserFields(user);
     const userResponse = { ...decryptedUser, email: decryptedEmail };
 
@@ -1196,7 +1197,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
 
     // Decrypt email for sending password reset email
-    const decryptedEmail = await decryptEmail(user.email);
+    const decryptedEmail = await decryptField(user.email);
 
     // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -2008,11 +2009,10 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
 
       if (validation.isValid) {
         // Encrypt intro message content before storing (application-level encryption)
-        const { encryptData } = require('./utils/pgcrypto');
         const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
         if (ENCRYPTION_KEY) {
-          const encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+          const encryptedContent = await encryptField(validation.sanitized);
           createdIntroMessage = await prisma.message.create({
             data: {
               conversationId: conversation.id,
@@ -2226,12 +2226,11 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
     }
 
     // Encrypt intro message content before storing (application-level encryption)
-    const { encryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
     let encryptedContent;
     if (ENCRYPTION_KEY) {
-      encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+      encryptedContent = await encryptField(validation.sanitized);
     } else {
       console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
       encryptedContent = validation.sanitized; // Fallback to unencrypted
@@ -2281,7 +2280,6 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
     });
 
     // Decrypt lastMessage content if present (application-level decryption)
-    const { decryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
     const result = await Promise.all(
@@ -2296,7 +2294,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         let lastMessage = c.messages[0] || null;
         if (lastMessage && ENCRYPTION_KEY) {
           try {
-            const decryptedContent = await decryptData(lastMessage.content, ENCRYPTION_KEY);
+            const decryptedContent = await decryptField(lastMessage.content);
             lastMessage = {
               ...lastMessage,
               content: decryptedContent,
@@ -2348,7 +2346,6 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     });
 
     // Decrypt message content (application-level decryption)
-    const { decryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
     const decryptedMessages = await Promise.all(
@@ -2356,7 +2353,7 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
         try {
           // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
           if (ENCRYPTION_KEY) {
-            const decryptedContent = await decryptData(msg.content, ENCRYPTION_KEY);
+            const decryptedContent = await decryptField(msg.content);
             return {
               ...msg,
               content: decryptedContent,
@@ -2435,14 +2432,13 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     }
 
     // Encrypt message content before storing (application-level encryption)
-    const { encryptData } = require('./utils/pgcrypto');
     const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
     if (!ENCRYPTION_KEY) {
       console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
       return res.status(500).json({ success: false, error: 'Encryption key not configured' });
     }
 
-    const encryptedContent = await encryptData(validation.sanitized, ENCRYPTION_KEY);
+    const encryptedContent = await encryptField(validation.sanitized);
 
     const message = await prisma.message.create({
       data: {
@@ -2456,8 +2452,7 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
     // Return message with decrypted content for client
-    const { decryptData } = require('./utils/pgcrypto');
-    const decryptedContent = await decryptData(message.content, ENCRYPTION_KEY);
+    const decryptedContent = await decryptField(message.content);
     const messageResponse = {
       ...message,
       content: decryptedContent, // Return decrypted content to client
