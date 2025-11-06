@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
+const config = require('../lib/config');
 
 /**
  * Field Encryption Utility
@@ -99,12 +100,11 @@ async function encryptField(value, preTransform = null) {
     return null;
   }
 
-  const encryptionKey = process.env.ENCRYPTION_KEY;
-  if (!encryptionKey) {
+  if (!config.encryptionKey) {
     throw new Error('ENCRYPTION_KEY environment variable is required');
   }
 
-  return await encryptData(transformedValue, encryptionKey);
+  return await encryptData(transformedValue, config.encryptionKey);
 }
 
 /**
@@ -118,12 +118,11 @@ async function decryptField(encryptedValue, postTransform = null) {
     return null;
   }
 
-  const encryptionKey = process.env.ENCRYPTION_KEY;
-  if (!encryptionKey) {
+  if (!config.encryptionKey) {
     throw new Error('ENCRYPTION_KEY environment variable is required');
   }
 
-  const decryptedValue = await decryptData(encryptedValue, encryptionKey);
+  const decryptedValue = await decryptData(encryptedValue, config.encryptionKey);
 
   if (!decryptedValue) {
     return null;

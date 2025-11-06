@@ -5,6 +5,13 @@ jest.mock('../../lib/prisma', () => ({
   $queryRaw: jest.fn(),
 }));
 
+// Mock config module
+const mockEncryptionKey = 'test-encryption-key-12345';
+const mockConfigObject = {
+  encryptionKey: mockEncryptionKey,
+};
+jest.mock('../../lib/config', () => mockConfigObject);
+
 const {
   hashEmail,
   prepareEmailForStorage,
@@ -17,14 +24,9 @@ const {
 const mockPrismaClient = require('../../lib/prisma');
 
 describe('Field Encryption Utility', () => {
-  const mockEncryptionKey = 'test-encryption-key-12345';
-  let originalEnv;
-
   beforeEach(() => {
-    // Save original environment
-    originalEnv = process.env.ENCRYPTION_KEY;
-    // Set test encryption key
-    process.env.ENCRYPTION_KEY = mockEncryptionKey;
+    // Reset config mock to have encryption key
+    mockConfigObject.encryptionKey = mockEncryptionKey;
     // Clear all mocks
     jest.clearAllMocks();
     // Suppress console.error during tests
@@ -32,12 +34,8 @@ describe('Field Encryption Utility', () => {
   });
 
   afterEach(() => {
-    // Restore original environment
-    if (originalEnv) {
-      process.env.ENCRYPTION_KEY = originalEnv;
-    } else {
-      delete process.env.ENCRYPTION_KEY;
-    }
+    // Reset config mock
+    mockConfigObject.encryptionKey = mockEncryptionKey;
     jest.restoreAllMocks();
   });
 
@@ -187,13 +185,15 @@ describe('Field Encryption Utility', () => {
     });
 
     it('should throw error if ENCRYPTION_KEY is missing', async () => {
-      delete process.env.ENCRYPTION_KEY;
+      mockConfigObject.encryptionKey = null;
 
       await expect(encryptField('test')).rejects.toThrow(
         'ENCRYPTION_KEY environment variable is required'
       );
 
       expect(mockPrismaClient.$queryRaw).not.toHaveBeenCalled();
+      // Restore for other tests
+      mockConfigObject.encryptionKey = mockEncryptionKey;
     });
 
     it('should handle encryption errors and throw generic error', async () => {
@@ -292,11 +292,14 @@ describe('Field Encryption Utility', () => {
     });
 
     it('should throw error if ENCRYPTION_KEY is missing', async () => {
-      delete process.env.ENCRYPTION_KEY;
+      mockConfigObject.encryptionKey = null;
 
       await expect(decryptField('encrypted')).rejects.toThrow(
         'ENCRYPTION_KEY environment variable is required'
       );
+
+      // Restore for other tests
+      mockConfigObject.encryptionKey = mockEncryptionKey;
 
       expect(mockPrismaClient.$queryRaw).not.toHaveBeenCalled();
     });
@@ -1054,7 +1057,7 @@ describe('Field Encryption Utility', () => {
     });
 
     it('should handle missing ENCRYPTION_KEY for all functions', async () => {
-      delete process.env.ENCRYPTION_KEY;
+      mockConfigObject.encryptionKey = null;
 
       await expect(encryptField('test')).rejects.toThrow(
         'ENCRYPTION_KEY environment variable is required'
@@ -1065,6 +1068,9 @@ describe('Field Encryption Utility', () => {
       await expect(prepareEmailForStorage('test@example.com')).rejects.toThrow(
         'ENCRYPTION_KEY environment variable is required'
       );
+
+      // Restore for other tests
+      mockConfigObject.encryptionKey = mockEncryptionKey;
     });
   });
 });

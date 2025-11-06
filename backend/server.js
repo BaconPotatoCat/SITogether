@@ -33,9 +33,8 @@ const app = express();
 const PORT = config.port;
 
 // Trust proxy configuration
-const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
-if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
-  app.set('trust proxy', trustProxyCount);
+if (!isNaN(config.trustProxy) && config.trustProxy > 0) {
+  app.set('trust proxy', config.trustProxy);
 }
 
 // Middleware
@@ -2043,9 +2042,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
 
       if (validation.isValid) {
         // Encrypt intro message content before storing (application-level encryption)
-        const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-
-        if (ENCRYPTION_KEY) {
+        if (config.encryptionKey) {
           const encryptedContent = await encryptField(validation.sanitized);
           createdIntroMessage = await prisma.message.create({
             data: {
@@ -2260,10 +2257,8 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
     }
 
     // Encrypt intro message content before storing (application-level encryption)
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-
     let encryptedContent;
-    if (ENCRYPTION_KEY) {
+    if (config.encryptionKey) {
       encryptedContent = await encryptField(validation.sanitized);
     } else {
       console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
@@ -2314,8 +2309,6 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
     });
 
     // Decrypt lastMessage content if present (application-level decryption)
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-
     const result = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
@@ -2326,7 +2319,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
 
         // Decrypt lastMessage if it exists
         let lastMessage = c.messages[0] || null;
-        if (lastMessage && ENCRYPTION_KEY) {
+        if (lastMessage && config.encryptionKey) {
           try {
             const decryptedContent = await decryptField(lastMessage.content);
             lastMessage = {
@@ -2354,8 +2347,6 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           id: c.id,
           isLocked: c.isLocked,
           lastMessage,
-          otherUser,
-          lastMessage: c.messages[0] || null,
           otherUser: sanitizedOtherUser,
         };
       })
@@ -2390,13 +2381,11 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     });
 
     // Decrypt message content (application-level decryption)
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-
     const decryptedMessages = await Promise.all(
       messages.map(async (msg) => {
         try {
           // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
-          if (ENCRYPTION_KEY) {
+          if (config.encryptionKey) {
             const decryptedContent = await decryptField(msg.content);
             return {
               ...msg,
@@ -2440,8 +2429,6 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       success: true,
       isLocked: conversation.isLocked,
       messages: decryptedMessages,
-      participants: { me, other },
-      messages,
       participants: { me, other: sanitizedOther },
       currentUserId: userId,
     });
@@ -2486,8 +2473,7 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     }
 
     // Encrypt message content before storing (application-level encryption)
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-    if (!ENCRYPTION_KEY) {
+    if (!config.encryptionKey) {
       console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
       return res.status(500).json({ success: false, error: 'Encryption key not configured' });
     }
