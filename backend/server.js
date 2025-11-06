@@ -19,7 +19,7 @@ const PORT = config.port;
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    origin: config.frontend.externalUrl,
     credentials: true,
   })
 );

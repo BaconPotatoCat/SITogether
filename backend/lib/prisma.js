@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const config = require('./config');
 
 const globalForPrisma = globalThis;
 
@@ -8,6 +9,6 @@ const prisma =
     log: ['query', 'info', 'warn', 'error'],
   });
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (!config.isProduction) globalForPrisma.prisma = prisma;
 
 module.exports = prisma;

@@ -7,6 +7,16 @@ jest.mock('../../../../utils/api', () => ({
   fetchWithAuthSSR: jest.fn(),
 }))
 
+// Mock the config module
+jest.mock('../../../../utils/config', () => ({
+  config: {
+    backendInternalUrl: 'http://localhost:5000',
+    nodeEnv: 'test',
+    isDevelopment: false,
+    isProduction: false,
+  },
+}))
+
 // Mock environment variable
 const originalEnv = process.env
 
