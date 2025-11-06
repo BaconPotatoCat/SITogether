@@ -16,6 +16,8 @@ const customJestConfig = {
     'components/**/*.{ts,tsx}',
     'hooks/**/*.{ts,tsx}',
     'utils/**/*.{ts,tsx}',
+    // Use regex to match DiscoveryPage specifically for coverage
+    'components/DiscoveryPage\\.tsx',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/__tests__/**',

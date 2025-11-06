@@ -4,15 +4,24 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 
 ## 🚀 Features
 
-- **Frontend**: Next.js 14 with TypeScript
+- **Frontend**: Next.js 14 with TypeScript and React 18
 - **Backend**: Express.js REST API with Prisma ORM
 - **Database**: PostgreSQL 15 for data persistence
 - **Authentication**: User registration and login with bcrypt password hashing
-- **Account Verification**: Email verification system for user accounts
+- **Password Reset**: Secure email-based password reset with time-limited tokens
+- **Email Verification**: Automated email verification system with secure tokens
+- **Unified Token System**: Extensible token architecture for verification, password reset, and future features
+- **Premium System**: Points-based premium features with daily tasks and unlocks
+- **Social Features**: Like/unlike users, pass functionality, and connection matching
+- **Advanced Filtering**: Premium filtering by age, gender, course, and interests
+- **User Reporting System**: Report users with reason selection and optional descriptions from Discovery Page and Chat
+- **Admin Panel**: Comprehensive user and report management interface for administrators
+- **User Management**: Admin features for banning/unbanning users and resetting passwords
+- **Report Management**: Admin interface to view, filter, and manage user reports with status tracking
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development
-- **Modern UI**: Clean and responsive design with toast notifications
+- **Modern UI**: Clean and responsive design with toast notifications and custom confirmation modals
 
 ## 📁 Project Structure
 
@@ -78,16 +87,19 @@ cp frontend/env.example frontend/.env
 
 **Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
 
-### Authentication
+### Authentication & Security
 
 The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js-style session management system:
 
+#### Session Management
 - **Login**: Users must log in to access protected pages and APIs
 - **Session Duration**: Tokens are valid for 1 hour
 - **Auto-refresh**: Session validity is checked every 5 minutes
 - **Logout**: Clears the authentication token and redirects to login
-- **Protected Routes**: All pages except `/auth` require authentication
+- **Protected Routes**: All pages except `/auth`, `/verify`, and `/reset-password` require authentication
 - **Protected APIs**: `/api/users` and other endpoints require valid tokens
+- **Admin Routes**: Admin-only endpoints require authentication and 'Admin' role
+- **Banned User Prevention**: Banned users are blocked from accessing protected routes
 
 #### Using Sessions in Components
 
@@ -202,15 +214,25 @@ npm run security:audit
 ### What Gets Tested
 
 **Backend:**
-- ✅ Authentication middleware (JWT validation, token expiry)
+- ✅ Authentication middleware (JWT validation, token expiry, banned user checks)
+- ✅ Admin authentication middleware (role-based access control)
 - ✅ Registration API (validation, duplicate users, password hashing)
 - ✅ Login API (credentials validation, account verification)
+- ✅ Email verification (token generation, expiration, cleanup)
+- ✅ Password reset (forgot password, token validation, password update)
+- ✅ Unified token system (EMAIL_VERIFICATION, PASSWORD_RESET types)
 - ✅ Users API (authorization, filtering verified users)
-- ✅ Security checks (SQL injection, XSS prevention)
+- ✅ Points system (daily rewards, premium unlocks)
+- ✅ Social features (likes, passes, matching)
+- ✅ User reporting system (report creation, reason validation)
+- ✅ Admin APIs (user management, ban/unban, password reset, report management)
+- ✅ Security checks (SQL injection, XSS prevention, email enumeration prevention)
 
 **Frontend:**
-- ✅ Custom hooks (useToast, useSession)
-- ✅ Components (LoadingSpinner, ToastContainer)
+- ✅ Custom hooks (useToast, useSession, useDiscovery)
+- ✅ Components (LoadingSpinner, ToastContainer, ConfirmModal, DiscoveryPage, FilterModal)
+- ✅ Admin Panel (user management, report management, ban/unban functionality)
+- ✅ Report functionality (DiscoveryPage and Chat page reporting)
 - ✅ API utilities (fetchWithAuth, error handling)
 - ✅ TypeScript type checking
 - ✅ Next.js build validation

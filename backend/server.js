@@ -8,11 +8,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const {
-  sendVerificationEmail,
-  sendTwoFactorEmail,
-  sendPasswordResetEmail,
-} = require('./lib/email');
+const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
 require('dotenv').config();
 
@@ -70,8 +66,7 @@ app.get('/api', (req, res) => {
         logout: 'POST /api/auth/logout',
         changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
-        forgotPassword: 'POST /api/auth/forgot-password',
-        resetPassword: 'POST /api/auth/reset-password',
+        resetPassword: 'POST /api/auth/reset-password (protected - authenticated users only)',
       },
       points: {
         getPoints: 'GET /api/points (protected)',
@@ -1074,206 +1069,17 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
   }
 });
 
-// Forgot password endpoint (request password reset)
-app.post('/api/auth/forgot-password', async (req, res) => {
+// Reset password endpoint (authenticated users only)
+app.post('/api/auth/reset-password', authenticateToken, async (req, res) => {
   try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email is required',
-      });
-    }
-
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        verified: true,
-      },
-    });
-
-    // Always return success to prevent email enumeration attacks
-    // Even if user doesn't exist, we say we sent the email
-    if (!user) {
-      return res.json({
-        success: true,
-        message: 'If an account with that email exists, a password reset link has been sent.',
-      });
-    }
-
-    // Check if user is verified
-    if (!user.verified) {
-      return res.status(400).json({
-        success: false,
-        error: 'Please verify your email address before resetting your password.',
-        requiresVerification: true,
-      });
-    }
-
-    // Generate password reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    // Delete any existing password reset tokens for this email
-    await prisma.token.deleteMany({
-      where: {
-        email,
-        type: 'PASSWORD_RESET',
-      },
-    });
-
-    // Create new password reset token
-    const createdToken = await prisma.token.create({
-      data: {
-        token: resetToken,
-        type: 'PASSWORD_RESET',
-        email: user.email,
-        userId: user.id,
-        expiresAt: resetTokenExpires,
-      },
-    });
-
-    // Send password reset email
-    try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
-
-      res.json({
-        success: true,
-        message: 'Password reset link has been sent to your email.',
-      });
-    } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError);
-
-      // Delete the token since email failed - user can't access it anyway
-      try {
-        await prisma.token.delete({
-          where: { id: createdToken.id },
-        });
-        console.log('Cleaned up password reset token after email failure');
-      } catch (cleanupError) {
-        console.error('Failed to cleanup token after email error:', cleanupError);
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send password reset email. Please try again later.',
-      });
-    }
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process password reset request',
-      message: error.message,
-    });
-  }
-});
-
-// Request password reset (for authenticated users)
-app.post('/api/auth/reset-password-request', authenticateToken, async (req, res) => {
-  try {
+    const { newPassword } = req.body;
     const userId = req.user.userId;
 
-    // Find user by ID
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        verified: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    // Check if user is verified
-    if (!user.verified) {
+    // Validate password is provided
+    if (!newPassword) {
       return res.status(400).json({
         success: false,
-        error: 'Please verify your email address before resetting your password.',
-        requiresVerification: true,
-      });
-    }
-
-    // Generate password reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    // Delete any existing password reset tokens for this email
-    await prisma.token.deleteMany({
-      where: {
-        email: user.email,
-        type: 'PASSWORD_RESET',
-      },
-    });
-
-    // Create new password reset token
-    const createdToken = await prisma.token.create({
-      data: {
-        token: resetToken,
-        type: 'PASSWORD_RESET',
-        email: user.email,
-        userId: user.id,
-        expiresAt: resetTokenExpires,
-      },
-    });
-
-    // Send password reset email
-    try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
-
-      res.json({
-        success: true,
-        message: 'Password reset link has been sent to your email.',
-      });
-    } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError);
-
-      // Delete the token since email failed - user can't access it anyway
-      try {
-        await prisma.token.delete({
-          where: { id: createdToken.id },
-        });
-        console.log('Cleaned up password reset token after email failure');
-      } catch (cleanupError) {
-        console.error('Failed to cleanup token after email error:', cleanupError);
-      }
-
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send password reset email. Please try again later.',
-      });
-    }
-  } catch (error) {
-    console.error('Reset password request error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process password reset request',
-      message: error.message,
-    });
-  }
-});
-
-// Reset password endpoint (verify token and update password)
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, newPassword } = req.body;
-
-    if (!token || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        error: 'Token and new password are required',
+        error: 'New password is required',
       });
     }
 
@@ -1286,36 +1092,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    // Find password reset token
-    const resetToken = await prisma.token.findFirst({
-      where: {
-        token,
-        type: 'PASSWORD_RESET',
-      },
-    });
-
-    if (!resetToken) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid or expired password reset token',
-      });
-    }
-
-    // Check if token has expired
-    if (new Date() > resetToken.expiresAt) {
-      // Delete expired token
-      await prisma.token.delete({
-        where: { id: resetToken.id },
-      });
-      return res.status(400).json({
-        success: false,
-        error: 'Password reset token has expired. Please request a new one.',
-      });
-    }
-
-    // Find user by email
+    // Find user by ID
     const user = await prisma.user.findUnique({
-      where: { email: resetToken.email },
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+      },
     });
 
     if (!user) {
@@ -1335,14 +1118,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
       data: { password: hashedPassword },
     });
 
-    // Delete the used reset token
-    await prisma.token.delete({
-      where: { id: resetToken.id },
-    });
-
     res.json({
       success: true,
-      message: 'Password has been reset successfully. You can now log in with your new password.',
+      message: 'Password has been reset successfully.',
     });
   } catch (error) {
     console.error('Reset password error:', error);
@@ -1577,7 +1355,7 @@ app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, r
     });
   } catch (error) {
     console.error('Admin password reset error:', error);
-    
+
     // Provide more specific error messages
     if (error.code === 'P2025') {
       return res.status(404).json({
@@ -1585,7 +1363,7 @@ app.post('/api/admin/users/:id/reset-password', authenticateAdmin, async (req, r
         error: 'User not found',
       });
     }
-    
+
     if (error.code === 'P2002') {
       return res.status(400).json({
         success: false,

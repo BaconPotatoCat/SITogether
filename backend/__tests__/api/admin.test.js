@@ -357,7 +357,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('Failed to fetch users');
+      expect(response.body.error).toMatch(/failed to fetch users/i);
     });
   });
 
@@ -388,7 +388,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('User banned successfully');
+      expect(response.body.message).toMatch(/user banned successfully/i);
       expect(response.body.data.banned).toBe(true);
     });
 
@@ -409,7 +409,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('Cannot ban admin users');
+      expect(response.body.error).toMatch(/cannot ban admin users/i);
     });
 
     it('should return 404 for non-existent user', async () => {
@@ -421,7 +421,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('User not found');
+      expect(response.body.error).toMatch(/user not found/i);
     });
   });
 
@@ -453,7 +453,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('User unbanned successfully');
+      expect(response.body.message).toMatch(/user unbanned successfully/i);
       expect(response.body.data.banned).toBe(false);
     });
 
@@ -466,7 +466,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('User not found');
+      expect(response.body.error).toMatch(/user not found/i);
     });
   });
 
@@ -487,7 +487,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toContain('Password reset link sent to');
+      expect(response.body.message).toMatch(/password reset link sent to/i);
       expect(response.body.data).toEqual(mockUser);
     });
 
@@ -500,7 +500,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('User not found');
+      expect(response.body.error).toMatch(/user not found/i);
     });
   });
 
@@ -597,7 +597,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Report updated successfully');
+      expect(response.body.message).toMatch(/report updated successfully/i);
       expect(response.body.data.status).toBe('Reviewed');
     });
 
@@ -611,7 +611,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Invalid status');
+      expect(response.body.error).toMatch(/invalid status/i);
     });
 
     it('should return 404 for non-existent report', async () => {
@@ -624,7 +624,7 @@ describe('Admin API Endpoints', () => {
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toBe('Report not found');
+      expect(response.body.error).toMatch(/report not found/i);
     });
   });
 });

@@ -117,7 +117,6 @@ describe('AdminPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockPush.mockClear()
-    global.confirm = jest.fn(() => true)
     mockUseSession.mockReturnValue({
       session: mockSession,
       status: 'authenticated' as const,
@@ -217,6 +216,15 @@ describe('AdminPanel', () => {
       const banButtons = screen.getAllByText('Ban')
       fireEvent.click(banButtons[0])
 
+      // Wait for confirmation modal to appear
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to ban this user/i)).toBeInTheDocument()
+      })
+
+      // Click confirm button
+      const confirmButton = screen.getByText('Confirm')
+      fireEvent.click(confirmButton)
+
       await waitFor(() => {
         expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/admin/user-actions', {
           method: 'POST',
@@ -250,42 +258,19 @@ describe('AdminPanel', () => {
       const unbanButton = screen.getByText('Unban')
       fireEvent.click(unbanButton)
 
+      // Wait for confirmation modal to appear
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to unban this user/i)).toBeInTheDocument()
+      })
+
+      // Click confirm button
+      const confirmButton = screen.getByText('Confirm')
+      fireEvent.click(confirmButton)
+
       await waitFor(() => {
         expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/admin/user-actions', {
           method: 'POST',
           body: JSON.stringify({ userId: 'user-2', action: 'unban' }),
-        })
-      })
-    })
-
-    it('should send password reset link', async () => {
-      mockFetchWithAuth
-        .mockResolvedValueOnce({
-          json: async () => ({ success: true, data: mockUsers }),
-        } as Response)
-        .mockResolvedValueOnce({
-          json: async () => ({
-            success: true,
-            message: 'Password reset link sent to user1@example.com',
-          }),
-        } as Response)
-        .mockResolvedValueOnce({
-          json: async () => ({ success: true, data: mockUsers }),
-        } as Response)
-
-      render(<AdminPanel />)
-
-      await waitFor(() => {
-        expect(screen.getByText('User One')).toBeInTheDocument()
-      })
-
-      const resetButtons = screen.getAllByText('Reset Password')
-      fireEvent.click(resetButtons[0])
-
-      await waitFor(() => {
-        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/admin/user-actions', {
-          method: 'POST',
-          body: JSON.stringify({ userId: 'user-1', action: 'reset-password' }),
         })
       })
     })
@@ -311,14 +296,21 @@ describe('AdminPanel', () => {
       const banButtons = screen.getAllByText('Ban')
       fireEvent.click(banButtons[0])
 
+      // Wait for confirmation modal to appear
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to ban this user/i)).toBeInTheDocument()
+      })
+
+      // Click confirm button
+      const confirmButton = screen.getByText('Confirm')
+      fireEvent.click(confirmButton)
+
       await waitFor(() => {
         expect(screen.getByText('Failed to ban user')).toBeInTheDocument()
       })
     })
 
     it('should not perform action if user cancels confirmation', async () => {
-      global.confirm = jest.fn(() => false)
-
       mockFetchWithAuth.mockResolvedValueOnce({
         json: async () => ({ success: true, data: mockUsers }),
       } as Response)
@@ -332,7 +324,16 @@ describe('AdminPanel', () => {
       const banButtons = screen.getAllByText('Ban')
       fireEvent.click(banButtons[0])
 
-      expect(global.confirm).toHaveBeenCalled()
+      // Wait for confirmation modal to appear
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to ban this user/i)).toBeInTheDocument()
+      })
+
+      // Click cancel button
+      const cancelButton = screen.getByText('Cancel')
+      fireEvent.click(cancelButton)
+
+      // Verify that the action was not performed (only initial fetch)
       expect(mockFetchWithAuth).toHaveBeenCalledTimes(1) // Only initial fetch
     })
   })

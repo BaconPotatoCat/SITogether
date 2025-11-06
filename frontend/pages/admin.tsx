@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import { useSession } from '../contexts/AuthContext'
 import { fetchWithAuth } from '../utils/api'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface User {
   id: string
@@ -56,6 +57,16 @@ export default function AdminPanel() {
   const [reportFilterStatus, setReportFilterStatus] = useState<
     'all' | 'Pending' | 'Reviewed' | 'Resolved'
   >('all')
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    message: string
+    onConfirm: () => void
+    type?: 'warning' | 'danger'
+  }>({
+    isOpen: false,
+    message: '',
+    onConfirm: () => {},
+  })
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
@@ -85,12 +96,14 @@ export default function AdminPanel() {
       const result = await response.json()
 
       if (result.success) {
-        setUsers(result.data)
+        setUsers(Array.isArray(result.data) ? result.data : [])
       } else {
         showMessage('error', result.error || 'Failed to fetch users')
+        setUsers([]) // Ensure users is always an array
       }
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Failed to fetch users')
+      setUsers([]) // Ensure users is always an array on error
     } finally {
       setLoading(false)
     }
@@ -105,62 +118,63 @@ export default function AdminPanel() {
       const result = await response.json()
 
       if (result.success) {
-        setReports(result.data)
+        setReports(Array.isArray(result.data) ? result.data : [])
       } else {
         showMessage('error', result.error || 'Failed to fetch reports')
+        setReports([]) // Ensure reports is always an array
       }
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Failed to fetch reports')
+      setReports([]) // Ensure reports is always an array on error
     } finally {
       setLoading(false)
     }
   }
 
   const handleUserAction = async (userId: string, action: 'ban' | 'unban' | 'reset-password') => {
-    if (action === 'reset-password') {
-      if (
-        !confirm(
-          'Are you sure you want to reset this user\'s password? A new temporary password will be generated and displayed.'
-        )
-      ) {
-        return
-      }
-    } else {
-      if (!confirm(`Are you sure you want to ${action} this user?`)) {
-        return
-      }
-    }
+    // Show confirmation modal instead of using confirm()
+    const confirmMessage =
+      action === 'reset-password'
+        ? "Are you sure you want to reset this user's password? A new temporary password will be generated and displayed."
+        : `Are you sure you want to ${action} this user?`
 
-    try {
-      setActionLoading(userId)
-      const response = await fetchWithAuth('/api/admin/user-actions', {
-        method: 'POST',
-        body: JSON.stringify({ userId, action }),
-      })
+    setConfirmModal({
+      isOpen: true,
+      message: confirmMessage,
+      type: action === 'ban' || action === 'reset-password' ? 'danger' : 'warning',
+      onConfirm: async () => {
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })
 
-      const result = await response.json()
+        try {
+          setActionLoading(userId)
+          const response = await fetchWithAuth('/api/admin/user-actions', {
+            method: 'POST',
+            body: JSON.stringify({ userId, action }),
+          })
 
-      if (result.success) {
-        if (action === 'reset-password' && result.data?.temporaryPassword) {
-          const tempPassword = result.data.temporaryPassword
-          showMessage(
-            'success',
-            `${result.message}\n\nTemporary password: ${tempPassword}\n\nPlease copy this password and share it securely with the user.`
-          )
-          // Also log to console for easy copying
-          console.log(`Temporary password for ${result.data.email}: ${tempPassword}`)
-        } else {
-          showMessage('success', result.message)
+          const result = await response.json()
+
+          if (result.success) {
+            if (action === 'reset-password' && result.data?.temporaryPassword) {
+              const tempPassword = result.data.temporaryPassword
+              showMessage(
+                'success',
+                `${result.message}\n\nTemporary password: ${tempPassword}\n\nPlease copy this password and share it securely with the user.`
+              )
+            } else {
+              showMessage('success', result.message)
+            }
+            fetchUsers()
+          } else {
+            showMessage('error', result.error || 'Action failed')
+          }
+        } catch (error) {
+          showMessage('error', error instanceof Error ? error.message : 'Action failed')
+        } finally {
+          setActionLoading(null)
         }
-        fetchUsers()
-      } else {
-        showMessage('error', result.error || 'Action failed')
-      }
-    } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Action failed')
-    } finally {
-      setActionLoading(null)
-    }
+      },
+    })
   }
 
   const showMessage = (type: 'success' | 'error', text: string) => {
@@ -168,7 +182,7 @@ export default function AdminPanel() {
     setTimeout(() => setMessage(null), 5000)
   }
 
-  const filteredUsers = users.filter((user) => {
+  const filteredUsers = (Array.isArray(users) ? users : []).filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -605,6 +619,13 @@ export default function AdminPanel() {
           )}
         </div>
       </main>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })}
+        type={confirmModal.type}
+      />
     </>
   )
 }

@@ -201,7 +201,14 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
                         transition: 'background 0.2s ease',
                       }}
                       onMouseEnter={(e) => {
-                        if (e.currentTarget.style.backgroundColor !== '#dc3545') return
+                        const currentColor = e.currentTarget.style.backgroundColor
+                        // Check for both hex (#dc3545) and RGB (rgb(220, 53, 69)) formats
+                        if (
+                          currentColor !== '#dc3545' &&
+                          currentColor !== 'rgb(220, 53, 69)' &&
+                          currentColor !== 'rgba(220, 53, 69, 1)'
+                        )
+                          return
                         e.currentTarget.style.backgroundColor = '#c82333'
                       }}
                       onMouseLeave={(e) => {
@@ -270,10 +277,14 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
             </p>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+              <label
+                htmlFor="report-reason-select"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}
+              >
                 Reason <span style={{ color: '#dc3545' }}>*</span>
               </label>
               <select
+                id="report-reason-select"
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 disabled={isSubmittingReport}
@@ -296,10 +307,14 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
             </div>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+              <label
+                htmlFor="report-description-textarea"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}
+              >
                 Additional Details (Optional)
               </label>
               <textarea
+                id="report-description-textarea"
                 value={reportDescription}
                 onChange={(e) => setReportDescription(e.target.value)}
                 disabled={isSubmittingReport}
