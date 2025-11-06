@@ -7,7 +7,7 @@ interface ConversationItem {
   id: string
   isLocked: boolean
   lastMessage: { content: string; createdAt: string } | null
-  otherUser: { id: string; name: string; avatarUrl: string | null }
+  otherUser: { id?: string; name: string; avatarUrl: string | null }
 }
 
 export default function Chat() {
