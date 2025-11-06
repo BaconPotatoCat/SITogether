@@ -56,7 +56,10 @@ export default function Chat() {
               >
                 <img
                   className="chat-avatar"
-                  src={c.otherUser.avatarUrl || '/avatar.png'}
+                  src={
+                    c.otherUser.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(c.otherUser.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                  }
                   alt={`${c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">
