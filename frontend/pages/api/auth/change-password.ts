@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { fetchWithAuthSSR } from '../../../utils/api'
 import { validatePasswordChange } from '../../../utils/passwordValidation'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -8,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/change-password`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/change-password`
 
     const { currentPassword, newPassword } = req.body
 

@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -7,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const { userId } = req.query
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes/${userId}/intro`
+    const backendUrl = `${config.backendInternalUrl}/api/likes/${userId}/intro`
 
     // Get token from cookie
     const token = req.cookies.token

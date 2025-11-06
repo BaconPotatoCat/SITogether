@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query
@@ -6,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'Invalid id' })
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/conversations/${id}/messages`
+    const backendUrl = `${config.backendInternalUrl}/api/conversations/${id}/messages`
     const token = req.cookies.token
 
     const headers: HeadersInit = {

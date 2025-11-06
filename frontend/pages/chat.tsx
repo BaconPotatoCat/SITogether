@@ -7,7 +7,7 @@ interface ConversationItem {
   id: string
   isLocked: boolean
   lastMessage: { content: string; createdAt: string } | null
-  otherUser: { id: string; name: string; avatarUrl: string | null }
+  otherUser: { id?: string; name: string; avatarUrl: string | null }
 }
 
 export default function Chat() {
@@ -55,14 +55,14 @@ export default function Chat() {
                 style={{ cursor: 'pointer' }}
               >
                 <img
-                  className="chat-avatar"
-                  src={c.otherUser.avatarUrl || '/avatar.png'}
-                  alt={`${c.otherUser.name} avatar`}
+                  className={`chat-avatar ${c.isLocked ? 'blurred' : ''}`}
+                  src={c.isLocked ? '/avatar.png' : c.otherUser.avatarUrl || '/avatar.png'}
+                  alt={`${c.isLocked ? 'Hidden' : c.otherUser.name} avatar`}
                 />
                 <div className="chat-body">
                   <div className="chat-head">
                     <h3>
-                      {c.otherUser.name} {c.isLocked ? '🔒' : ''}
+                      {c.isLocked ? 'Hidden User' : c.otherUser.name} {c.isLocked ? '🔒' : ''}
                     </h3>
                     <span className="time">
                       {c.lastMessage ? new Date(c.lastMessage.createdAt).toLocaleString() : ''}

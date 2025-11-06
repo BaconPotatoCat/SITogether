@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { fetchWithAuth } from '../utils/api'
 import IntroMessageModal from '../components/IntroMessageModal'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface Profile {
   id: string
@@ -12,6 +14,7 @@ interface Profile {
   interests: string[]
   bio: string
   avatarUrl: string
+  hasIntro?: boolean
 }
 
 export default function LikedProfiles() {
@@ -22,8 +25,9 @@ export default function LikedProfiles() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [pendingLikeUserId, setPendingLikeUserId] = useState<string | null>(null)
+  const { toasts, showToast, removeToast } = useToast()
 
-  // Fetch liked profiles without intro messages
+  // Fetch liked profiles with hasIntro flag
   useEffect(() => {
     const fetchLikedProfiles = async () => {
       try {
@@ -61,7 +65,7 @@ export default function LikedProfiles() {
   }
 
   const handleSendIntro = () => {
-    if (selectedProfile) {
+    if (selectedProfile && !selectedProfile.hasIntro) {
       setPendingLikeUserId(selectedProfile.id)
       setIsProfileModalOpen(false)
       setIsIntroOpen(true)
@@ -75,7 +79,7 @@ export default function LikedProfiles() {
     }
 
     if (!message || message.trim().length === 0) {
-      alert('Please enter an introduction message')
+      showToast('Please enter an introduction message', 'warning')
       return
     }
 
@@ -89,16 +93,36 @@ export default function LikedProfiles() {
       const result = await response.json()
 
       if (result.success) {
-        // Refresh the list to update (profiles with intro will still show, but user can see they've sent intro)
-        // Optionally, you could filter them out client-side if needed
+        // Refresh the list to update hasIntro flags
+        const refreshResponse = await fetchWithAuth('/api/likes/all')
+        if (refreshResponse.ok) {
+          const refreshResult = await refreshResponse.json()
+          if (refreshResult.success) {
+            setProfiles(refreshResult.data || [])
+          }
+        }
         setSelectedProfile(null)
+        showToast('Introduction sent successfully!', 'success')
       } else {
-        console.error('Failed to send introduction:', result.error)
-        alert(`Failed to send introduction: ${result.error || 'Unknown error'}`)
+        // Handle 409 Conflict (intro already sent)
+        if (response.status === 409) {
+          showToast('You have already sent an introduction message to this user.', 'warning')
+          // Refresh the list to update hasIntro flags
+          const refreshResponse = await fetchWithAuth('/api/likes/all')
+          if (refreshResponse.ok) {
+            const refreshResult = await refreshResponse.json()
+            if (refreshResult.success) {
+              setProfiles(refreshResult.data || [])
+            }
+          }
+        } else {
+          console.error('Failed to send introduction:', result.error)
+          showToast(`Failed to send introduction: ${result.error || 'Unknown error'}`, 'error')
+        }
       }
     } catch (error) {
       console.error('Error sending introduction:', error)
-      alert('Failed to send introduction. Please try again.')
+      showToast('Failed to send introduction. Please try again.', 'error')
     } finally {
       setIsIntroOpen(false)
       setPendingLikeUserId(null)
@@ -215,7 +239,10 @@ export default function LikedProfiles() {
                   }}
                 >
                   <img
-                    src={profile.avatarUrl}
+                    src={
+                      profile.avatarUrl ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                    }
                     alt={`${profile.name} avatar`}
                     style={{
                       width: '80px',
@@ -333,7 +360,10 @@ export default function LikedProfiles() {
               >
                 <div style={{ position: 'relative' }}>
                   <img
-                    src={selectedProfile.avatarUrl}
+                    src={
+                      selectedProfile.avatarUrl ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedProfile.name)}&size=400&background=6366f1&color=ffffff&bold=true`
+                    }
                     alt={`${selectedProfile.name} avatar`}
                     style={{
                       width: '100%',
@@ -410,19 +440,36 @@ export default function LikedProfiles() {
                       )}
                     </div>
                   </div>
-                  <button
-                    className="btn primary"
-                    onClick={handleSendIntro}
-                    style={{ width: '100%', padding: '12px' }}
-                  >
-                    Send an Introduction
-                  </button>
+                  {selectedProfile.hasIntro ? (
+                    <button
+                      className="btn"
+                      disabled
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        opacity: 0.6,
+                        cursor: 'not-allowed',
+                      }}
+                    >
+                      Introduction Already Sent ✓
+                    </button>
+                  ) : (
+                    <button
+                      className="btn primary"
+                      onClick={handleSendIntro}
+                      style={{ width: '100%', padding: '12px' }}
+                    >
+                      Send an Introduction
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
         </section>
       </main>
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

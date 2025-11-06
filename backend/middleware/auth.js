@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const config = require('../lib/config');
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -14,7 +15,7 @@ const authenticateToken = (req, res, next) => {
 
   try {
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, config.jwtSecret);
 
     // Attach user info to request
     req.user = decoded;
