@@ -13,7 +13,7 @@ datasource db {
 model User {
   id        String       @id @default(uuid()) @db.Uuid
   email     String       // Encrypted email data at rest (no longer unique - emailHash is used for uniqueness)
-  emailHash String?      @unique @map("email_hash") // Hash for authentication/lookup
+  emailHash String      @unique @map("email_hash") // Hash for authentication/lookup
   password  String
   name      String
   age       Int

@@ -41,7 +41,7 @@ services:
       - ./backend:/app
       - /app/node_modules
     command: >
-      sh -c "node prisma/migrate-email-encryption.js; npx prisma db push && npm run dev"
+      sh -c "npx prisma db push && npm run dev"
     networks:
       - sitogether-frontend-network
       - sitogether-backend-network

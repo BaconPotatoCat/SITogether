@@ -8,7 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- Create a basic users table (example)
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,  -- Encrypted email data at rest (not unique - emailHash is used for uniqueness)
+    email_hash VARCHAR(255) UNIQUE NOT NULL,  -- Hash for authentication/lookup
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     age INTEGER NOT NULL,
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email_hash ON users(email_hash);
 CREATE INDEX IF NOT EXISTS idx_users_course ON users(course);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
 
