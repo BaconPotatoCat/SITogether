@@ -105,6 +105,43 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
 
       const result = await response.json()
       res.status(200).json(result)
+    } else if (req.method === 'DELETE') {
+      // Get token from cookie
+      const token = req.cookies.token
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+
+      // Add authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      // Call backend API to delete user (with authentication)
+      const response = await fetch(`${backendUrl}/api/users/${id}`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      })
+
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        // If response is not JSON, return a generic error
+        return res.status(response.status).json({
+          success: false,
+          error: 'Failed to parse backend response',
+        })
+      }
+
+      if (!response.ok) {
+        // Forward the backend's error response with the same status code
+        return res.status(response.status).json(data)
+      }
+
+      res.status(200).json(data)
     } else {
       res.status(405).json({ error: 'Method not allowed' })
     }

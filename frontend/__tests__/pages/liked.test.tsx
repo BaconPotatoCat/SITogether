@@ -58,12 +58,12 @@ const mockShowToast = jest.fn()
 const mockRemoveToast = jest.fn()
 
 describe('LikedProfiles', () => {
-  // Suppress console.error during tests to reduce noise from expected error scenarios
-  const originalError = console.error
+  let consoleErrorSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
-    // Suppress console.error for cleaner test output
-    console.error = jest.fn()
+    // Suppress console.error to reduce test noise (errors are expected in some tests)
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     mockUseRouter.mockReturnValue({
       push: mockPush,
       query: {},
@@ -74,11 +74,15 @@ describe('LikedProfiles', () => {
       showToast: mockShowToast,
       removeToast: mockRemoveToast,
     })
+    // Default mock to prevent unhandled promise rejections
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: [] }),
+    } as Response)
   })
 
   afterEach(() => {
-    // Restore console.error after each test
-    console.error = originalError
+    consoleErrorSpy.mockRestore()
   })
 
   it('should display loading state initially', () => {

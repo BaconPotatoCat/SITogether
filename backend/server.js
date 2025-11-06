@@ -368,6 +368,95 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete user by ID (Protected - requires authentication and authorization)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Authorization check: Users can only delete their own account
+    if (req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only delete your own account.',
+      });
+    }
+
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: id },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Before deleting the user, find and delete conversations where both users are deleted
+    // (i.e., conversations where this user is involved AND the other user ID is already null)
+    const conversationsToDelete = await prisma.conversation.findMany({
+      where: {
+        OR: [
+          { userAId: id, userBId: null }, // This user is userA, userB is already deleted
+          { userAId: null, userBId: id }, // This user is userB, userA is already deleted
+        ],
+      },
+      select: { id: true },
+    });
+
+    // Delete conversations where both users are deleted (messages will be cascade deleted)
+    if (conversationsToDelete.length > 0) {
+      await prisma.conversation.deleteMany({
+        where: {
+          id: { in: conversationsToDelete.map((c) => c.id) },
+        },
+      });
+    }
+
+    // Also clean up any orphaned conversations (where both user IDs are already null)
+    // This handles edge cases where both users might have been deleted simultaneously
+    await prisma.conversation.deleteMany({
+      where: {
+        userAId: null,
+        userBId: null,
+      },
+    });
+
+    // Delete the user (this will set userAId/userBId to null for remaining conversations)
+    await prisma.user.delete({
+      where: { id: id },
+    });
+
+    // Clear the authentication cookie
+    res.clearCookie('token');
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+
+    // Handle specific Prisma errors
+    if (error.code === 'P2025') {
+      // Record not found
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Return detailed error in development, generic in production
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete account',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    });
+  }
+});
+
 // Authentication routes
 // Register endpoint
 app.post('/api/auth/register', registerLimiter, async (req, res) => {
@@ -1808,27 +1897,45 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
     });
 
     // Format the response and check if intro message exists for each profile
+    // Filter out likes where the liked user has been deleted (liked is null)
+    const validLikes = likes.filter((like) => like.liked !== null);
+
     const likedProfiles = await Promise.all(
-      likes.map(async (like) => {
+      validLikes.map(async (like) => {
         const likedId = like.liked.id;
         // Find conversation between the two users
         const userAId = likerId < likedId ? likerId : likedId;
         const userBId = likerId < likedId ? likedId : likerId;
 
-        const conversation = await prisma.conversation.findUnique({
-          where: { userAId_userBId: { userAId, userBId } },
-          include: {
-            messages: {
-              where: {
-                senderId: likerId,
+        // Try to find conversation - handle case where one user might be deleted
+        let conversation = null;
+        try {
+          conversation = await prisma.conversation.findUnique({
+            where: { userAId_userBId: { userAId, userBId } },
+            include: {
+              messages: {
+                where: {
+                  senderId: likerId,
+                },
+                take: 1,
               },
-              take: 1,
             },
-          },
-        });
+          });
+        } catch (error) {
+          // If conversation query fails (e.g., due to null user IDs), conversation remains null
+          console.warn(
+            `Failed to find conversation for users ${userAId} and ${userBId}:`,
+            error.message
+          );
+        }
 
         // Check if intro message exists (conversation exists and has at least one message from liker)
-        const hasIntro = !!conversation && conversation.messages.length > 0;
+        // Also check that conversation doesn't have null user IDs (both users still exist)
+        const hasIntro =
+          !!conversation &&
+          conversation.messages.length > 0 &&
+          conversation.userAId !== null &&
+          conversation.userBId !== null;
 
         return {
           id: like.liked.id,
@@ -1886,28 +1993,45 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
     });
 
     // Check which likes have intro messages
+    // Filter out likes where the liked user has been deleted (liked is null)
+    const validLikes = likes.filter((like) => like.liked !== null);
     const likesWithoutIntro = [];
 
-    for (const like of likes) {
+    for (const like of validLikes) {
       const likedId = like.likedId;
       // Find conversation between the two users
       const userAId = likerId < likedId ? likerId : likedId;
       const userBId = likerId < likedId ? likedId : likerId;
 
-      const conversation = await prisma.conversation.findUnique({
-        where: { userAId_userBId: { userAId, userBId } },
-        include: {
-          messages: {
-            where: {
-              senderId: likerId,
+      // Try to find conversation - handle case where one user might be deleted
+      let conversation = null;
+      try {
+        conversation = await prisma.conversation.findUnique({
+          where: { userAId_userBId: { userAId, userBId } },
+          include: {
+            messages: {
+              where: {
+                senderId: likerId,
+              },
+              take: 1,
             },
-            take: 1,
           },
-        },
-      });
+        });
+      } catch (error) {
+        // If conversation query fails (e.g., due to null user IDs), conversation remains null
+        console.warn(
+          `Failed to find conversation for users ${userAId} and ${userBId}:`,
+          error.message
+        );
+      }
 
-      // If no conversation exists or no messages from the liker, they haven't sent an intro
-      if (!conversation || conversation.messages.length === 0) {
+      // If no conversation exists, no messages from the liker, or conversation has null user IDs, they haven't sent an intro
+      if (
+        !conversation ||
+        conversation.messages.length === 0 ||
+        conversation.userAId === null ||
+        conversation.userBId === null
+      ) {
         likesWithoutIntro.push({
           id: like.liked.id,
           name: like.liked.name,
@@ -2312,10 +2436,13 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
     const result = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
-        const otherUser = await prisma.user.findUnique({
-          where: { id: otherUserId },
-          select: { id: true, name: true, avatarUrl: true },
-        });
+        // Handle case where other user might be deleted (null)
+        const otherUser = otherUserId
+          ? await prisma.user.findUnique({
+              where: { id: otherUserId },
+              select: { id: true, name: true, avatarUrl: true },
+            })
+          : null;
 
         // Decrypt lastMessage if it exists
         let lastMessage = c.messages[0] || null;
@@ -2335,14 +2462,17 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           }
         }
 
-        // Hide name, avatar, and ID when conversation is locked (before match)
+        // Hide name, avatar, and ID when conversation is locked (before match) or when user is deleted
         const sanitizedOtherUser =
-          c.isLocked && otherUser
+          otherUser && c.isLocked
             ? {
                 name: 'Hidden User',
                 avatarUrl: null,
               }
-            : otherUser;
+            : otherUser || {
+                name: 'Deleted User',
+                avatarUrl: null,
+              };
         return {
           id: c.id,
           isLocked: c.isLocked,
@@ -2371,7 +2501,11 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     if (!conversation)
       return res.status(404).json({ success: false, error: 'Conversation not found' });
 
-    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+    // Handle null user IDs (when a user has been deleted)
+    if (
+      (conversation.userAId !== userId && conversation.userBId !== userId) ||
+      (!conversation.userAId && !conversation.userBId)
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
@@ -2404,26 +2538,34 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     );
 
     // Include lightweight participant details to render avatars in chat UI
+    // Handle null user IDs when a user has been deleted
     const [userA, userB] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: conversation.userAId },
-        select: { id: true, name: true, avatarUrl: true },
-      }),
-      prisma.user.findUnique({
-        where: { id: conversation.userBId },
-        select: { id: true, name: true, avatarUrl: true },
-      }),
+      conversation.userAId
+        ? prisma.user.findUnique({
+            where: { id: conversation.userAId },
+            select: { id: true, name: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+      conversation.userBId
+        ? prisma.user.findUnique({
+            where: { id: conversation.userBId },
+            select: { id: true, name: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
     ]);
     const me = userA && userA.id === userId ? userA : userB;
-    // Hide other user's name, avatar, and ID when conversation is locked (before match)
+    // Hide other user's name, avatar, and ID when conversation is locked (before match) or when user is deleted
     const other = userA && userA.id === userId ? userB : userA;
     const sanitizedOther =
-      conversation.isLocked && other
+      other && conversation.isLocked
         ? {
             name: 'Hidden User',
             avatarUrl: null,
           }
-        : other;
+        : other || {
+            name: 'Deleted User',
+            avatarUrl: null,
+          };
 
     res.json({
       success: true,
@@ -2465,8 +2607,18 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation)
       return res.status(404).json({ success: false, error: 'Conversation not found' });
-    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+    // Handle null user IDs (when a user has been deleted)
+    if (
+      (conversation.userAId !== userId && conversation.userBId !== userId) ||
+      (!conversation.userAId && !conversation.userBId)
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    // Prevent sending messages if the other user has been deleted
+    if (!conversation.userAId || !conversation.userBId) {
+      return res
+        .status(410)
+        .json({ success: false, error: 'Cannot send message: other user has been deleted' });
     }
     if (conversation.isLocked) {
       return res.status(423).json({ success: false, error: 'Chat is locked until you match' });

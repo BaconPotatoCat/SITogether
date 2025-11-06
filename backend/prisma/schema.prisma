@@ -111,15 +111,15 @@ enum TokenType {
 
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
-  userAId   String   @db.Uuid
-  userBId   String   @db.Uuid
+  userAId   String?  @db.Uuid
+  userBId   String?  @db.Uuid
   isLocked  Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  userA    User @relation("UserAConversations", fields: [userAId], references: [id], onDelete: Cascade)
-  userB    User @relation("UserBConversations", fields: [userBId], references: [id], onDelete: Cascade)
+  userA    User? @relation("UserAConversations", fields: [userAId], references: [id], onDelete: SetNull)
+  userB    User? @relation("UserBConversations", fields: [userBId], references: [id], onDelete: SetNull)
   messages Message[]
 
   // Ensure one conversation per pair regardless of order
@@ -130,13 +130,13 @@ model Conversation {
 model Message {
   id             String       @id @default(uuid()) @db.Uuid
   conversationId String       @db.Uuid
-  senderId       String       @db.Uuid
+  senderId       String?      @db.Uuid
   content        String
   createdAt      DateTime     @default(now()) @map("created_at")
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sender       User?         @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@map("messages")
 }
