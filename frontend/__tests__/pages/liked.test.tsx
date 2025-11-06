@@ -351,7 +351,6 @@ describe('LikedProfiles', () => {
     })
   })
 
-
   it('should show warning toast when intro already sent (409 error)', async () => {
     const mockProfiles = [
       {
