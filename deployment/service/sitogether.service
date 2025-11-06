@@ -1,0 +1,24 @@
+[Unit]
+Description=SITogether Docker Compose Application
+Requires=docker.service
+After=docker.service
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+WorkingDirectory=/services/SITogether
+# Pull latest changes from GitHub before starting
+ExecStartPre=/bin/bash -c 'cd /services/SITogether && git fetch origin && git pull origin main || true'
+ExecStart=/usr/bin/docker-compose up
+ExecStop=/usr/bin/docker-compose down
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+# Optional: Uncomment and set path to your .env file if needed
+EnvironmentFile=/services/SITogether/.env
+
+[Install]
+WantedBy=multi-user.target
+
