@@ -37,6 +37,8 @@ services:
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       NEXT_PUBLIC_FRONTEND_EXTERNALURL: ${NEXT_PUBLIC_FRONTEND_EXTERNALURL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TRUST_PROXY: ${TRUST_PROXY}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app

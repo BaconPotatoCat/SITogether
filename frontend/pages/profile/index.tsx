@@ -228,6 +228,12 @@ export default function MyProfilePage() {
         reader.readAsDataURL(file)
       })
 
+      // Validate that base64 conversion was successful
+      if (!base64String || !base64String.startsWith('data:image/')) {
+        showToast('Invalid image file. Please select a valid image and try again.', 'error')
+        return
+      }
+
       // Update profile with new avatar
       if (session?.user) {
         const response = await fetchWithAuth(`/api/users/${session.user.id}`, {
@@ -242,20 +248,48 @@ export default function MyProfilePage() {
           }),
         })
 
-        const result = await response.json()
+        // Check if response is ok and has valid JSON
+        let result
+        try {
+          const responseText = await response.text()
+          if (!response.ok) {
+            // Log detailed error for debugging, but show generic message to user
+            try {
+              const errorResult = JSON.parse(responseText)
+              console.error('Failed to update profile:', errorResult.error)
+            } catch {
+              console.error('Failed to update profile:', responseText)
+            }
+            // Always show generic error message to user for security
+            showToast('Failed to update profile picture. Please try again.', 'error')
+            return
+          }
+          // Parse the successful response
+          result = JSON.parse(responseText)
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError)
+          showToast('An error occurred. Please try again.', 'error')
+          return
+        }
 
         if (result.success) {
           showToast('Profile picture updated successfully!', 'success')
           // Refresh session to update avatar in AuthContext
           await refreshSession()
         } else {
-          showToast(result.error || 'Failed to update profile picture', 'error')
+          // Log detailed error but show generic message
           console.error('Failed to update profile:', result.error)
+          showToast('Failed to update profile picture. Please try again.', 'error')
         }
       }
     } catch (error) {
+      // Log detailed error for debugging
       console.error('Error uploading avatar:', error)
-      showToast('An error occurred while uploading your profile picture', 'error')
+      // Show generic error message to user for security
+      showToast(
+        'An error occurred while uploading your profile picture. Please try again.',
+        'error'
+      )
     } finally {
       setIsUploadingAvatar(false)
       // Reset file input

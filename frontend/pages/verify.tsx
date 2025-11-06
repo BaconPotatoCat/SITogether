@@ -97,6 +97,11 @@ export default function VerifyEmail() {
           justify-content: center;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           padding: 20px;
+          transition: background 0.3s ease;
+        }
+
+        :global(html.dark) .verify-container {
+          background: linear-gradient(135deg, #4c5566 0%, #5b2a6b 100%);
         }
 
         .verify-card {
@@ -107,6 +112,15 @@ export default function VerifyEmail() {
           width: 100%;
           text-align: center;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          transition:
+            background-color 0.3s ease,
+            border-color 0.3s ease;
+        }
+
+        :global(html.dark) .verify-card {
+          background: #1f2937;
+          border: 1px solid #374151;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
         }
 
         .spinner {
@@ -117,6 +131,12 @@ export default function VerifyEmail() {
           border-radius: 50%;
           animation: spin 1s linear infinite;
           margin: 0 auto 30px;
+          transition: border-color 0.3s ease;
+        }
+
+        :global(html.dark) .spinner {
+          border-color: #374151;
+          border-top-color: #818cf8;
         }
 
         @keyframes spin {
@@ -142,6 +162,10 @@ export default function VerifyEmail() {
           animation: scaleIn 0.5s ease;
         }
 
+        :global(html.dark) .success-icon {
+          background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+        }
+
         .error-icon {
           width: 80px;
           height: 80px;
@@ -154,6 +178,10 @@ export default function VerifyEmail() {
           justify-content: center;
           margin: 0 auto 30px;
           animation: scaleIn 0.5s ease;
+        }
+
+        :global(html.dark) .error-icon {
+          background: #ef4444;
         }
 
         @keyframes scaleIn {
@@ -172,6 +200,11 @@ export default function VerifyEmail() {
           font-size: 32px;
           margin-bottom: 20px;
           color: #333;
+          transition: color 0.3s ease;
+        }
+
+        :global(html.dark) h1 {
+          color: #f3f4f6;
         }
 
         p {
@@ -179,12 +212,22 @@ export default function VerifyEmail() {
           color: #666;
           margin-bottom: 15px;
           line-height: 1.6;
+          transition: color 0.3s ease;
+        }
+
+        :global(html.dark) p {
+          color: #d1d5db;
         }
 
         .redirect-text {
           font-style: italic;
           color: #999;
           margin-top: 20px;
+          transition: color 0.3s ease;
+        }
+
+        :global(html.dark) .redirect-text {
+          color: #9ca3af;
         }
 
         .btn-primary {
@@ -198,13 +241,22 @@ export default function VerifyEmail() {
           cursor: pointer;
           transition:
             transform 0.2s,
-            box-shadow 0.2s;
+            box-shadow 0.2s,
+            background 0.3s ease;
           margin-top: 20px;
+        }
+
+        :global(html.dark) .btn-primary {
+          background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
         }
 
         .btn-primary:hover {
           transform: translateY(-2px);
           box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        :global(html.dark) .btn-primary:hover {
+          box-shadow: 0 10px 20px rgba(129, 140, 248, 0.4);
         }
 
         .btn-primary:active {
