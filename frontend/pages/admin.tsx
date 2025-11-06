@@ -54,9 +54,9 @@ export default function AdminPanel() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'banned' | 'active'>('all')
-  const [reportFilterStatus, setReportFilterStatus] = useState<
-    'all' | 'Pending' | 'Reviewed' | 'Resolved'
-  >('all')
+  const [reportFilterStatus, setReportFilterStatus] = useState<'all' | 'Pending' | 'Resolved'>(
+    'all'
+  )
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean
     message: string
@@ -107,7 +107,7 @@ export default function AdminPanel() {
     }
   }
 
-  const fetchReports = async (status?: 'all' | 'Pending' | 'Reviewed' | 'Resolved') => {
+  const fetchReports = async (status?: 'all' | 'Pending' | 'Resolved') => {
     try {
       setLoading(true)
       const filterStatus = status ?? reportFilterStatus
@@ -128,6 +128,34 @@ export default function AdminPanel() {
       setLoading(false)
     }
   }
+
+  // Group reports by reported user
+  interface GroupedReport {
+    user: NonNullable<Report['reportedUser']> & { id: string }
+    reports: Report[]
+  }
+
+  const groupedReports = reports.reduce(
+    (acc, report) => {
+      const userId = report.reportedId
+      if (!acc[userId]) {
+        acc[userId] = {
+          user: (report.reportedUser || {
+            id: report.reportedId,
+            email: 'Unknown',
+            name: 'Unknown User',
+            banned: false,
+          }) as NonNullable<Report['reportedUser']> & { id: string },
+          reports: [],
+        }
+      }
+      acc[userId].reports.push(report)
+      return acc
+    },
+    {} as Record<string, GroupedReport>
+  )
+
+  const groupedReportsArray = Object.values(groupedReports)
 
   const handleUserAction = async (userId: string, action: 'ban' | 'unban') => {
     // Show confirmation modal instead of using confirm()
@@ -152,11 +180,107 @@ export default function AdminPanel() {
           if (result.success) {
             showMessage('success', result.message)
             fetchUsers()
+            // Refresh reports if we're on the reports tab
+            if (activeTab === 'reports') {
+              // If filtering by 'Pending', switch to 'all' to see the resolved reports
+              if (reportFilterStatus === 'Pending') {
+                setReportFilterStatus('all')
+                fetchReports('all')
+              } else {
+                fetchReports()
+              }
+            }
           } else {
             showMessage('error', result.error || 'Action failed')
           }
         } catch (error) {
           showMessage('error', error instanceof Error ? error.message : 'Action failed')
+        } finally {
+          setActionLoading(null)
+        }
+      },
+    })
+  }
+
+  const handleBanFromReport = async (userId: string, reportId: string, action: 'ban' | 'unban') => {
+    // Show confirmation modal
+    const confirmMessage = `Are you sure you want to ${action} this user? ${
+      action === 'ban' ? 'This will also resolve all pending reports for this user.' : ''
+    }`
+
+    setConfirmModal({
+      isOpen: true,
+      message: confirmMessage,
+      type: action === 'ban' ? 'danger' : 'warning',
+      onConfirm: async () => {
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })
+
+        try {
+          setActionLoading(userId)
+          const response = await fetchWithAuth('/api/admin/user-actions', {
+            method: 'POST',
+            body: JSON.stringify({ userId, action }),
+          })
+
+          const result = await response.json()
+
+          if (result.success) {
+            showMessage('success', result.message)
+            // Refresh reports to show updated statuses
+            // If filtering by 'Pending', switch to 'all' to see the resolved reports
+            if (reportFilterStatus === 'Pending') {
+              setReportFilterStatus('all')
+              fetchReports('all')
+            } else {
+              fetchReports()
+            }
+          } else {
+            showMessage('error', result.error || 'Action failed')
+          }
+        } catch (error) {
+          showMessage('error', error instanceof Error ? error.message : 'Action failed')
+        } finally {
+          setActionLoading(null)
+        }
+      },
+    })
+  }
+
+  const handleInvalidReport = async (reportId: string) => {
+    // Show confirmation modal
+    setConfirmModal({
+      isOpen: true,
+      message:
+        'Are you sure you want to mark this report as invalid? This will resolve the report without banning the user.',
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })
+
+        try {
+          setActionLoading(reportId)
+          const response = await fetchWithAuth(`/api/admin/reports/${reportId}/invalid`, {
+            method: 'POST',
+          })
+
+          const result = await response.json()
+
+          if (result.success) {
+            showMessage('success', result.message)
+            // If filtering by 'Pending', switch to 'all' to see the resolved report
+            if (reportFilterStatus === 'Pending') {
+              setReportFilterStatus('all')
+              fetchReports('all')
+            } else {
+              fetchReports()
+            }
+          } else {
+            showMessage('error', result.error || 'Failed to mark report as invalid')
+          }
+        } catch (error) {
+          showMessage(
+            'error',
+            error instanceof Error ? error.message : 'Failed to mark report as invalid'
+          )
         } finally {
           setActionLoading(null)
         }
@@ -170,9 +294,26 @@ export default function AdminPanel() {
   }
 
   const filteredUsers = (Array.isArray(users) ? users : []).filter((user) => {
+    // Skip invalid user objects - check for null explicitly since typeof null === 'object'
+    if (
+      !user ||
+      user === null ||
+      typeof user !== 'object' ||
+      Array.isArray(user) ||
+      typeof user.name !== 'string' ||
+      typeof user.email !== 'string' ||
+      !user.name ||
+      !user.email
+    ) {
+      return false
+    }
+
+    // Ensure searchTerm is a string
+    const safeSearchTerm = typeof searchTerm === 'string' ? searchTerm : ''
+
     const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      user.name.toLowerCase().includes(safeSearchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(safeSearchTerm.toLowerCase())
 
     const matchesFilter =
       filterStatus === 'all' ||
@@ -449,7 +590,7 @@ export default function AdminPanel() {
                 <select
                   value={reportFilterStatus}
                   onChange={(e) => {
-                    const newStatus = e.target.value as 'all' | 'Pending' | 'Reviewed' | 'Resolved'
+                    const newStatus = e.target.value as 'all' | 'Pending' | 'Resolved'
                     setReportFilterStatus(newStatus)
                     fetchReports(newStatus)
                   }}
@@ -458,80 +599,86 @@ export default function AdminPanel() {
                 >
                   <option value="all">All Reports</option>
                   <option value="Pending">Pending</option>
-                  <option value="Reviewed">Reviewed</option>
                   <option value="Resolved">Resolved</option>
                 </select>
               </div>
 
               {loading ? (
                 <LoadingSpinner message="Loading reports..." />
-              ) : reports.length === 0 ? (
+              ) : groupedReportsArray.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
                   No reports found
                 </div>
               ) : (
-                <div style={{ display: 'grid', gap: '1rem' }}>
-                  {reports.map((report) => (
-                    <div
-                      key={report.id}
-                      style={{
-                        padding: '1.5rem',
-                        backgroundColor: '#fff',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '12px',
-                      }}
-                    >
+                <div style={{ display: 'grid', gap: '1.5rem' }}>
+                  {groupedReportsArray.map((group) => {
+                    const pendingCount = group.reports.filter((r) => r.status === 'Pending').length
+                    const resolvedCount = group.reports.filter(
+                      (r) => r.status === 'Resolved'
+                    ).length
+                    const totalCount = group.reports.length
+
+                    return (
                       <div
+                        key={group.user.id}
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr auto',
-                          gap: '1rem',
-                          marginBottom: '1rem',
+                          padding: '1.5rem',
+                          backgroundColor: '#fff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '12px',
                         }}
                       >
-                        <div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.75rem',
-                              marginBottom: '0.5rem',
-                            }}
-                          >
-                            <h3 style={{ margin: 0, color: '#111827', fontSize: '1.125rem' }}>
-                              {report.reportedUser?.name || 'Unknown User'}
-                            </h3>
-                            {report.reportedUser?.banned && (
-                              <span
-                                style={{
-                                  padding: '0.25rem 0.75rem',
-                                  borderRadius: '999px',
-                                  fontSize: '0.875rem',
-                                  fontWeight: 600,
-                                  backgroundColor: '#fee2e2',
-                                  color: '#991b1b',
-                                }}
-                              >
-                                Banned
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.75rem',
-                              marginBottom: '0.25rem',
-                            }}
-                          >
-                            <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
-                              {report.reportedUser?.email || 'N/A'}
-                            </p>
-                            {report.reportedUser && (
+                        {/* User Header */}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr auto',
+                            gap: '1rem',
+                            marginBottom: '1.5rem',
+                            paddingBottom: '1rem',
+                            borderBottom: '2px solid #e5e7eb',
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                marginBottom: '0.5rem',
+                              }}
+                            >
+                              <h3 style={{ margin: 0, color: '#111827', fontSize: '1.25rem' }}>
+                                {group.user.name || 'Unknown User'}
+                              </h3>
+                              {group.user.banned && (
+                                <span
+                                  style={{
+                                    padding: '0.25rem 0.75rem',
+                                    borderRadius: '999px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: 600,
+                                    backgroundColor: '#fee2e2',
+                                    color: '#991b1b',
+                                  }}
+                                >
+                                  Banned
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                marginBottom: '0.5rem',
+                              }}
+                            >
+                              <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
+                                {group.user.email || 'N/A'}
+                              </p>
                               <button
-                                onClick={() =>
-                                  router.push(`/profile/${report.reportedUser!.id}?from=admin`)
-                                }
+                                onClick={() => router.push(`/profile/${group.user.id}?from=admin`)}
                                 style={{
                                   padding: '0.25rem 0.75rem',
                                   fontSize: '0.875rem',
@@ -551,92 +698,146 @@ export default function AdminPanel() {
                               >
                                 View Profile
                               </button>
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                              <strong>{totalCount}</strong> report{totalCount !== 1 ? 's' : ''} (
+                              {pendingCount} Pending, {resolvedCount} Resolved)
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {group.user && (
+                              <button
+                                onClick={() => {
+                                  handleBanFromReport(
+                                    group.user.id,
+                                    group.reports[0].id,
+                                    group.user.banned ? 'unban' : 'ban'
+                                  )
+                                }}
+                                disabled={actionLoading === group.user.id}
+                                style={{
+                                  padding: '0.5rem 1rem',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 600,
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  cursor:
+                                    actionLoading === group.user.id ? 'not-allowed' : 'pointer',
+                                  backgroundColor: group.user.banned ? '#10b981' : '#ef4444',
+                                  color: '#fff',
+                                  opacity: actionLoading === group.user.id ? 0.5 : 1,
+                                }}
+                              >
+                                {group.user.banned ? 'Unban User' : 'Ban User'}
+                              </button>
                             )}
                           </div>
                         </div>
-                        <div>
-                          <span
-                            style={{
-                              padding: '0.5rem 1rem',
-                              borderRadius: '999px',
-                              fontSize: '0.875rem',
-                              fontWeight: 600,
-                              backgroundColor:
-                                report.status === 'Pending'
-                                  ? '#fef3c7'
-                                  : report.status === 'Reviewed'
-                                    ? '#e0e7ff'
-                                    : '#d1fae5',
-                              color:
-                                report.status === 'Pending'
-                                  ? '#92400e'
-                                  : report.status === 'Reviewed'
-                                    ? '#3730a3'
-                                    : '#065f46',
-                            }}
-                          >
-                            {report.status}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div style={{ marginBottom: '1rem' }}>
-                        <div style={{ fontWeight: 600, color: '#374151', marginBottom: '0.25rem' }}>
-                          Reason: {report.reason}
+                        {/* Reports List */}
+                        <div style={{ display: 'grid', gap: '1rem' }}>
+                          {group.reports.map((report) => (
+                            <div
+                              key={report.id}
+                              style={{
+                                padding: '1rem',
+                                backgroundColor: '#f9fafb',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'flex-start',
+                                  marginBottom: '0.75rem',
+                                }}
+                              >
+                                <div style={{ flex: 1 }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      color: '#374151',
+                                      marginBottom: '0.25rem',
+                                    }}
+                                  >
+                                    Reason: {report.reason}
+                                  </div>
+                                  {report.description && (
+                                    <p
+                                      style={{
+                                        margin: '0.25rem 0 0 0',
+                                        color: '#6b7280',
+                                        fontSize: '0.9375rem',
+                                      }}
+                                    >
+                                      {report.description}
+                                    </p>
+                                  )}
+                                </div>
+                                <div
+                                  style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                                >
+                                  <span
+                                    style={{
+                                      padding: '0.375rem 0.75rem',
+                                      borderRadius: '999px',
+                                      fontSize: '0.875rem',
+                                      fontWeight: 600,
+                                      backgroundColor:
+                                        report.status === 'Pending' ? '#fef3c7' : '#d1fae5',
+                                      color: report.status === 'Pending' ? '#92400e' : '#065f46',
+                                    }}
+                                  >
+                                    {report.status}
+                                  </span>
+                                  {report.status === 'Pending' && (
+                                    <button
+                                      onClick={() => handleInvalidReport(report.id)}
+                                      disabled={actionLoading === report.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 600,
+                                        borderRadius: '6px',
+                                        border: 'none',
+                                        cursor:
+                                          actionLoading === report.id ? 'not-allowed' : 'pointer',
+                                        backgroundColor: '#6b7280',
+                                        color: '#fff',
+                                        opacity: actionLoading === report.id ? 0.5 : 1,
+                                      }}
+                                    >
+                                      Invalid Report
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '0.875rem',
+                                  color: '#9ca3af',
+                                  paddingTop: '0.75rem',
+                                  borderTop: '1px solid #e5e7eb',
+                                }}
+                              >
+                                Reported on {new Date(report.createdAt).toLocaleDateString()} by{' '}
+                                {report.reportedBy}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        {report.description && (
-                          <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9375rem' }}>
-                            {report.description}
-                          </p>
-                        )}
                       </div>
-
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          paddingTop: '1rem',
-                          borderTop: '1px solid #e5e7eb',
-                        }}
-                      >
-                        <div style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-                          Reported on {new Date(report.createdAt).toLocaleDateString()} by{' '}
-                          {report.reportedBy}
-                        </div>
-                        {report.reportedUser && (
-                          <button
-                            onClick={() => {
-                              const user = report.reportedUser!
-                              handleUserAction(user.id, user.banned ? 'unban' : 'ban')
-                            }}
-                            disabled={actionLoading === report.reportedUser.id}
-                            style={{
-                              padding: '0.5rem 1rem',
-                              fontSize: '0.875rem',
-                              fontWeight: 600,
-                              borderRadius: '6px',
-                              border: 'none',
-                              cursor:
-                                actionLoading === report.reportedUser.id
-                                  ? 'not-allowed'
-                                  : 'pointer',
-                              backgroundColor: report.reportedUser.banned ? '#10b981' : '#ef4444',
-                              color: '#fff',
-                              opacity: actionLoading === report.reportedUser.id ? 0.5 : 1,
-                            }}
-                          >
-                            {report.reportedUser.banned ? 'Unban User' : 'Ban User'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
               <div style={{ marginTop: '1rem', color: '#6b7280', fontSize: '0.875rem' }}>
-                Showing {reports.length} report{reports.length !== 1 ? 's' : ''}
+                Showing {groupedReportsArray.length} user
+                {groupedReportsArray.length !== 1 ? 's' : ''} with {reports.length} total report
+                {reports.length !== 1 ? 's' : ''}
               </div>
             </div>
           )}

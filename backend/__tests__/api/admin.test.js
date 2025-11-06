@@ -25,7 +25,9 @@ jest.mock('../../lib/prisma', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
   return mockPrisma;
 });
@@ -102,27 +104,43 @@ describe('Admin API Endpoints', () => {
           });
         }
 
-        if (user.role === 'Admin') {
+        // Prevent banning admin users (check role internally)
+        const userRole = await mockPrismaClient.user.findUnique({
+          where: { id },
+          select: { role: true },
+        });
+
+        if (userRole && userRole.role === 'Admin') {
           return res.status(403).json({
             success: false,
             error: 'Cannot ban admin users',
           });
         }
 
-        const bannedUser = await mockPrismaClient.user.update({
-          where: { id },
-          data: {
-            banned: true,
-            bannedAt: new Date(),
-          },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            banned: true,
-            bannedAt: true,
-          },
-        });
+        // Ban the user and resolve all their reports
+        const [bannedUser] = await mockPrismaClient.$transaction([
+          mockPrismaClient.user.update({
+            where: { id },
+            data: {
+              banned: true,
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              banned: true,
+            },
+          }),
+          mockPrismaClient.report.updateMany({
+            where: {
+              reportedId: id,
+              status: 'Pending',
+            },
+            data: {
+              status: 'Resolved',
+            },
+          }),
+        ]);
 
         res.json({
           success: true,
@@ -244,16 +262,64 @@ describe('Admin API Endpoints', () => {
       }
     });
 
+    // Mark report as invalid (resolves without banning) (Admin only)
+    // This route must be defined BEFORE the more general /api/admin/reports/:id route
+    app.post('/api/admin/reports/:id/invalid', mockAuthenticateAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        // Check if report exists
+        const report = await mockPrismaClient.report.findUnique({
+          where: { id },
+        });
+
+        if (!report) {
+          return res.status(404).json({
+            success: false,
+            error: 'Report not found',
+          });
+        }
+
+        // Update report status to Resolved
+        const updatedReport = await mockPrismaClient.report.update({
+          where: { id },
+          data: { status: 'Resolved' },
+          include: {
+            reportedUser: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                banned: true,
+              },
+            },
+          },
+        });
+
+        res.json({
+          success: true,
+          message: 'Report marked as invalid and resolved',
+          data: updatedReport,
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to mark report as invalid',
+          message: error.message,
+        });
+      }
+    });
+
     app.put('/api/admin/reports/:id', mockAuthenticateAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         const { status } = req.body;
 
-        const validStatuses = ['Pending', 'Reviewed', 'Resolved'];
+        const validStatuses = ['Pending', 'Resolved'];
         if (!validStatuses.includes(status)) {
           return res.status(400).json({
             success: false,
-            error: 'Invalid status. Must be one of: Pending, Reviewed, Resolved',
+            error: 'Invalid status. Must be one of: Pending, Resolved',
           });
         }
 
@@ -371,16 +437,20 @@ describe('Admin API Endpoints', () => {
         role: 'User',
       };
 
-      const mockBannedUser = {
+      const mockBannedUserResult = {
         id: userId,
         email: 'user@example.com',
         name: 'Test User',
         banned: true,
-        bannedAt: new Date(),
       };
 
-      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
-      mockPrismaClient.user.update.mockResolvedValue(mockBannedUser);
+      mockPrismaClient.user.findUnique
+        .mockResolvedValueOnce(mockUser) // First call: check if user exists
+        .mockResolvedValueOnce({ role: 'User' }); // Second call: check role
+      mockPrismaClient.$transaction.mockResolvedValue([
+        mockBannedUserResult, // bannedUser
+        { count: 0 }, // reportsUpdated (no pending reports)
+      ]);
 
       const response = await request(app)
         .post(`/api/admin/users/${userId}/ban`)
@@ -578,7 +648,7 @@ describe('Admin API Endpoints', () => {
 
       const mockUpdatedReport = {
         id: reportId,
-        status: 'Reviewed',
+        status: 'Resolved',
         reportedUser: {
           id: 'user-1',
           email: 'user1@example.com',
@@ -593,12 +663,12 @@ describe('Admin API Endpoints', () => {
       const response = await request(app)
         .put(`/api/admin/reports/${reportId}`)
         .set('Cookie', [`token=${adminToken}`])
-        .send({ status: 'Reviewed' });
+        .send({ status: 'Resolved' });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.message).toMatch(/report updated successfully/i);
-      expect(response.body.data.status).toBe('Reviewed');
+      expect(response.body.data.status).toBe('Resolved');
     });
 
     it('should reject invalid status', async () => {
@@ -620,11 +690,98 @@ describe('Admin API Endpoints', () => {
       const response = await request(app)
         .put('/api/admin/reports/non-existent-id')
         .set('Cookie', [`token=${adminToken}`])
-        .send({ status: 'Reviewed' });
+        .send({ status: 'Resolved' });
 
       expect(response.status).toBe(404);
       expect(response.body.success).toBe(false);
       expect(response.body.error).toMatch(/report not found/i);
+    });
+  });
+
+  describe('POST /api/admin/reports/:id/invalid', () => {
+    it('should mark report as invalid and resolve it', async () => {
+      const reportId = 'report-123';
+      const mockReport = {
+        id: reportId,
+        status: 'Pending',
+      };
+
+      const mockUpdatedReport = {
+        id: reportId,
+        status: 'Resolved',
+        reportedUser: {
+          id: 'user-1',
+          email: 'user1@example.com',
+          name: 'User One',
+          banned: false,
+        },
+      };
+
+      mockPrismaClient.report.findUnique.mockResolvedValue(mockReport);
+      mockPrismaClient.report.update.mockResolvedValue(mockUpdatedReport);
+
+      const response = await request(app)
+        .post(`/api/admin/reports/${reportId}/invalid`)
+        .set('Cookie', [`token=${adminToken}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toMatch(/report marked as invalid/i);
+      expect(response.body.data.status).toBe('Resolved');
+    });
+
+    it('should return 404 for non-existent report', async () => {
+      mockPrismaClient.report.findUnique.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post('/api/admin/reports/non-existent-id/invalid')
+        .set('Cookie', [`token=${adminToken}`]);
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toMatch(/report not found/i);
+    });
+  });
+
+  describe('POST /api/admin/users/:id/ban', () => {
+    it('should ban user and resolve all pending reports', async () => {
+      const userId = 'user-123';
+      const mockUser = {
+        id: userId,
+        email: 'user@example.com',
+        name: 'Test User',
+        role: 'User',
+        banned: false,
+      };
+
+      const mockBannedUserResult = {
+        id: userId,
+        email: 'user@example.com',
+        name: 'Test User',
+        banned: true,
+      };
+
+      mockPrismaClient.user.findUnique
+        .mockResolvedValueOnce(mockUser) // First call: check if user exists
+        .mockResolvedValueOnce({ role: 'User' }); // Second call: check role
+      mockPrismaClient.$transaction.mockResolvedValue([
+        mockBannedUserResult, // bannedUser
+        { count: 2 }, // reportsUpdated
+      ]);
+
+      const response = await request(app)
+        .post(`/api/admin/users/${userId}/ban`)
+        .set('Cookie', [`token=${adminToken}`]);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toMatch(/user banned successfully/i);
+      expect(response.body.data.banned).toBe(true);
+      expect(mockPrismaClient.$transaction).toHaveBeenCalled();
+      expect(mockPrismaClient.$transaction).toHaveBeenCalledTimes(1);
+      // Verify transaction was called with an array of 2 operations
+      const transactionCall = mockPrismaClient.$transaction.mock.calls[0];
+      expect(transactionCall[0]).toHaveLength(2);
     });
   });
 });

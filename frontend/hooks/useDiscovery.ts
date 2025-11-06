@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { fetchWithAuth } from '../utils/api'
+import { useToast } from './useToast'
 
 interface User {
   id: string
@@ -55,6 +56,7 @@ export function useDiscovery(isPremium = false) {
     likingUserId: null,
     passingUserId: null,
   })
+  const { showToast } = useToast()
 
   // Mobile detection
   useEffect(() => {
@@ -159,17 +161,17 @@ export function useDiscovery(isPremium = false) {
           }))
         } else {
           const errorData = await response.json()
-          alert(errorData.error || `Failed to ${action} user`)
+          showToast(errorData.error || `Failed to ${action} user`, 'error')
           setState((prev) => ({ ...prev, [loadingState]: null }))
         }
       } catch (error) {
         const gerund = action === 'like' ? 'liking' : `${action}ing`
         console.error(`Error ${gerund} user:`, error)
-        alert(`Failed to ${action} user`)
+        showToast(`Failed to ${action} user`, 'error')
         setState((prev) => ({ ...prev, [loadingState]: null }))
       }
     },
-    [state]
+    [state, showToast]
   )
 
   const handleLike = useCallback(

@@ -388,7 +388,7 @@ describe('AdminPanel', () => {
       })
 
       const filterSelect = screen.getByDisplayValue('All Reports')
-      fireEvent.change(filterSelect, { target: { value: 'Reviewed' } })
+      fireEvent.change(filterSelect, { target: { value: 'Resolved' } })
 
       await waitFor(() => {
         const reportsCalls = mockFetchWithAuth.mock.calls.filter((call) =>
@@ -396,7 +396,7 @@ describe('AdminPanel', () => {
         )
         expect(reportsCalls.length).toBeGreaterThan(0)
         const lastCall = reportsCalls[reportsCalls.length - 1]
-        expect(lastCall[0]).toBe('/api/admin/reports?status=Reviewed')
+        expect(lastCall[0]).toBe('/api/admin/reports?status=Resolved')
       })
     })
 
@@ -416,6 +416,168 @@ describe('AdminPanel', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/no reports found/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should display report status badge', async () => {
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockUsers }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockReports }),
+        } as Response)
+
+      render(<AdminPanel />)
+
+      const reportsTab = screen.getByText('Reported Accounts')
+      fireEvent.click(reportsTab)
+
+      await waitFor(() => {
+        expect(screen.getByText('Pending')).toBeInTheDocument()
+      })
+    })
+
+    it('should display reporter email instead of ID', async () => {
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockUsers }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockReports }),
+        } as Response)
+
+      render(<AdminPanel />)
+
+      const reportsTab = screen.getByText('Reported Accounts')
+      fireEvent.click(reportsTab)
+
+      await waitFor(() => {
+        expect(screen.getByText(/reporter@example.com/i)).toBeInTheDocument()
+      })
+    })
+
+    it('should show invalid report button for pending reports', async () => {
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockUsers }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockReports }),
+        } as Response)
+
+      render(<AdminPanel />)
+
+      const reportsTab = screen.getByText('Reported Accounts')
+      fireEvent.click(reportsTab)
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid Report')).toBeInTheDocument()
+      })
+    })
+
+    it('should mark report as invalid when invalid button is clicked', async () => {
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockUsers }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockReports }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            message: 'Report marked as invalid and resolved',
+            data: { ...mockReports[0], status: 'Resolved' },
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            data: [{ ...mockReports[0], status: 'Resolved' }],
+          }),
+        } as Response)
+
+      render(<AdminPanel />)
+
+      const reportsTab = screen.getByText('Reported Accounts')
+      fireEvent.click(reportsTab)
+
+      await waitFor(() => {
+        expect(screen.getByText('Invalid Report')).toBeInTheDocument()
+      })
+
+      const invalidButton = screen.getByText('Invalid Report')
+      fireEvent.click(invalidButton)
+
+      // Wait for confirmation modal
+      await waitFor(() => {
+        expect(
+          screen.getByText(/are you sure you want to mark this report as invalid/i)
+        ).toBeInTheDocument()
+      })
+
+      const confirmButton = screen.getByText('Confirm')
+      fireEvent.click(confirmButton)
+
+      await waitFor(() => {
+        expect(mockFetchWithAuth).toHaveBeenCalledWith(
+          '/api/admin/reports/report-1/invalid',
+          expect.objectContaining({
+            method: 'POST',
+          })
+        )
+      })
+    })
+
+    it('should refresh reports after banning user from report', async () => {
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockUsers }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({ success: true, data: mockReports }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            message: 'User banned successfully',
+            data: { ...mockUsers[0], banned: true },
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          json: async () => ({
+            success: true,
+            data: [{ ...mockReports[0], status: 'Resolved' }],
+          }),
+        } as Response)
+
+      render(<AdminPanel />)
+
+      const reportsTab = screen.getByText('Reported Accounts')
+      fireEvent.click(reportsTab)
+
+      await waitFor(() => {
+        expect(screen.getByText('Ban User')).toBeInTheDocument()
+      })
+
+      const banButton = screen.getByText('Ban User')
+      fireEvent.click(banButton)
+
+      // Wait for confirmation modal
+      await waitFor(() => {
+        expect(screen.getByText(/are you sure you want to ban this user/i)).toBeInTheDocument()
+      })
+
+      const confirmButton = screen.getByText('Confirm')
+      fireEvent.click(confirmButton)
+
+      await waitFor(() => {
+        // Should refresh reports after ban
+        const reportsCalls = mockFetchWithAuth.mock.calls.filter((call) =>
+          call[0]?.startsWith('/api/admin/reports')
+        )
+        expect(reportsCalls.length).toBeGreaterThan(1)
       })
     })
   })

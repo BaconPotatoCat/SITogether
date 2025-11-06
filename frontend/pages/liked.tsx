@@ -25,6 +25,10 @@ export default function LikedProfiles() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [pendingLikeUserId, setPendingLikeUserId] = useState<string | null>(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
   const { toasts, showToast, removeToast } = useToast()
 
   // Fetch liked profiles with hasIntro flag
@@ -69,6 +73,54 @@ export default function LikedProfiles() {
       setPendingLikeUserId(selectedProfile.id)
       setIsProfileModalOpen(false)
       setIsIntroOpen(true)
+    }
+  }
+
+  const handleReportClick = () => {
+    if (selectedProfile) {
+      setShowReportModal(true)
+      setReportReason('')
+      setReportDescription('')
+    }
+  }
+
+  const handleSubmitReport = async () => {
+    if (!selectedProfile || !reportReason.trim()) {
+      showToast('Please select a reason for reporting', 'warning')
+      return
+    }
+
+    setIsSubmittingReport(true)
+    try {
+      const response = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          reportedId: selectedProfile.id,
+          reason: reportReason,
+          description: reportDescription.trim() || null,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
+        )
+        setShowReportModal(false)
+        setReportReason('')
+        setReportDescription('')
+      } else {
+        showToast(result.error || 'Failed to submit report', 'error')
+      }
+    } catch (error) {
+      showToast('Failed to submit report. Please try again.', 'error')
+      console.error('Report error:', error)
+    } finally {
+      setIsSubmittingReport(false)
     }
   }
 
@@ -440,34 +492,196 @@ export default function LikedProfiles() {
                       )}
                     </div>
                   </div>
-                  {selectedProfile.hasIntro ? (
+                  <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+                    {selectedProfile.hasIntro ? (
+                      <button
+                        className="btn"
+                        disabled
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          opacity: 0.6,
+                          cursor: 'not-allowed',
+                        }}
+                      >
+                        Introduction Already Sent ✓
+                      </button>
+                    ) : (
+                      <button
+                        className="btn primary"
+                        onClick={handleSendIntro}
+                        style={{ width: '100%', padding: '12px' }}
+                      >
+                        Send an Introduction
+                      </button>
+                    )}
                     <button
-                      className="btn"
-                      disabled
+                      onClick={handleReportClick}
                       style={{
                         width: '100%',
                         padding: '12px',
-                        opacity: 0.6,
-                        cursor: 'not-allowed',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        transition: 'background 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#c82333'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#dc3545'
                       }}
                     >
-                      Introduction Already Sent ✓
+                      🚩 Report User
                     </button>
-                  ) : (
-                    <button
-                      className="btn primary"
-                      onClick={handleSendIntro}
-                      style={{ width: '100%', padding: '12px' }}
-                    >
-                      Send an Introduction
-                    </button>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </section>
       </main>
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+          }}
+          onClick={() => {
+            if (!isSubmittingReport) {
+              setShowReportModal(false)
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Report User</h2>
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              Please select a reason for reporting this user. All reports are reviewed by our
+              moderation team.
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                htmlFor="report-reason-select"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}
+              >
+                Reason <span style={{ color: '#dc3545' }}>*</span>
+              </label>
+              <select
+                id="report-reason-select"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                disabled={isSubmittingReport}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                }}
+              >
+                <option value="">Select a reason...</option>
+                <option value="Inappropriate Content">Inappropriate Content</option>
+                <option value="Harassment">Harassment</option>
+                <option value="Spam">Spam</option>
+                <option value="Fake Profile">Fake Profile</option>
+                <option value="Inappropriate Behavior">Inappropriate Behavior</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                htmlFor="report-description-textarea"
+                style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}
+              >
+                Additional Details (Optional)
+              </label>
+              <textarea
+                id="report-description-textarea"
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                disabled={isSubmittingReport}
+                placeholder="Please provide any additional information..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  if (!isSubmittingReport) {
+                    setShowReportModal(false)
+                  }
+                }}
+                disabled={isSubmittingReport}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: isSubmittingReport ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitReport}
+                disabled={isSubmittingReport || !reportReason.trim()}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor:
+                    isSubmittingReport || !reportReason.trim() ? '#6c757d' : '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: isSubmittingReport || !reportReason.trim() ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Container */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>

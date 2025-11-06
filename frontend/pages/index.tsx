@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { fetchWithAuth } from '../utils/api'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface Profile {
   id: string
@@ -37,6 +39,7 @@ export default function Home() {
   const [reportReason, setReportReason] = useState('')
   const [reportDescription, setReportDescription] = useState('')
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const { toasts, showToast, removeToast } = useToast()
 
   // Fetch users from database on component mount
   useEffect(() => {
@@ -132,7 +135,7 @@ export default function Home() {
 
   const handleSubmitReport = async () => {
     if (!reportingUserId || !reportReason.trim()) {
-      alert('Please select a reason for reporting')
+      showToast('Please select a reason for reporting', 'warning')
       return
     }
 
@@ -152,16 +155,19 @@ export default function Home() {
       const result = await response.json()
 
       if (result.success) {
-        alert('Report submitted successfully. Thank you for helping keep our community safe.')
+        showToast(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
+        )
         setShowReportModal(false)
         setReportingUserId(null)
         setReportReason('')
         setReportDescription('')
       } else {
-        alert(result.error || 'Failed to submit report')
+        showToast(result.error || 'Failed to submit report', 'error')
       }
     } catch (error) {
-      alert('Failed to submit report. Please try again.')
+      showToast('Failed to submit report. Please try again.', 'error')
       console.error('Report error:', error)
     } finally {
       setIsSubmittingReport(false)
@@ -606,6 +612,7 @@ export default function Home() {
           </div>
         )}
       </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

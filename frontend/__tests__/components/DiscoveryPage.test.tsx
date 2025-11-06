@@ -4,10 +4,18 @@ import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
 import DiscoveryPage from '../../components/DiscoveryPage'
 import { fetchWithAuth } from '../../utils/api'
+import { useToast } from '../../hooks/useToast'
 
 // Mock the API
 jest.mock('../../utils/api')
 const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithAuth>
+
+// Mock useToast hook
+jest.mock('../../hooks/useToast', () => ({
+  useToast: jest.fn(),
+}))
+const mockUseToast = useToast as jest.MockedFunction<typeof useToast>
+const mockShowToast = jest.fn()
 
 // Mock ResizeObserver
 global.ResizeObserver = jest.fn().mockImplementation(() => ({
@@ -69,6 +77,12 @@ describe('DiscoveryPage', () => {
     jest.clearAllMocks()
     // Suppress console errors during tests to reduce noise
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    // Set up useToast mock
+    mockUseToast.mockReturnValue({
+      toasts: [],
+      showToast: mockShowToast,
+      removeToast: jest.fn(),
+    })
     // By default, return only verified users to prevent unexpected filtering in tests
     const verifiedUsers = mockUsers.filter((user) => user.verified === true)
     mockFetchWithAuth.mockResolvedValue({
@@ -632,7 +646,6 @@ describe('DiscoveryPage', () => {
 
     it('should handle like network errors', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       mockFetchWithAuth
         .mockResolvedValueOnce({
@@ -659,19 +672,16 @@ describe('DiscoveryPage', () => {
         body: JSON.stringify({ likedId: '1' }),
       })
 
-      // Should log error and show alert (lines 142-143)
+      // Should log error and show toast
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith('Error liking user:', expect.any(Error))
-        expect(alertSpy).toHaveBeenCalledWith('Failed to like user')
+        expect(mockShowToast).toHaveBeenCalledWith('Failed to like user', 'error')
       })
 
       consoleSpy.mockRestore()
-      alertSpy.mockRestore()
     })
 
     it('should handle like API response errors', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-
       mockFetchWithAuth
         .mockResolvedValueOnce({
           ok: true,
@@ -695,12 +705,10 @@ describe('DiscoveryPage', () => {
         fireEvent.click(firstLikeButton)
       })
 
-      // Should show alert with API error (lines 138-139)
+      // Should show toast with API error
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('User not found')
+        expect(mockShowToast).toHaveBeenCalledWith('User not found', 'error')
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should prevent multiple simultaneous likes', async () => {
@@ -775,7 +783,6 @@ describe('DiscoveryPage', () => {
 
     it('should handle pass network errors', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       mockFetchWithAuth
         .mockResolvedValueOnce({
@@ -802,19 +809,16 @@ describe('DiscoveryPage', () => {
         body: JSON.stringify({ passedId: '1' }),
       })
 
-      // Should log error and show alert (lines 167-168)
+      // Should log error and show toast
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith('Error passing user:', expect.any(Error))
-        expect(alertSpy).toHaveBeenCalledWith('Failed to pass user')
+        expect(mockShowToast).toHaveBeenCalledWith('Failed to pass user', 'error')
       })
 
       consoleSpy.mockRestore()
-      alertSpy.mockRestore()
     })
 
     it('should handle pass API response errors', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-
       mockFetchWithAuth
         .mockResolvedValueOnce({
           ok: true,
@@ -838,12 +842,10 @@ describe('DiscoveryPage', () => {
         fireEvent.click(firstPassButton)
       })
 
-      // Should show alert with API error (lines 163-164)
+      // Should show toast with API error
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('Pass limit exceeded')
+        expect(mockShowToast).toHaveBeenCalledWith('Pass limit exceeded', 'error')
       })
-
-      alertSpy.mockRestore()
     })
   })
 
@@ -1151,7 +1153,6 @@ describe('DiscoveryPage', () => {
     })
 
     it('should submit report successfully', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1198,19 +1199,15 @@ describe('DiscoveryPage', () => {
       })
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(
-          expect.stringMatching(
-            /report submitted successfully.*thank you for helping keep our community safe/i
-          )
+        expect(mockShowToast).toHaveBeenCalledWith(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
         )
         expect(screen.queryByText(/report user/i)).not.toBeInTheDocument()
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should submit report with null description when description is empty', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1249,12 +1246,9 @@ describe('DiscoveryPage', () => {
           }),
         })
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should handle report submission error', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
@@ -1283,15 +1277,13 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/failed to submit report/i))
+        expect(mockShowToast).toHaveBeenCalledWith('Failed to submit report', 'error')
       })
 
-      alertSpy.mockRestore()
       consoleSpy.mockRestore()
     })
 
     it('should handle report submission network error', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
 
@@ -1317,8 +1309,9 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(
-          expect.stringMatching(/failed to submit report.*please try again/i)
+        expect(mockShowToast).toHaveBeenCalledWith(
+          'Failed to submit report. Please try again.',
+          'error'
         )
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringMatching(/report error:/i),
@@ -1326,7 +1319,6 @@ describe('DiscoveryPage', () => {
         )
       })
 
-      alertSpy.mockRestore()
       consoleSpy.mockRestore()
     })
 

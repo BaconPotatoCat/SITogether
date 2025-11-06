@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import FilterModal from './FilterModal'
 import { useDiscovery } from '../hooks/useDiscovery'
+import ToastContainer from './ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface DiscoveryPageProps {
   isPremium?: boolean
@@ -33,6 +35,7 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
   const [reportReason, setReportReason] = useState('')
   const [reportDescription, setReportDescription] = useState('')
   const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const { toasts, showToast, removeToast } = useToast()
 
   const handleReportClick = (userId: string) => {
     setReportingUserId(userId)
@@ -43,7 +46,7 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
 
   const handleSubmitReport = async () => {
     if (!reportingUserId || !reportReason.trim()) {
-      alert('Please select a reason for reporting')
+      showToast('Please select a reason for reporting', 'warning')
       return
     }
 
@@ -63,16 +66,19 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
       const result = await response.json()
 
       if (result.success) {
-        alert('Report submitted successfully. Thank you for helping keep our community safe.')
+        showToast(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
+        )
         setShowReportModal(false)
         setReportingUserId(null)
         setReportReason('')
         setReportDescription('')
       } else {
-        alert(result.error || 'Failed to submit report')
+        showToast(result.error || 'Failed to submit report', 'error')
       }
     } catch (error) {
-      alert('Failed to submit report. Please try again.')
+      showToast('Failed to submit report. Please try again.', 'error')
       console.error('Report error:', error)
     } finally {
       setIsSubmittingReport(false)
@@ -373,6 +379,7 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
           </div>
         </div>
       )}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   )
 }

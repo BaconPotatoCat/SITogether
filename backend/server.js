@@ -157,6 +157,9 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
     const users = await prisma.user.findMany({
       where: {
         verified: true,
+        role: {
+          not: 'Admin', // Exclude admin accounts from discovery
+        },
         id: {
           notIn: excludedIds,
         },
@@ -166,7 +169,6 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
         name: true,
         age: true,
         gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
@@ -209,7 +211,6 @@ app.get('/api/users/:id', async (req, res) => {
         name: true,
         age: true,
         gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
@@ -221,6 +222,20 @@ app.get('/api/users/:id', async (req, res) => {
     });
 
     if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Hide admin accounts from normal users (return 404)
+    // Check role internally without exposing it
+    const userWithRole = await prisma.user.findUnique({
+      where: { id: id },
+      select: { role: true },
+    });
+
+    if (userWithRole && userWithRole.role === 'Admin') {
       return res.status(404).json({
         success: false,
         error: 'User not found',
@@ -1286,7 +1301,6 @@ app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
         course: true,
         verified: true,
         banned: true,
-        bannedAt: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -1332,29 +1346,45 @@ app.post('/api/admin/users/:id/ban', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // Prevent banning admin users
-    if (user.role === 'Admin') {
+    // Prevent banning admin users (check role internally)
+    const userRole = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (userRole && userRole.role === 'Admin') {
       return res.status(403).json({
         success: false,
         error: 'Cannot ban admin users',
       });
     }
 
-    // Ban the user
-    const bannedUser = await prisma.user.update({
-      where: { id },
-      data: {
-        banned: true,
-        bannedAt: new Date(),
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        banned: true,
-        bannedAt: true,
-      },
-    });
+    // Ban the user and resolve all their reports
+    const [bannedUser, reportsUpdated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: {
+          banned: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          banned: true,
+        },
+      }),
+      prisma.report.updateMany({
+        where: {
+          reportedId: id,
+          status: 'Pending',
+        },
+        data: {
+          status: 'Resolved',
+        },
+      }),
+    ]);
+
+    console.log(`Banned user ${id} and resolved ${reportsUpdated.count} pending reports`);
 
     res.json({
       success: true,
@@ -1393,14 +1423,12 @@ app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
       where: { id },
       data: {
         banned: false,
-        bannedAt: null,
       },
       select: {
         id: true,
         email: true,
         name: true,
         banned: true,
-        bannedAt: true,
       },
     });
 
@@ -1541,6 +1569,56 @@ app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Mark report as invalid (resolves without banning) (Admin only)
+// This route must be defined BEFORE the more general /api/admin/reports/:id route
+app.post('/api/admin/reports/:id/invalid', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`Marking report ${id} as invalid`);
+
+    // Check if report exists
+    const report = await prisma.report.findUnique({
+      where: { id },
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found',
+      });
+    }
+
+    // Update report status to Resolved
+    const updatedReport = await prisma.report.update({
+      where: { id },
+      data: { status: 'Resolved' },
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            banned: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Report marked as invalid and resolved',
+      data: updatedReport,
+    });
+  } catch (error) {
+    console.error('Mark report as invalid error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to mark report as invalid',
+      message: error.message,
+    });
+  }
+});
+
 // Update report status (Admin only)
 app.put('/api/admin/reports/:id', authenticateAdmin, async (req, res) => {
   try {
@@ -1548,11 +1626,11 @@ app.put('/api/admin/reports/:id', authenticateAdmin, async (req, res) => {
     const { status } = req.body;
 
     // Validate status
-    const validStatuses = ['Pending', 'Reviewed', 'Resolved'];
+    const validStatuses = ['Pending', 'Resolved'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid status. Must be one of: Pending, Reviewed, Resolved',
+        error: 'Invalid status. Must be one of: Pending, Resolved',
       });
     }
 
@@ -1672,64 +1750,6 @@ app.get('/api/points', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve user points',
-      message: error.message,
-    });
-  }
-});
-
-// Update report status (admin only)
-app.put('/api/admin/reports/:id', authenticateAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    // Validate status
-    const validStatuses = ['Pending', 'Reviewed', 'Resolved'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid status. Must be one of: Pending, Reviewed, Resolved',
-      });
-    }
-
-    // Check if report exists
-    const report = await prisma.report.findUnique({
-      where: { id },
-    });
-
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        error: 'Report not found',
-      });
-    }
-
-    // Update report
-    const updatedReport = await prisma.report.update({
-      where: { id },
-      data: { status },
-      include: {
-        reportedUser: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            banned: true,
-          },
-        },
-      },
-    });
-
-    res.json({
-      success: true,
-      message: 'Report updated successfully',
-      data: updatedReport,
-    });
-  } catch (error) {
-    console.error('Update report error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update report',
       message: error.message,
     });
   }
@@ -2080,10 +2100,15 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
-    // Get all likes by the current user
+    // Get all likes by the current user (excluding admin accounts)
     const likes = await prisma.userLikes.findMany({
       where: {
         likerId: likerId,
+        liked: {
+          role: {
+            not: 'Admin', // Exclude admin accounts
+          },
+        },
       },
       include: {
         liked: {
@@ -2161,10 +2186,15 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
-    // Get all likes by the current user
+    // Get all likes by the current user (excluding admin accounts)
     const likes = await prisma.userLikes.findMany({
       where: {
         likerId: likerId,
+        liked: {
+          role: {
+            not: 'Admin', // Exclude admin accounts
+          },
+        },
       },
       include: {
         liked: {
@@ -2582,13 +2612,22 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
       },
     });
 
-    const result = await Promise.all(
+    const conversationResults = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
         const otherUser = await prisma.user.findUnique({
           where: { id: otherUserId },
           select: { id: true, name: true, avatarUrl: true },
         });
+        // Check if other user is admin (without exposing role)
+        const otherUserRole = await prisma.user.findUnique({
+          where: { id: otherUserId },
+          select: { role: true },
+        });
+        // Exclude conversations with admin accounts
+        if (!otherUser || (otherUserRole && otherUserRole.role === 'Admin')) {
+          return null;
+        }
         // Hide name, avatar, and ID when conversation is locked (before match)
         const sanitizedOtherUser =
           c.isLocked && otherUser
@@ -2605,6 +2644,9 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         };
       })
     );
+
+    // Filter out null results (admin conversations)
+    const result = conversationResults.filter((r) => r !== null);
 
     res.json({ success: true, conversations: result });
   } catch (error) {

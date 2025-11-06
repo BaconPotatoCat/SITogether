@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useDiscovery } from '../../hooks/useDiscovery'
 import { fetchWithAuth } from '../../utils/api'
+import { useToast } from '../../hooks/useToast'
 
 // Suppress act() warnings for useEffect async operations in hooks
 // These are false positives - we properly wait for all async operations with waitFor()
@@ -26,6 +27,13 @@ afterAll(() => {
 // Mock the API
 jest.mock('../../utils/api')
 const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithAuth>
+
+// Mock useToast hook
+jest.mock('../../hooks/useToast', () => ({
+  useToast: jest.fn(),
+}))
+const mockUseToast = useToast as jest.MockedFunction<typeof useToast>
+const mockShowToast = jest.fn()
 
 // Mock ResizeObserver
 global.ResizeObserver = jest.fn().mockImplementation(() => ({
@@ -89,6 +97,11 @@ describe('useDiscovery', () => {
       ok: true,
       json: async () => ({ success: true, data: mockUsers, count: mockUsers.length }),
     } as Response)
+    mockUseToast.mockReturnValue({
+      toasts: [],
+      showToast: mockShowToast,
+      removeToast: jest.fn(),
+    })
   })
 
   describe('Filtering Logic', () => {
@@ -335,8 +348,6 @@ describe('useDiscovery', () => {
     })
 
     it('should handle API action errors', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-
       const { result } = renderHook(() => useDiscovery(true))
 
       // Wait for initial data load
@@ -356,16 +367,13 @@ describe('useDiscovery', () => {
       // Wait for API call to complete
       await waitFor(() => expect(result.current.likingUserId).toBe(null))
 
-      // Should show alert and clear loading state
-      expect(alertSpy).toHaveBeenCalledWith('Like failed')
+      // Should show toast and clear loading state
+      expect(mockShowToast).toHaveBeenCalledWith('Like failed', 'error')
       expect(result.current.likingUserId).toBe(null)
-
-      alertSpy.mockRestore()
     })
 
     it('should handle network errors in API actions', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       const { result } = renderHook(() => useDiscovery(true))
 
@@ -383,13 +391,12 @@ describe('useDiscovery', () => {
       // Wait for API call to complete
       await waitFor(() => expect(result.current.likingUserId).toBe(null))
 
-      // Should log error, show alert, and clear loading state
+      // Should log error, show toast, and clear loading state
       expect(consoleSpy).toHaveBeenCalledWith('Error liking user:', expect.any(Error))
-      expect(alertSpy).toHaveBeenCalledWith('Failed to like user')
+      expect(mockShowToast).toHaveBeenCalledWith('Failed to like user', 'error')
       expect(result.current.likingUserId).toBe(null)
 
       consoleSpy.mockRestore()
-      alertSpy.mockRestore()
     })
   })
 
