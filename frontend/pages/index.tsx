@@ -3,6 +3,7 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { fetchWithAuth } from '../utils/api'
 import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride'
+import { useTheme } from '../contexts/ThemeContext'
 
 interface Profile {
   id: string
@@ -17,6 +18,7 @@ interface Profile {
 
 export default function Home() {
   const router = useRouter()
+  const { isDarkMode } = useTheme()
   const [deck, setDeck] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -330,19 +332,46 @@ export default function Home() {
           callback={handleJoyrideCallback}
           styles={{
             options: {
-              primaryColor: '#007bff',
+              primaryColor: isDarkMode ? '#818cf8' : '#007bff',
               zIndex: 10000,
             },
             tooltip: {
               borderRadius: 8,
+              backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipContainer: {
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipTitle: {
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipContent: {
+              color: isDarkMode ? '#d1d5db' : '#374151',
             },
             buttonNext: {
-              backgroundColor: '#007bff',
+              backgroundColor: isDarkMode ? '#818cf8' : '#007bff',
+              color: isDarkMode ? '#111827' : '#ffffff',
               borderRadius: 6,
             },
             buttonBack: {
-              color: '#666',
+              color: isDarkMode ? '#9ca3af' : '#666',
               marginRight: 8,
+            },
+            buttonSkip: {
+              color: isDarkMode ? '#9ca3af' : '#666',
+            },
+            overlay: {
+              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)',
+            },
+            spotlight: {
+              borderRadius: 8,
+            },
+            beaconInner: {
+              backgroundColor: isDarkMode ? '#818cf8' : '#007bff',
+            },
+            beaconOuter: {
+              borderColor: isDarkMode ? '#818cf8' : '#007bff',
             },
           }}
         />
