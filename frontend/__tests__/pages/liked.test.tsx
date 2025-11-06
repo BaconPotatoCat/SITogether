@@ -351,55 +351,6 @@ describe('LikedProfiles', () => {
     })
   })
 
-  it('should show warning toast when trying to send intro without message', async () => {
-    const mockProfiles = [
-      {
-        id: 'user-1',
-        name: 'John Doe',
-        age: 25,
-        gender: 'Male',
-        course: 'Computer Science',
-        bio: 'Test bio',
-        interests: ['coding'],
-        avatarUrl: 'https://example.com/avatar.jpg',
-        hasIntro: false,
-      },
-    ]
-
-    mockFetchWithAuth.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ success: true, data: mockProfiles }),
-    } as Response)
-
-    render(<LikedProfiles />)
-
-    await waitFor(() => {
-      expect(screen.getByText('John Doe, 25')).toBeInTheDocument()
-    })
-
-    // Click on profile to open modal
-    const profileCard = screen.getByText('John Doe, 25')
-    fireEvent.click(profileCard)
-
-    await waitFor(() => {
-      expect(screen.getByText('Send an Introduction')).toBeInTheDocument()
-    })
-
-    // Click "Send an Introduction" button
-    const sendButton = screen.getByText('Send an Introduction')
-    fireEvent.click(sendButton)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('intro-modal')).toBeInTheDocument()
-    })
-
-    // Submit with empty message (mock the modal to submit empty)
-    // We need to modify the mock to handle empty message
-    const IntroMessageModal = require('../../components/IntroMessageModal').default
-    // Since we're using a mock, we need to test the actual submitIntro function
-    // For now, let's test that the warning toast is shown when message is empty
-    // This would require modifying our mock or testing the actual component behavior
-  })
 
   it('should show warning toast when intro already sent (409 error)', async () => {
     const mockProfiles = [
