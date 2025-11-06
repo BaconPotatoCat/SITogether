@@ -399,6 +399,27 @@ export default function AdminPanel() {
                           </td>
                           <td style={tableCellStyle}>
                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => router.push(`/profile/${user.id}?from=admin`)}
+                                style={{
+                                  padding: '0.375rem 0.75rem',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 600,
+                                  borderRadius: '6px',
+                                  border: '1px solid #6366f1',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#6366f1',
+                                  color: '#fff',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#4f46e5'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#6366f1'
+                                }}
+                              >
+                                View Profile
+                              </button>
                               {user.role !== 'Admin' && (
                                 <button
                                   onClick={() =>
@@ -527,9 +548,43 @@ export default function AdminPanel() {
                               </span>
                             )}
                           </div>
-                          <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
-                            {report.reportedUser?.email || 'N/A'}
-                          </p>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              marginBottom: '0.25rem',
+                            }}
+                          >
+                            <p style={{ margin: 0, color: '#6b7280', fontSize: '0.875rem' }}>
+                              {report.reportedUser?.email || 'N/A'}
+                            </p>
+                            {report.reportedUser && (
+                              <button
+                                onClick={() =>
+                                  router.push(`/profile/${report.reportedUser!.id}?from=admin`)
+                                }
+                                style={{
+                                  padding: '0.25rem 0.75rem',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 600,
+                                  borderRadius: '6px',
+                                  border: '1px solid #6366f1',
+                                  cursor: 'pointer',
+                                  backgroundColor: '#6366f1',
+                                  color: '#fff',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#4f46e5'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#6366f1'
+                                }}
+                              >
+                                View Profile
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <span
