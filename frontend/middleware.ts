@@ -2,14 +2,20 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value
   const { pathname } = request.nextUrl
+  const tokenCookie = request.cookies.get('token')
+  const token = tokenCookie?.value
 
   // Public paths that don't require authentication
-  const publicPaths = ['/auth', '/verify', '/reset-password']
+  const publicPaths = ['/auth', '/verify', '/verify-2fa', '/reset-password']
 
   // Check if the current path is public
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path))
+
+  // Skip middleware for API routes (except auth which is already public)
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
 
   // If trying to access a protected path without a token, redirect to auth
   if (!isPublicPath && !token) {
@@ -25,6 +31,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Allow access to all other paths if token exists or path is public
   return NextResponse.next()
 }
 

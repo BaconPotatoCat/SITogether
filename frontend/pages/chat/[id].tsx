@@ -11,7 +11,7 @@ interface Message {
 }
 
 interface Participant {
-  id: string
+  id?: string
   name: string
   avatarUrl: string | null
 }
@@ -53,11 +53,12 @@ export default function ConversationPage() {
     load()
   }, [id])
 
-  // Enrich avatars from profile API if missing
+  // Enrich avatars from profile API if missing (only if conversation is unlocked)
   useEffect(() => {
+    if (isLocked) return // Don't enrich when locked to preserve privacy
     const enrich = async () => {
       try {
-        if (other && !other.avatarUrl) {
+        if (other && !other.avatarUrl && other.id) {
           const res = await fetch(`/api/users/${other.id}`)
           const data = await res.json()
           if (data?.success && data?.user?.avatarUrl) {
@@ -74,7 +75,7 @@ export default function ConversationPage() {
       } catch {}
     }
     enrich()
-  }, [me, other])
+  }, [me, other, isLocked])
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault()
@@ -141,23 +142,31 @@ export default function ConversationPage() {
             <div className="chat-thread">
               {messages.map((m) => {
                 const isMine = currentUserId && m.senderId === currentUserId
-                const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
-                const name = isMine ? me?.name : other?.name
+                const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
+                // Always use "Hidden User" when locked to prevent any name leakage
+                const displayName = shouldBlur
+                  ? 'Hidden User'
+                  : (isMine ? me?.name : other?.name) || 'User'
+                const displayAvatarUrl = shouldBlur
+                  ? null
+                  : isMine
+                    ? me?.avatarUrl
+                    : other?.avatarUrl
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
-                    {avatarUrl ? (
+                    {displayAvatarUrl ? (
                       <img
-                        src={avatarUrl}
-                        alt={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        src={displayAvatarUrl}
+                        alt={`${displayName} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                       />
                     ) : (
                       <div
-                        aria-label={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        aria-label={`${displayName} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                         style={{
-                          background: '#eee',
-                          color: '#555',
+                          background: shouldBlur ? '#ccc' : '#eee',
+                          color: shouldBlur ? '#999' : '#555',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -165,7 +174,7 @@ export default function ConversationPage() {
                           fontSize: 12,
                         }}
                       >
-                        {(name || 'U').charAt(0).toUpperCase()}
+                        {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="chat-bubble-wrap">

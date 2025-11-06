@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -7,8 +8,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Make request from frontend container to backend container
-    // Using the environment variable for backend URL
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/health`
+    // Using the config for backend URL
+    const backendUrl = `${config.backendInternalUrl}/health`
 
     const response = await fetch(backendUrl, {
       method: 'GET',

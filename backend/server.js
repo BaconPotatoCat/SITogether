@@ -8,18 +8,33 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
-const { sendVerificationEmail } = require('./lib/email');
+const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
-require('dotenv').config();
+const config = require('./lib/config');
 
+const {
+  loginLimiter,
+  passwordResetLimiter,
+  registerLimiter,
+  otpLimiter,
+  resendOtpLimiter,
+  resendVerificationLimiter,
+  sensitiveDataLimiter,
+} = require('./middleware/rateLimiter');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
+
+// Trust proxy configuration
+const trustProxyCount = process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0;
+if (!isNaN(trustProxyCount) && trustProxyCount > 0) {
+  app.set('trust proxy', trustProxyCount);
+}
 
 // Middleware
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    origin: config.frontend.externalUrl,
     credentials: true,
   })
 );
@@ -61,6 +76,8 @@ app.get('/api', (req, res) => {
         verify: 'GET /api/auth/verify?token=<verification_token>',
         resendVerification: 'POST /api/auth/resend-verification',
         login: 'POST /api/auth/login',
+        verify2fa: 'POST /api/auth/verify-2fa',
+        resend2fa: 'POST /api/auth/resend-2fa',
         logout: 'POST /api/auth/logout',
         changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
@@ -88,7 +105,7 @@ app.get('/api', (req, res) => {
 });
 
 // Users API route (protected)
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.userId;
 
@@ -366,7 +383,7 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
 
 // Authentication routes
 // Register endpoint
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, name, age, gender, course } = req.body;
 
@@ -589,7 +606,7 @@ app.get('/api/auth/verify', async (req, res) => {
 });
 
 // Resend verification email endpoint
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -678,7 +695,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -739,17 +756,146 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' } // Token expires in 1 hour
-    );
+    // Generate 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
+    const tempToken = jwt.sign({ userId: user.id, requiresTwoFactor: true }, config.jwtSecret, {
+      expiresIn: '10m',
+    });
+
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Please check your email for the verification code',
+        requiresTwoFactor: true,
+        tempToken: tempToken,
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to login',
+      message: error.message,
+    });
+  }
+});
+
+// Verify 2FA code and complete login
+app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
+  try {
+    const { tempToken, code } = req.body;
+
+    if (!tempToken || !code) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token and verification code are required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, config.jwtSecret);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Find 2FA token
+    const twoFactorToken = await prisma.token.findFirst({
+      where: {
+        token: code,
+        type: 'TWO_FACTOR_AUTH',
+        userId: userId,
+      },
+    });
+
+    if (!twoFactorToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid verification code',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > twoFactorToken.expiresAt) {
+      // Delete expired token
+      await prisma.token.delete({
+        where: { id: twoFactorToken.id },
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Verification code has expired. Please try logging in again.',
+      });
+    }
+
+    // Delete the used 2FA token
+    await prisma.token.delete({
+      where: { id: twoFactorToken.id },
+    });
+
+    // Generate final JWT token
+    const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
     // Set cookie with token
-    res.cookie('token', token, {
+    res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.isProduction,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -759,10 +905,121 @@ app.post('/api/auth/login', async (req, res) => {
       message: 'Login successful',
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('2FA verification error:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to login',
+      error: 'Failed to verify code',
+      message: error.message,
+    });
+  }
+});
+
+// Resend 2FA code endpoint
+app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
+  try {
+    const { tempToken } = req.body;
+
+    if (!tempToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Temporary token is required',
+      });
+    }
+
+    // Verify temporary token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, config.jwtSecret);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired temporary token. Please try logging in again.',
+      });
+    }
+
+    // Check if this is a 2FA token
+    if (!decoded.requiresTwoFactor || !decoded.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid temporary token',
+      });
+    }
+
+    const userId = decoded.userId;
+
+    // Get user details
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        verified: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Generate new 6-digit 2FA code
+    const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set expiration to 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Delete any existing 2FA tokens for this user
+    await prisma.token.deleteMany({
+      where: {
+        userId: user.id,
+        type: 'TWO_FACTOR_AUTH',
+      },
+    });
+
+    // Create new 2FA token
+    const createdToken = await prisma.token.create({
+      data: {
+        token: twoFactorCode,
+        type: 'TWO_FACTOR_AUTH',
+        userId: user.id,
+        expiresAt: expiresAt,
+      },
+    });
+
+    // Send 2FA email
+    try {
+      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+
+      res.json({
+        success: true,
+        message: 'Verification code sent successfully. Please check your email.',
+      });
+    } catch (emailError) {
+      console.error('Failed to send 2FA email:', emailError);
+
+      // Delete the token since email failed
+      try {
+        await prisma.token.delete({
+          where: { id: createdToken.id },
+        });
+        console.log('Cleaned up 2FA token after email failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup token after email error:', cleanupError);
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      });
+    }
+  } catch (error) {
+    console.error('Resend 2FA error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to resend verification code',
       message: error.message,
     });
   }
@@ -850,16 +1107,12 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       where: { id: req.user.userId },
       select: {
         id: true,
-        email: true,
         name: true,
         age: true,
-        gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
         avatarUrl: true,
-        verified: true,
       },
     });
 
@@ -885,7 +1138,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
 });
 
 // Forgot password endpoint (request password reset)
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -986,7 +1239,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Reset password endpoint (verify token and update password)
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
@@ -1519,17 +1772,42 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
-    // Format the response
-    const likedProfiles = likes.map((like) => ({
-      id: like.liked.id,
-      name: like.liked.name,
-      age: like.liked.age,
-      gender: like.liked.gender,
-      course: like.liked.course,
-      bio: like.liked.bio,
-      interests: like.liked.interests,
-      avatarUrl: like.liked.avatarUrl,
-    }));
+    // Format the response and check if intro message exists for each profile
+    const likedProfiles = await Promise.all(
+      likes.map(async (like) => {
+        const likedId = like.liked.id;
+        // Find conversation between the two users
+        const userAId = likerId < likedId ? likerId : likedId;
+        const userBId = likerId < likedId ? likedId : likerId;
+
+        const conversation = await prisma.conversation.findUnique({
+          where: { userAId_userBId: { userAId, userBId } },
+          include: {
+            messages: {
+              where: {
+                senderId: likerId,
+              },
+              take: 1,
+            },
+          },
+        });
+
+        // Check if intro message exists (conversation exists and has at least one message from liker)
+        const hasIntro = !!conversation && conversation.messages.length > 0;
+
+        return {
+          id: like.liked.id,
+          name: like.liked.name,
+          age: like.liked.age,
+          gender: like.liked.gender,
+          course: like.liked.course,
+          bio: like.liked.bio,
+          interests: like.liked.interests,
+          avatarUrl: like.liked.avatarUrl,
+          hasIntro,
+        };
+      })
+    );
 
     res.json({
       success: true,
@@ -1979,11 +2257,19 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           where: { id: otherUserId },
           select: { id: true, name: true, avatarUrl: true },
         });
+        // Hide name, avatar, and ID when conversation is locked (before match)
+        const sanitizedOtherUser =
+          c.isLocked && otherUser
+            ? {
+                name: 'Hidden User',
+                avatarUrl: null,
+              }
+            : otherUser;
         return {
           id: c.id,
           isLocked: c.isLocked,
           lastMessage: c.messages[0] || null,
-          otherUser,
+          otherUser: sanitizedOtherUser,
         };
       })
     );
@@ -2028,13 +2314,21 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       }),
     ]);
     const me = userA && userA.id === userId ? userA : userB;
+    // Hide other user's name, avatar, and ID when conversation is locked (before match)
     const other = userA && userA.id === userId ? userB : userA;
+    const sanitizedOther =
+      conversation.isLocked && other
+        ? {
+            name: 'Hidden User',
+            avatarUrl: null,
+          }
+        : other;
 
     res.json({
       success: true,
       isLocked: conversation.isLocked,
       messages,
-      participants: { me, other },
+      participants: { me, other: sanitizedOther },
       currentUserId: userId,
     });
   } catch (error) {
@@ -2226,7 +2520,7 @@ app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    error: config.isDevelopment ? err.message : 'Internal server error',
   });
 });
 
@@ -2240,5 +2534,5 @@ app.use('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 Environment: ${config.nodeEnv}`);
 });

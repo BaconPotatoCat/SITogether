@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -16,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Use internal Docker URL to communicate with backend
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_INTERNALURL
+    const backendUrl = config.backendInternalUrl
     const response = await fetch(`${backendUrl}/api/auth/resend-verification`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

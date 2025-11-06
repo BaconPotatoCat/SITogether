@@ -3,11 +3,8 @@ import { useRouter } from 'next/router'
 
 interface User {
   id: string
-  email: string
   name: string
   age: number
-  gender: string
-  role: string
   course?: string
   bio?: string
   interests?: string[]

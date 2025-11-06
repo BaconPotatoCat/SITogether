@@ -27,10 +27,16 @@ SITogether/
 │   ├── pages/         # Next.js pages
 │   ├── components/    # React components
 │   ├── hooks/         # Custom React hooks
+│   ├── utils/         # Utility functions
+│   │   └── config.ts  # Centralized environment configuration
 │   ├── styles/        # CSS styles
 │   ├── package.json   # Frontend dependencies
 │   └── Dockerfile     # Frontend container config
 ├── backend/           # Express.js backend API
+│   ├── lib/           # Library files
+│   │   ├── config.js  # Centralized environment configuration
+│   │   ├── email.js   # Email service utilities
+│   │   └── prisma.js  # Prisma client setup
 │   ├── prisma/        # Prisma schema and migrations
 │   │   ├── schema.prisma  # Database schema
 │   │   └── seed.js    # Database seeding script
@@ -121,10 +127,6 @@ function MyComponent() {
 - `loading` - Initial state, fetching session
 - `authenticated` - User is logged in
 - `unauthenticated` - No valid session
-
-**Session object includes:**
-- `session.user` - User data (id, email, name, age, gender, role, etc.)
-- `session.expires` - Token expiration timestamp
 
 ### Database Seeding
 

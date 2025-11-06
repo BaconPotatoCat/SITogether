@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const config = require('./config');
 
 /**
  * Create Gmail email transporter
@@ -8,8 +9,8 @@ const createTransporter = () => {
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD, // Use App Password for Gmail
+      user: config.email.user,
+      pass: config.email.password, // Use App Password for Gmail
     },
   });
 };
@@ -24,7 +25,7 @@ const createTransporter = () => {
 const sendVerificationEmail = async (email, name, verificationToken) => {
   const transporter = createTransporter();
 
-  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL;
+  const frontendUrl = config.frontend.externalUrl;
   const verificationUrl = `${frontendUrl}/verify?token=${verificationToken}`;
 
   // Calculate expiration time (1 hour from now)
@@ -37,7 +38,7 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
   });
 
   const mailOptions = {
-    from: `"SITogether" <${process.env.EMAIL_USER}>`,
+    from: `"SITogether" <${config.email.user}>`,
     to: email,
     subject: 'Verify Your SITogether Account',
     html: `
@@ -153,7 +154,7 @@ const sendVerificationEmail = async (email, name, verificationToken) => {
 const sendPasswordResetEmail = async (email, name, resetToken) => {
   const transporter = createTransporter();
 
-  const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL;
+  const frontendUrl = config.frontend.externalUrl;
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   // Calculate expiration time (1 hour from now)
@@ -166,7 +167,7 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
   });
 
   const mailOptions = {
-    from: `"SITogether" <${process.env.EMAIL_USER}>`,
+    from: `"SITogether" <${config.email.user}>`,
     to: email,
     subject: 'Reset Your SITogether Password',
     html: `
@@ -282,7 +283,135 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
   }
 };
 
+/**
+ * Send two-factor authentication code email to user
+ * @param {string} email
+ * @param {string} name
+ * @param {string} code
+ * @returns {Promise<object>} - Email send result
+ */
+const sendTwoFactorEmail = async (email, name, code) => {
+  const transporter = createTransporter();
+
+  // Calculate expiration time (10 minutes from now)
+  const expirationDate = new Date(Date.now() + 10 * 60 * 1000);
+  const expirationTime = expirationDate.toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    hour12: true,
+    timeZone: 'Asia/Singapore',
+  });
+
+  const mailOptions = {
+    from: `"SITogether" <${config.email.user}>`,
+    to: email,
+    subject: 'Your SITogether Login Code',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+            }
+            .container {
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 30px;
+              text-align: center;
+              border-radius: 10px 10px 0 0;
+            }
+            .content {
+              background: #f9f9f9;
+              padding: 30px;
+              border-radius: 0 0 10px 10px;
+            }
+            .code {
+              background: white;
+              border: 2px dashed #667eea;
+              padding: 20px;
+              text-align: center;
+              font-size: 32px;
+              font-weight: bold;
+              letter-spacing: 8px;
+              color: #667eea;
+              margin: 20px 0;
+              border-radius: 10px;
+            }
+            .warning {
+              background: #fff3cd;
+              padding: 12px;
+              border-radius: 5px;
+              border-left: 4px solid #ffc107;
+              color: #856404;
+              margin: 15px 0;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 20px;
+              color: #666;
+              font-size: 12px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Login Verification Code</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${name},</p>
+              <p>We received a login request for your SITogether account. Use the following verification code to complete your login:</p>
+              <div class="code">${code}</div>
+              <div class="warning">
+                <strong>⏰ Important:</strong> This code will expire on <strong>${expirationTime} SGT</strong> (10 minutes from now) for security reasons.
+              </div>
+              <p><strong>Security Note:</strong> If you didn't attempt to log in, please ignore this email and consider changing your password.</p>
+              <p>Stay safe!<br>The SITogether Team</p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} SITogether. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `
+      Hi ${name},
+
+      Login Verification Code
+
+      We received a login request for your SITogether account. Use the following verification code to complete your login:
+
+      ${code}
+
+      ⏰ IMPORTANT: This code will expire on ${expirationTime} SGT (10 minutes from now) for security reasons.
+
+      Security Note: If you didn't attempt to log in, please ignore this email and consider changing your password.
+
+      Stay safe!
+      The SITogether Team
+    `,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending two-factor authentication email:', error);
+    throw new Error('Failed to send two-factor authentication email');
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendTwoFactorEmail,
 };

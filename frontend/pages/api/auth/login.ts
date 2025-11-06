@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -6,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/login`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/login`
 
     const response = await fetch(backendUrl, {
       method: 'POST',
@@ -26,10 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.setHeader('Set-Cookie', setCookieHeader)
       }
 
-      res.status(200).json({
-        success: true,
-        message: data.message || 'Login successful',
-      })
+      // Pass through the full response to handle 2FA
+      res.status(200).json(data)
     } else {
       // Pass through the backend response directly
       res.status(response.status).json(data)

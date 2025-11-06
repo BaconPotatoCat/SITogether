@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log('[pending-intro] Route hit:', req.method, req.url)
@@ -8,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/likes/pending-intro`
+    const backendUrl = `${config.backendInternalUrl}/api/likes/pending-intro`
     console.log('[pending-intro] Backend URL:', backendUrl)
 
     // Get token from cookie

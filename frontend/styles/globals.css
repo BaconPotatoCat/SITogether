@@ -621,6 +621,41 @@ html.dark .card-info {
   gap: 0.75rem;
 }
 
+/* Chat empty state */
+.chat-empty-state {
+  max-width: 720px;
+  margin: 3rem auto;
+  text-align: center;
+  padding: 3rem 1.5rem;
+}
+
+.chat-empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.6;
+}
+
+.chat-empty-state h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem 0;
+  color: #111827;
+}
+
+html.dark .chat-empty-state h2 {
+  color: #f3f4f6;
+}
+
+.chat-empty-state p {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+html.dark .chat-empty-state p {
+  color: #d1d5db;
+}
+
 /* Chat thread and bubbles */
 .chat-thread {
   border: 1px solid #eee;
@@ -729,6 +764,23 @@ html.dark .chat-item {
   height: 56px;
   border-radius: 999px;
   object-fit: cover;
+}
+
+.chat-avatar.blurred {
+  filter: blur(8px);
+  -webkit-filter: blur(8px);
+}
+
+.chat-avatar-sm.blurred {
+  filter: blur(6px);
+  -webkit-filter: blur(6px);
+}
+
+.chat-name-blurred {
+  filter: blur(4px);
+  -webkit-filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
 }
 
 .chat-body .chat-head {

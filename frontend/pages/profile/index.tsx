@@ -321,7 +321,7 @@ export default function MyProfilePage() {
                   className="profile-avatar-large"
                   src={
                     session.user.avatarUrl ||
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.name)}&size=400&background=6366f1&color=ffffff&bold=true`
                   }
                   alt={`${session.user.name} avatar`}
                 />
