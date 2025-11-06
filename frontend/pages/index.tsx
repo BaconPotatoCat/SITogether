@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { fetchWithAuth } from '../utils/api'
+import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride'
+import { useTheme } from '../contexts/ThemeContext'
 
 interface Profile {
   id: string
@@ -16,6 +18,7 @@ interface Profile {
 
 export default function Home() {
   const router = useRouter()
+  const { isDarkMode } = useTheme()
   const [deck, setDeck] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +30,9 @@ export default function Home() {
   // Health check state
   const [healthCheckResult, setHealthCheckResult] = useState<string | null>(null)
   const [isCheckingHealth, setIsCheckingHealth] = useState(false)
+
+  // Tutorial state
+  const [runTutorial, setRunTutorial] = useState(false)
 
   // Refs for dynamic geometry
   const deckRef = useRef<HTMLDivElement | null>(null)
@@ -58,6 +64,17 @@ export default function Home() {
 
     fetchUsers()
   }, [])
+
+  // Start tutorial on first visit (check localStorage)
+  useEffect(() => {
+    const hasSeenTutorial = localStorage.getItem('sitogether-tutorial-completed')
+    if (!hasSeenTutorial && !loading && deck.length > 0) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        setRunTutorial(true)
+      }, 500)
+    }
+  }, [loading, deck.length])
 
   const topCard = deck[0]
   const restCards = deck.slice(1)
@@ -188,6 +205,85 @@ export default function Home() {
     return Math.min(1, Math.abs(drag.x) / Math.max(1, needed))
   }
 
+  // Tutorial steps configuration
+  const tutorialSteps: Step[] = [
+    {
+      target: '.swipe-section',
+      content: (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Welcome to SITogether! 👋</h3>
+          <p>
+            Let&apos;s learn how to use the platform. You&apos;ll see profiles of other students
+            here.
+          </p>
+        </div>
+      ),
+      placement: 'center',
+      disableBeacon: true,
+    },
+    {
+      target: '[data-tutorial="like-button"]',
+      content: (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Like a Person ❤️</h3>
+          <p>
+            Click the <strong>Like</strong> button or swipe right on a profile card to like someone.
+            If they like you back, you&apos;ll match!
+          </p>
+        </div>
+      ),
+      placement: 'top',
+    },
+    {
+      target: '[data-tutorial="pass-button"]',
+      content: (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Pass on a Person 👋</h3>
+          <p>
+            Click the <strong>Pass</strong> button or swipe left if you&apos;re not interested. You
+            can always come back to discover more profiles later.
+          </p>
+        </div>
+      ),
+      placement: 'top',
+    },
+    {
+      target: '.nav-link[href="/liked"], .tab-link[href="/liked"]',
+      content: (
+        <div>
+          <h3 style={{ marginTop: 0 }}>Send Introductions 💬</h3>
+          <p>
+            Visit the <strong>Liked</strong> tab to see profiles you&apos;ve liked. You can send
+            them an introduction message to break the ice!
+          </p>
+        </div>
+      ),
+      placement: 'bottom',
+    },
+    {
+      target: '.nav-link[href="/chat"], .tab-link[href="/chat"]',
+      content: (
+        <div>
+          <h3 style={{ marginTop: 0 }}>View Your Chats 💭</h3>
+          <p>
+            Once you match with someone, visit the <strong>Chat</strong> tab to start conversations
+            and get to know each other better!
+          </p>
+        </div>
+      ),
+      placement: 'bottom',
+    },
+  ]
+
+  // Handle tutorial callback
+  const handleJoyrideCallback = (data: CallBackProps) => {
+    const { status } = data
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+      setRunTutorial(false)
+      localStorage.setItem('sitogether-tutorial-completed', 'true')
+    }
+  }
+
   // Health check function - now calls frontend API route which proxies to backend
   const checkBackendHealth = async () => {
     setIsCheckingHealth(true)
@@ -227,6 +323,58 @@ export default function Home() {
       </Head>
 
       <main className="container">
+        <Joyride
+          steps={tutorialSteps}
+          run={runTutorial}
+          continuous={true}
+          showProgress={true}
+          showSkipButton={true}
+          callback={handleJoyrideCallback}
+          styles={{
+            options: {
+              primaryColor: isDarkMode ? '#818cf8' : '#007bff',
+              zIndex: 10000,
+            },
+            tooltip: {
+              borderRadius: 8,
+              backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipContainer: {
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipTitle: {
+              color: isDarkMode ? '#f3f4f6' : '#111827',
+            },
+            tooltipContent: {
+              color: isDarkMode ? '#d1d5db' : '#374151',
+            },
+            buttonNext: {
+              backgroundColor: isDarkMode ? '#818cf8' : '#007bff',
+              color: isDarkMode ? '#111827' : '#ffffff',
+              borderRadius: 6,
+            },
+            buttonBack: {
+              color: isDarkMode ? '#9ca3af' : '#666',
+              marginRight: 8,
+            },
+            buttonSkip: {
+              color: isDarkMode ? '#9ca3af' : '#666',
+            },
+            overlay: {
+              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)',
+            },
+            spotlight: {
+              borderRadius: 8,
+            },
+            beaconInner: {
+              backgroundColor: isDarkMode ? '#818cf8' : '#007bff',
+            },
+            beaconOuter: {
+              borderColor: isDarkMode ? '#818cf8' : '#007bff',
+            },
+          }}
+        />
         {/* Temporary Health Check Section */}
         <section
           style={{
@@ -464,10 +612,10 @@ export default function Home() {
               </div>
 
               <div className="swipe-actions">
-                <button className="btn ghost" onClick={onPass}>
+                <button className="btn ghost" onClick={onPass} data-tutorial="pass-button">
                   Pass
                 </button>
-                <button className="btn primary" onClick={onLike}>
+                <button className="btn primary" onClick={onLike} data-tutorial="like-button">
                   Like
                 </button>
               </div>
