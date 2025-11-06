@@ -10,6 +10,7 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
+const { hashEmail, prepareEmailForStorage, decryptEmail } = require('./utils/emailEncryption');
 require('dotenv').config();
 
 const app = express();
@@ -227,9 +228,13 @@ app.get('/api/users/:id', async (req, res) => {
       });
     }
 
+    // Decrypt email for response
+    const decryptedEmail = await decryptEmail(user.email);
+    const userResponse = { ...user, email: decryptedEmail };
+
     res.json({
       success: true,
-      data: user,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -373,9 +378,12 @@ app.post('/api/auth/register', async (req, res) => {
     //   });
     // }
 
-    // Check if user already exists
+    // Prepare email for storage (encrypt and hash)
+    const { emailHash, encryptedEmail } = await prepareEmailForStorage(email);
+
+    // Check if user already exists by emailHash
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (existingUser) {
@@ -396,7 +404,8 @@ app.post('/api/auth/register', async (req, res) => {
     // Create user and verification token in a transaction
     const user = await prisma.user.create({
       data: {
-        email,
+        email: encryptedEmail,
+        emailHash: emailHash,
         password: hashedPassword,
         name,
         age: ageNum,
@@ -430,6 +439,10 @@ app.post('/api/auth/register', async (req, res) => {
       },
     });
 
+    // Decrypt email for response (client doesn't need to see encrypted value)
+    const decryptedEmail = await decryptEmail(user.email);
+    const userResponse = { ...user, email: decryptedEmail };
+
     // Create UserPoints record for the new user
     await prisma.userPoints.create({
       data: {
@@ -445,7 +458,7 @@ app.post('/api/auth/register', async (req, res) => {
       res.status(201).json({
         success: true,
         message: 'User registered successfully. Please check your email to verify your account.',
-        data: user,
+        data: userResponse,
       });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
@@ -455,7 +468,7 @@ app.post('/api/auth/register', async (req, res) => {
         success: true,
         message:
           'User registered successfully, but verification email could not be sent. Please contact support.',
-        data: user,
+        data: userResponse,
         warning: 'Verification email not sent',
       });
     }
@@ -558,9 +571,12 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+    
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (!user) {
@@ -577,6 +593,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
         error: 'Account is already verified. You can log in now.',
       });
     }
+
+    // Decrypt email for sending verification email
+    const decryptedEmail = await decryptEmail(user.email);
 
     // Generate new verification token and expiration
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -602,7 +621,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(user.email, user.name, verificationToken);
+      await sendVerificationEmail(decryptedEmail, user.name, verificationToken);
       res.status(200).json({
         success: true,
         message: 'Verification email sent successfully. Please check your email.',
@@ -648,9 +667,12 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+    
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -686,6 +708,9 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
+    // Decrypt email for use in response and email sending
+    const decryptedEmail = await decryptEmail(user.email);
+
     // Check if account is verified
     if (!user.verified) {
       return res.status(403).json({
@@ -693,7 +718,7 @@ app.post('/api/auth/login', async (req, res) => {
         error:
           'Account not verified. Please check your email and verify your account before logging in.',
         requiresVerification: true,
-        email: user.email,
+        email: decryptedEmail,
       });
     }
 
@@ -730,7 +755,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -908,6 +933,9 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
       });
     }
 
+    // Decrypt email for sending 2FA email
+    const decryptedEmail = await decryptEmail(user.email);
+
     // Generate new 6-digit 2FA code
     const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -934,7 +962,7 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -1070,9 +1098,13 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       });
     }
 
+    // Decrypt email for response
+    const decryptedEmail = await decryptEmail(user.email);
+    const userResponse = { ...user, email: decryptedEmail };
+
     res.json({
       success: true,
-      user: user,
+      user: userResponse,
     });
   } catch (error) {
     console.error('Session error:', error);
@@ -1096,9 +1128,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+    
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -1125,24 +1160,26 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
+    // Decrypt email for sending password reset email
+    const decryptedEmail = await decryptEmail(user.email);
+
     // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Delete any existing password reset tokens for this email
+    // Delete any existing password reset tokens for this user
     await prisma.token.deleteMany({
       where: {
-        email,
+        userId: user.id,
         type: 'PASSWORD_RESET',
       },
     });
 
-    // Create new password reset token
+    // Create new password reset token (using userId instead of email)
     const createdToken = await prisma.token.create({
       data: {
         token: resetToken,
         type: 'PASSWORD_RESET',
-        email: user.email,
         userId: user.id,
         expiresAt: resetTokenExpires,
       },
@@ -1151,7 +1188,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Send password reset email
     const { sendPasswordResetEmail } = require('./lib/email');
     try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
+      await sendPasswordResetEmail(decryptedEmail, user.name, resetToken);
 
       res.json({
         success: true,
@@ -1233,9 +1270,16 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Find user by userId (from token)
+    if (!resetToken.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid password reset token',
+      });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: resetToken.email },
+      where: { id: resetToken.userId },
     });
 
     if (!user) {
