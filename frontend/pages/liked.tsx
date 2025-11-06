@@ -352,21 +352,23 @@ export default function LikedProfiles() {
                         justifyContent: 'flex-end',
                       }}
                     >
-                      {profile.interests.slice(0, 2).map((interest) => (
-                        <span
-                          key={interest}
-                          className="chip"
-                          style={{
-                            padding: '2px 8px',
-                            backgroundColor: '#eef2ff',
-                            color: '#3730a3',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                          }}
-                        >
-                          {interest}
-                        </span>
-                      ))}
+                      {(Array.isArray(profile.interests) ? profile.interests : [])
+                        .slice(0, 2)
+                        .map((interest) => (
+                          <span
+                            key={interest}
+                            className="chip"
+                            style={{
+                              padding: '2px 8px',
+                              backgroundColor: '#eef2ff',
+                              color: '#3730a3',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                            }}
+                          >
+                            {interest}
+                          </span>
+                        ))}
                     </div>
                     <span
                       className="liked-profile-action"
@@ -471,7 +473,8 @@ export default function LikedProfiles() {
                       className="chips"
                       style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
                     >
-                      {selectedProfile.interests.length > 0 ? (
+                      {Array.isArray(selectedProfile.interests) &&
+                      selectedProfile.interests.length > 0 ? (
                         selectedProfile.interests.map((interest) => (
                           <span
                             key={interest}

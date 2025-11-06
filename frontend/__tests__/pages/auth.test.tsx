@@ -7,8 +7,41 @@ jest.mock('next/router', () => ({
   useRouter: jest.fn(),
 }))
 
+// Mock AuthContext
+const mockRefreshSession = jest.fn()
+jest.mock('../../contexts/AuthContext', () => ({
+  useSession: jest.fn(() => ({
+    refreshSession: mockRefreshSession,
+    session: null,
+    status: 'unauthenticated',
+    signOut: jest.fn(),
+  })),
+}))
+
 // Mock fetch
 global.fetch = jest.fn()
+
+// Mock window.location
+const mockLocationHref = jest.fn()
+const originalLocation = window.location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (window as any).location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(window as any).location = {
+  ...originalLocation,
+  href: '',
+}
+Object.defineProperty(window.location, 'href', {
+  configurable: true,
+  writable: true,
+  value: '',
+})
+// Override the setter
+Object.defineProperty(window.location, 'href', {
+  set: mockLocationHref,
+  get: () => '',
+  configurable: true,
+})
 
 // Mock sessionStorage
 const sessionStorageMock = (() => {
@@ -44,6 +77,8 @@ describe('Auth Page', () => {
     sessionStorageMock.clear()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     ;(global.fetch as jest.Mock).mockClear()
+    mockRefreshSession.mockResolvedValue(undefined)
+    mockLocationHref.mockClear()
     // Default mock implementation to prevent unhandled fetch calls
     ;(global.fetch as jest.Mock).mockImplementation(() =>
       Promise.resolve({
@@ -280,10 +315,16 @@ describe('Auth Page', () => {
         expect(screen.getByText(/login successful/i)).toBeInTheDocument()
       })
 
+      // Wait for refreshSession to be called
+      await waitFor(() => {
+        expect(mockRefreshSession).toHaveBeenCalled()
+      })
+
       // Fast-forward time to trigger redirect
       jest.advanceTimersByTime(500)
 
-      expect(mockPush).toHaveBeenCalledWith('/')
+      // Check for window.location.href redirect instead of router.push
+      expect(mockLocationHref).toHaveBeenCalledWith('/')
 
       jest.useRealTimers()
     })

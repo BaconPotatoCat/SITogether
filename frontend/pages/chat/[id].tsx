@@ -7,7 +7,7 @@ import { useToast } from '../../hooks/useToast'
 
 interface Message {
   id: string
-  senderId: string
+  senderId: string | null
   content: string
   createdAt: string
 }
@@ -265,17 +265,19 @@ export default function ConversationPage() {
 
             <div className="chat-thread">
               {messages.map((m) => {
+                // Handle null senderId (deleted user)
                 const isMine = currentUserId && m.senderId === currentUserId
+                const isDeletedUser = !m.senderId
                 const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
                 // Always use "Hidden User" when locked to prevent any name leakage
+                // Use "Deleted User" when senderId is null
                 const displayName = shouldBlur
                   ? 'Hidden User'
-                  : (isMine ? me?.name : other?.name) || 'User'
-                const displayAvatarUrl = shouldBlur
-                  ? null
-                  : isMine
-                    ? me?.avatarUrl
-                    : other?.avatarUrl
+                  : isDeletedUser
+                    ? 'Deleted User'
+                    : (isMine ? me?.name : other?.name) || 'User'
+                const displayAvatarUrl =
+                  shouldBlur || isDeletedUser ? null : isMine ? me?.avatarUrl : other?.avatarUrl
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {displayAvatarUrl ? (
@@ -283,6 +285,21 @@ export default function ConversationPage() {
                         src={displayAvatarUrl}
                         alt={`${displayName} avatar`}
                         className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
+                        onError={(e) => {
+                          // Fallback if image fails to load - replace with placeholder
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          const parent = target.parentElement
+                          if (parent) {
+                            const placeholder = document.createElement('div')
+                            placeholder.setAttribute('aria-label', `${displayName} avatar`)
+                            placeholder.className = `chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`
+                            placeholder.style.cssText =
+                              'background: #eee; color: #555; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px;'
+                            placeholder.textContent = displayName.charAt(0).toUpperCase()
+                            parent.insertBefore(placeholder, target)
+                          }
+                        }}
                       />
                     ) : (
                       <div

@@ -12,15 +12,16 @@ datasource db {
 
 model User {
   id        String       @id @default(uuid()) @db.Uuid
-  email     String       @unique
+  email     String       // Encrypted email data at rest (no longer unique - emailHash is used for uniqueness)
+  emailHash String      @unique @map("email_hash") // Hash for authentication/lookup
   password  String
   name      String
-  age       Int
-  gender    String
+  age       String       // Encrypted age data at rest (stored as encrypted string)
+  gender    String       // Encrypted gender data at rest
   role      String       @default("User")
-  course    String?
-  bio       String?
-  interests String[]
+  course    String?      // Encrypted course data at rest (nullable)
+  bio       String?      // Encrypted bio data at rest (nullable)
+  interests String?      // Encrypted interests data at rest (stored as encrypted JSON string, nullable)
   avatarUrl String?      @map("avatar_url")
   verified  Boolean      @default(false)
   banned    Boolean      @default(false)
@@ -39,6 +40,7 @@ model User {
   sentMessages   Message[]      @relation("UserSentMessages")
   reports    Report[] @relation("ReportedUser")
 
+  @@index([emailHash])
   @@map("users")
 }
 
@@ -126,15 +128,15 @@ enum TokenType {
 
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
-  userAId   String   @db.Uuid
-  userBId   String   @db.Uuid
+  userAId   String?  @db.Uuid
+  userBId   String?  @db.Uuid
   isLocked  Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  userA    User @relation("UserAConversations", fields: [userAId], references: [id], onDelete: Cascade)
-  userB    User @relation("UserBConversations", fields: [userBId], references: [id], onDelete: Cascade)
+  userA    User? @relation("UserAConversations", fields: [userAId], references: [id], onDelete: SetNull)
+  userB    User? @relation("UserBConversations", fields: [userBId], references: [id], onDelete: SetNull)
   messages Message[]
 
   // Ensure one conversation per pair regardless of order
@@ -145,13 +147,13 @@ model Conversation {
 model Message {
   id             String       @id @default(uuid()) @db.Uuid
   conversationId String       @db.Uuid
-  senderId       String       @db.Uuid
+  senderId       String?      @db.Uuid
   content        String
   createdAt      DateTime     @default(now()) @map("created_at")
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sender       User?         @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@map("messages")
 }

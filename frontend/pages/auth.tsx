@@ -4,9 +4,11 @@ import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 import { validatePassword } from '../utils/passwordValidation'
+import { useSession } from '../contexts/AuthContext'
 
 export default function Auth() {
   const router = useRouter()
+  const { refreshSession } = useSession()
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [confirmPasswordError, setConfirmPasswordError] = useState('')
@@ -152,9 +154,11 @@ export default function Auth() {
             }, 500)
           } else {
             showToast('Login successful!', 'success')
-            // Redirect to home page after a brief delay
+            // Refresh session to update AuthContext before redirecting
+            await refreshSession()
+            // Use window.location for a full page reload to ensure session is properly loaded
             setTimeout(() => {
-              router.push('/')
+              window.location.href = '/'
             }, 500)
           }
         } else {

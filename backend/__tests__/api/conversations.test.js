@@ -88,8 +88,18 @@ describe('Conversations API Endpoints', () => {
         const conversation = await mockPrismaClient.conversation.findUnique({ where: { id } });
         if (!conversation)
           return res.status(404).json({ success: false, error: 'Conversation not found' });
-        if (conversation.userAId !== userId && conversation.userBId !== userId) {
+        // Handle null user IDs (when a user has been deleted)
+        if (
+          (conversation.userAId !== userId && conversation.userBId !== userId) ||
+          (!conversation.userAId && !conversation.userBId)
+        ) {
           return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+        // Prevent sending messages if the other user has been deleted
+        if (!conversation.userAId || !conversation.userBId) {
+          return res
+            .status(410)
+            .json({ success: false, error: 'Cannot send message: other user has been deleted' });
         }
         if (conversation.isLocked) {
           return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
@@ -377,6 +387,90 @@ describe('Conversations API Endpoints', () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('Chat is locked until you match');
+      expect(mockPrismaClient.message.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 410 when trying to send message to conversation with deleted user (userAId is null)', async () => {
+      mockValidateConversationId.mockReturnValue(true);
+      mockValidateAndSanitizeMessage.mockReturnValue({
+        isValid: true,
+        sanitized: validContent,
+        error: null,
+      });
+
+      const mockConversation = {
+        id: conversationId,
+        userAId: null, // Deleted user
+        userBId: mockUserId,
+        isLocked: false,
+      };
+
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(mockConversation);
+
+      const response = await request(app)
+        .post(`/api/conversations/${conversationId}/messages`)
+        .set('Cookie', `token=${mockAuthToken}`)
+        .send({ content: validContent })
+        .expect(410);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Cannot send message: other user has been deleted');
+      expect(mockPrismaClient.message.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 410 when trying to send message to conversation with deleted user (userBId is null)', async () => {
+      mockValidateConversationId.mockReturnValue(true);
+      mockValidateAndSanitizeMessage.mockReturnValue({
+        isValid: true,
+        sanitized: validContent,
+        error: null,
+      });
+
+      const mockConversation = {
+        id: conversationId,
+        userAId: mockUserId,
+        userBId: null, // Deleted user
+        isLocked: false,
+      };
+
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(mockConversation);
+
+      const response = await request(app)
+        .post(`/api/conversations/${conversationId}/messages`)
+        .set('Cookie', `token=${mockAuthToken}`)
+        .send({ content: validContent })
+        .expect(410);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Cannot send message: other user has been deleted');
+      expect(mockPrismaClient.message.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 403 when both users in conversation are deleted', async () => {
+      mockValidateConversationId.mockReturnValue(true);
+      mockValidateAndSanitizeMessage.mockReturnValue({
+        isValid: true,
+        sanitized: validContent,
+        error: null,
+      });
+
+      const mockConversation = {
+        id: conversationId,
+        userAId: null, // Both users deleted
+        userBId: null,
+        isLocked: false,
+      };
+
+      mockPrismaClient.conversation.findUnique.mockResolvedValue(mockConversation);
+
+      const response = await request(app)
+        .post(`/api/conversations/${conversationId}/messages`)
+        .set('Cookie', `token=${mockAuthToken}`)
+        .send({ content: validContent })
+        .expect(403);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Forbidden');
       expect(mockPrismaClient.message.create).not.toHaveBeenCalled();
     });
   });

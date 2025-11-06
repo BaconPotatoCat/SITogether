@@ -58,6 +58,7 @@ const config = {
   // Server configuration
   nodeEnv: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 5000,
+  trustProxy: process.env.TRUST_PROXY ? parseInt(process.env.TRUST_PROXY, 10) : 0,
 
   // Authentication
   jwtSecret: process.env.JWT_SECRET,
@@ -75,6 +76,9 @@ const config = {
   frontend: {
     externalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL || 'http://localhost:3000',
   },
+
+  // Encryption
+  encryptionKey: process.env.ENCRYPTION_KEY,
 
   // Validation helpers
   isDevelopment: process.env.NODE_ENV === 'development',
