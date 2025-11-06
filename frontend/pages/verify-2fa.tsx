@@ -3,9 +3,11 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
+import { useSession } from '../contexts/AuthContext'
 
 export default function Verify2FA() {
   const router = useRouter()
+  const { refreshSession } = useSession()
   const [code, setCode] = useState(['', '', '', '', '', ''])
   const [isLoading, setIsLoading] = useState(false)
   const [isResending, setIsResending] = useState(false)
@@ -192,8 +194,11 @@ export default function Verify2FA() {
         // Clear tempToken from sessionStorage
         sessionStorage.removeItem('tempToken')
         showToast('Login successful!', 'success')
+        // Refresh session to update AuthContext before redirecting
+        await refreshSession()
+        // Use window.location for a full page reload to ensure session is properly loaded
         setTimeout(() => {
-          router.push('/')
+          window.location.href = '/'
         }, 500)
       } else {
         showToast(result.error || 'Invalid verification code', 'error')

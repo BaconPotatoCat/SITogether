@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useRouter } from 'next/router'
 import Verify2FA from '../../pages/verify-2fa'
 
@@ -7,8 +7,41 @@ jest.mock('next/router', () => ({
   useRouter: jest.fn(),
 }))
 
+// Mock AuthContext
+const mockRefreshSession = jest.fn()
+jest.mock('../../contexts/AuthContext', () => ({
+  useSession: jest.fn(() => ({
+    refreshSession: mockRefreshSession,
+    session: null,
+    status: 'unauthenticated',
+    signOut: jest.fn(),
+  })),
+}))
+
 // Mock fetch
 global.fetch = jest.fn()
+
+// Mock window.location
+const mockLocationHref = jest.fn()
+const originalLocation = window.location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (window as any).location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(window as any).location = {
+  ...originalLocation,
+  href: '',
+}
+Object.defineProperty(window.location, 'href', {
+  configurable: true,
+  writable: true,
+  value: '',
+})
+// Override the setter
+Object.defineProperty(window.location, 'href', {
+  set: mockLocationHref,
+  get: () => '',
+  configurable: true,
+})
 
 // Mock sessionStorage
 const sessionStorageMock = (() => {
@@ -44,6 +77,8 @@ describe('2FA Verification Page', () => {
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     ;(global.fetch as jest.Mock).mockClear()
     sessionStorageMock.clear()
+    mockRefreshSession.mockResolvedValue(undefined)
+    mockLocationHref.mockClear()
   })
 
   afterEach(() => {
@@ -210,6 +245,7 @@ describe('2FA Verification Page', () => {
     })
 
     it('should successfully verify code and redirect', async () => {
+      jest.useFakeTimers()
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -231,7 +267,12 @@ describe('2FA Verification Page', () => {
       })
 
       const submitButton = screen.getByRole('button', { name: /verify code/i })
-      fireEvent.click(submitButton)
+
+      await act(async () => {
+        fireEvent.click(submitButton)
+        // Flush any pending promises
+        await Promise.resolve()
+      })
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith('/api/auth/verify-2fa', {
@@ -246,8 +287,21 @@ describe('2FA Verification Page', () => {
 
       await waitFor(() => {
         expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('tempToken')
-        expect(mockPush).toHaveBeenCalledWith('/')
+        expect(mockRefreshSession).toHaveBeenCalled()
       })
+
+      // Fast-forward the setTimeout within act and flush promises
+      await act(async () => {
+        jest.advanceTimersByTime(500)
+        await Promise.resolve()
+      })
+
+      // Wait for the redirect (window.location.href is set after a timeout)
+      await waitFor(() => {
+        expect(mockLocationHref).toHaveBeenCalledWith('/')
+      })
+
+      jest.useRealTimers()
     })
 
     it('should handle invalid code error', async () => {
@@ -271,7 +325,9 @@ describe('2FA Verification Page', () => {
       })
 
       const submitButton = screen.getByRole('button', { name: /verify code/i })
-      fireEvent.click(submitButton)
+      await act(async () => {
+        fireEvent.click(submitButton)
+      })
 
       await waitFor(() => {
         // Inputs should be cleared
@@ -301,7 +357,9 @@ describe('2FA Verification Page', () => {
       })
 
       const submitButton = screen.getByRole('button', { name: /verify code/i })
-      fireEvent.click(submitButton)
+      await act(async () => {
+        fireEvent.click(submitButton)
+      })
 
       // Wait for the async error handling to complete and toast to appear
       await waitFor(() => {
@@ -343,7 +401,9 @@ describe('2FA Verification Page', () => {
       })
 
       const submitButton = screen.getByRole('button', { name: /verify code/i })
-      fireEvent.click(submitButton)
+      await act(async () => {
+        fireEvent.click(submitButton)
+      })
 
       // Should show verifying state
       expect(screen.getByText('Verifying...')).toBeInTheDocument()
