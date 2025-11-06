@@ -7,7 +7,7 @@ interface ConversationItem {
   id: string
   isLocked: boolean
   lastMessage: { content: string; createdAt: string } | null
-  otherUser: { id: string; name: string; avatarUrl: string | null }
+  otherUser: { id?: string; name: string; avatarUrl: string | null }
 }
 
 export default function Chat() {
@@ -54,15 +54,46 @@ export default function Chat() {
                 onClick={() => router.push(`/chat/${c.id}`)}
                 style={{ cursor: 'pointer' }}
               >
-                <img
-                  className="chat-avatar"
-                  src={c.otherUser.avatarUrl || '/avatar.png'}
-                  alt={`${c.otherUser.name} avatar`}
-                />
+                {c.otherUser.avatarUrl && !c.isLocked && c.otherUser.name !== 'Deleted User' ? (
+                  <img
+                    className="chat-avatar"
+                    src={c.otherUser.avatarUrl}
+                    alt={`${c.otherUser.name} avatar`}
+                    onError={(e) => {
+                      // Hide image and show placeholder instead
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      const parent = target.parentElement
+                      if (parent) {
+                        const placeholder = document.createElement('div')
+                        placeholder.className = `chat-avatar ${c.isLocked ? 'blurred' : ''}`
+                        placeholder.style.cssText =
+                          'background: #eee; color: #555; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px;'
+                        placeholder.textContent = c.otherUser.name.charAt(0).toUpperCase()
+                        parent.insertBefore(placeholder, target)
+                      }
+                    }}
+                  />
+                ) : (
+                  <div
+                    className={`chat-avatar ${c.isLocked ? 'blurred' : ''}`}
+                    style={{
+                      background: c.isLocked ? '#ccc' : '#eee',
+                      color: c.isLocked ? '#999' : '#555',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 20,
+                    }}
+                  >
+                    {c.otherUser.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="chat-body">
                   <div className="chat-head">
                     <h3>
-                      {c.otherUser.name} {c.isLocked ? '🔒' : ''}
+                      {c.isLocked ? 'Hidden User' : c.otherUser.name} {c.isLocked ? '🔒' : ''}
                     </h3>
                     <span className="time">
                       {c.lastMessage ? new Date(c.lastMessage.createdAt).toLocaleString() : ''}

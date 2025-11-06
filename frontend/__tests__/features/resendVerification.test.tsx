@@ -7,8 +7,41 @@ jest.mock('next/router', () => ({
   useRouter: jest.fn(),
 }))
 
+// Mock AuthContext
+const mockRefreshSession = jest.fn()
+jest.mock('../../contexts/AuthContext', () => ({
+  useSession: jest.fn(() => ({
+    refreshSession: mockRefreshSession,
+    session: null,
+    status: 'unauthenticated',
+    signOut: jest.fn(),
+  })),
+}))
+
 // Mock fetch
 global.fetch = jest.fn()
+
+// Mock window.location
+const mockLocationHref = jest.fn()
+const originalLocation = window.location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (window as any).location
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+;(window as any).location = {
+  ...originalLocation,
+  href: '',
+}
+Object.defineProperty(window.location, 'href', {
+  configurable: true,
+  writable: true,
+  value: '',
+})
+// Override the setter
+Object.defineProperty(window.location, 'href', {
+  set: mockLocationHref,
+  get: () => '',
+  configurable: true,
+})
 
 describe('Resend Verification Feature', () => {
   const mockPush = jest.fn()
@@ -21,6 +54,8 @@ describe('Resend Verification Feature', () => {
     jest.clearAllMocks()
     ;(useRouter as jest.Mock).mockReturnValue(mockRouter)
     ;(global.fetch as jest.Mock).mockClear()
+    mockRefreshSession.mockResolvedValue(undefined)
+    mockLocationHref.mockClear()
   })
 
   describe('Unverified User Login', () => {
@@ -321,6 +356,7 @@ describe('Resend Verification Feature', () => {
     })
 
     it('should not show verification reminder for verified users', async () => {
+      jest.useFakeTimers()
       // Mock successful login
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -341,12 +377,21 @@ describe('Resend Verification Feature', () => {
       fireEvent.change(passwordInput, { target: { value: 'password123' } })
       fireEvent.click(loginButton)
 
-      // Verification reminder should not appear
+      // Wait for refreshSession to be called
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalled()
+        expect(mockRefreshSession).toHaveBeenCalled()
+      })
+
+      // Fast-forward the setTimeout
+      jest.advanceTimersByTime(500)
+
+      // Verification reminder should not appear and redirect should happen
+      await waitFor(() => {
+        expect(mockLocationHref).toHaveBeenCalledWith('/')
       })
 
       expect(screen.queryByText(/email not verified/i)).not.toBeInTheDocument()
+      jest.useRealTimers()
     })
   })
 })

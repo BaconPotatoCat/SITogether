@@ -5,13 +5,13 @@ import { sanitizeForDisplay } from '../../utils/messageValidation'
 
 interface Message {
   id: string
-  senderId: string
+  senderId: string | null
   content: string
   createdAt: string
 }
 
 interface Participant {
-  id: string
+  id?: string
   name: string
   avatarUrl: string | null
 }
@@ -53,11 +53,12 @@ export default function ConversationPage() {
     load()
   }, [id])
 
-  // Enrich avatars from profile API if missing
+  // Enrich avatars from profile API if missing (only if conversation is unlocked)
   useEffect(() => {
+    if (isLocked) return // Don't enrich when locked to preserve privacy
     const enrich = async () => {
       try {
-        if (other && !other.avatarUrl) {
+        if (other && !other.avatarUrl && other.id) {
           const res = await fetch(`/api/users/${other.id}`)
           const data = await res.json()
           if (data?.success && data?.user?.avatarUrl) {
@@ -74,7 +75,7 @@ export default function ConversationPage() {
       } catch {}
     }
     enrich()
-  }, [me, other])
+  }, [me, other, isLocked])
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault()
@@ -140,24 +141,49 @@ export default function ConversationPage() {
 
             <div className="chat-thread">
               {messages.map((m) => {
+                // Handle null senderId (deleted user)
                 const isMine = currentUserId && m.senderId === currentUserId
-                const avatarUrl = isMine ? me?.avatarUrl : other?.avatarUrl
-                const name = isMine ? me?.name : other?.name
+                const isDeletedUser = !m.senderId
+                const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
+                // Always use "Hidden User" when locked to prevent any name leakage
+                // Use "Deleted User" when senderId is null
+                const displayName = shouldBlur
+                  ? 'Hidden User'
+                  : isDeletedUser
+                    ? 'Deleted User'
+                    : (isMine ? me?.name : other?.name) || 'User'
+                const displayAvatarUrl =
+                  shouldBlur || isDeletedUser ? null : isMine ? me?.avatarUrl : other?.avatarUrl
                 return (
                   <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
-                    {avatarUrl ? (
+                    {displayAvatarUrl ? (
                       <img
-                        src={avatarUrl}
-                        alt={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        src={displayAvatarUrl}
+                        alt={`${displayName} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
+                        onError={(e) => {
+                          // Fallback if image fails to load - replace with placeholder
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          const parent = target.parentElement
+                          if (parent) {
+                            const placeholder = document.createElement('div')
+                            placeholder.setAttribute('aria-label', `${displayName} avatar`)
+                            placeholder.className = `chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`
+                            placeholder.style.cssText =
+                              'background: #eee; color: #555; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px;'
+                            placeholder.textContent = displayName.charAt(0).toUpperCase()
+                            parent.insertBefore(placeholder, target)
+                          }
+                        }}
                       />
                     ) : (
                       <div
-                        aria-label={`${name || 'User'} avatar`}
-                        className="chat-avatar-sm"
+                        aria-label={`${displayName} avatar`}
+                        className={`chat-avatar-sm ${shouldBlur ? 'blurred' : ''}`}
                         style={{
-                          background: '#eee',
-                          color: '#555',
+                          background: shouldBlur ? '#ccc' : '#eee',
+                          color: shouldBlur ? '#999' : '#555',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -165,7 +191,7 @@ export default function ConversationPage() {
                           fontSize: 12,
                         }}
                       >
-                        {(name || 'U').charAt(0).toUpperCase()}
+                        {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="chat-bubble-wrap">
