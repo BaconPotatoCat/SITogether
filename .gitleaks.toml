@@ -1,0 +1,24 @@
+# Gitleaks configuration for secret detection
+title = "SITogether Secret Detection"
+
+[extend]
+# Use default rules
+useDefault = true
+
+[allowlist]
+description = "Allowlist for known safe patterns"
+paths = [
+  '''\.lock$''',
+  '''package-lock\.json$''',
+  '''yarn\.lock$''',
+  '''\.test\.js$''',
+  '''\.test\.ts$''',
+  '''\.spec\.js$''',
+  '''\.spec\.ts$''',
+  '''__tests__/''',
+  '''node_modules/''',
+  '''\.next/''',
+  '''coverage/''',
+  '''dist/''',
+]
+

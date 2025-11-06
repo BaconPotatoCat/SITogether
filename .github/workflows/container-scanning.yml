@@ -1,0 +1,48 @@
+name: Container Security Scanning
+
+on:
+  push: # Run on all branches and commits
+    paths:
+      - '**/Dockerfile'
+      - 'docker-compose.yml'
+
+jobs:
+  trivy-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        dockerfile:
+          - backend/Dockerfile
+          - frontend/Dockerfile
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: |
+          DIR=$(dirname "${{ matrix.dockerfile }}")
+          IMAGE_NAME="sitogether-${DIR}"
+          cd $DIR
+          docker build -f Dockerfile -t $IMAGE_NAME:${{ github.sha }} .
+          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'container-scan'
+
