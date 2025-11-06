@@ -58,8 +58,12 @@ const mockShowToast = jest.fn()
 const mockRemoveToast = jest.fn()
 
 describe('LikedProfiles', () => {
+  // Suppress console.error during tests to reduce noise from expected error scenarios
+  const originalError = console.error
   beforeEach(() => {
     jest.clearAllMocks()
+    // Suppress console.error for cleaner test output
+    console.error = jest.fn()
     mockUseRouter.mockReturnValue({
       push: mockPush,
       query: {},
@@ -70,6 +74,11 @@ describe('LikedProfiles', () => {
       showToast: mockShowToast,
       removeToast: mockRemoveToast,
     })
+  })
+
+  afterEach(() => {
+    // Restore console.error after each test
+    console.error = originalError
   })
 
   it('should display loading state initially', () => {

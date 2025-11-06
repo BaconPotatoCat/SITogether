@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { fetchWithAuthSSR } from '../../../utils/api'
-import { config } from '../../../utils/config'
+import { config as appConfig } from '../../../utils/config'
 
 // Disable body parsing for this route to handle large payloads (10MB+)
 export const config = {
@@ -24,7 +24,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query
 
   try {
-    const backendUrl = config.backendInternalUrl
+    const backendUrl = appConfig.backendInternalUrl
 
     if (!backendUrl) {
       console.error('Backend internal URL is not configured')
