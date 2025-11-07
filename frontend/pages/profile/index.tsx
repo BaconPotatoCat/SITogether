@@ -1,5 +1,6 @@
 import Head from 'next/head'
 import React, { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -7,6 +8,12 @@ import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 import { fetchWithAuth } from '../../utils/api'
 import { validatePasswordChange } from '../../utils/passwordValidation'
+import { config } from '../../utils/config'
+
+// Dynamically import ReCAPTCHA to avoid SSR issues
+const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => mod.default), {
+  ssr: false,
+})
 
 type ViewMode = 'menu' | 'edit' | 'changePassword'
 
@@ -25,11 +32,16 @@ export default function MyProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   })
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
+  const [recaptchaKey, setRecaptchaKey] = useState(0)
+  const [requiresRecaptcha, setRequiresRecaptcha] = useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Initialize edit form when session loads
@@ -104,6 +116,8 @@ export default function MyProfilePage() {
       newPassword: '',
       confirmPassword: '',
     })
+    setRequiresRecaptcha(false)
+    setRecaptchaToken(null)
     setViewMode('menu')
   }
 
@@ -125,6 +139,12 @@ export default function MyProfilePage() {
       return
     }
 
+    // Check if reCAPTCHA is required
+    if (requiresRecaptcha && !recaptchaToken) {
+      showToast('Please complete the reCAPTCHA verification.', 'error')
+      return
+    }
+
     try {
       setIsChangingPassword(true)
 
@@ -138,12 +158,22 @@ export default function MyProfilePage() {
           body: JSON.stringify({
             currentPassword: passwordForm.currentPassword,
             newPassword: passwordForm.newPassword,
+            ...(requiresRecaptcha && recaptchaToken ? { recaptchaToken } : {}),
           }),
         },
         false
       )
 
       const result = await response.json()
+
+      // Check if reCAPTCHA is required (rate limit exceeded)
+      if (result.requiresRecaptcha && !result.success) {
+        setRequiresRecaptcha(true)
+        setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA
+        showToast(result.error || 'Please complete the reCAPTCHA verification.', 'error')
+        setIsChangingPassword(false)
+        return
+      }
 
       if (response.ok && result.success) {
         setViewMode('menu')
@@ -152,6 +182,8 @@ export default function MyProfilePage() {
           newPassword: '',
           confirmPassword: '',
         })
+        setRequiresRecaptcha(false)
+        setRecaptchaToken(null)
         showToast('Password changed successfully!', 'success')
       } else {
         // Handle different error cases
@@ -197,6 +229,37 @@ export default function MyProfilePage() {
     await signOut()
   }
 
+  const handleDeleteAccount = async () => {
+    if (!session?.user) return
+
+    try {
+      setIsDeletingAccount(true)
+
+      const response = await fetchWithAuth(`/api/users/${session.user.id}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast('Account deleted successfully', 'success')
+        // Clear session and redirect to auth page
+        await signOut()
+        // Navigate to auth page (signOut already does this, but just in case)
+        window.location.href = '/auth'
+      } else {
+        showToast(result.error || 'Failed to delete account', 'error')
+        setShowDeleteConfirm(false)
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      showToast('An error occurred while deleting your account', 'error')
+      setShowDeleteConfirm(false)
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
   const handleAvatarClick = () => {
     fileInputRef.current?.click()
   }
@@ -228,6 +291,12 @@ export default function MyProfilePage() {
         reader.readAsDataURL(file)
       })
 
+      // Validate that base64 conversion was successful
+      if (!base64String || !base64String.startsWith('data:image/')) {
+        showToast('Invalid image file. Please select a valid image and try again.', 'error')
+        return
+      }
+
       // Update profile with new avatar
       if (session?.user) {
         const response = await fetchWithAuth(`/api/users/${session.user.id}`, {
@@ -242,20 +311,48 @@ export default function MyProfilePage() {
           }),
         })
 
-        const result = await response.json()
+        // Check if response is ok and has valid JSON
+        let result
+        try {
+          const responseText = await response.text()
+          if (!response.ok) {
+            // Log detailed error for debugging, but show generic message to user
+            try {
+              const errorResult = JSON.parse(responseText)
+              console.error('Failed to update profile:', errorResult.error)
+            } catch {
+              console.error('Failed to update profile:', responseText)
+            }
+            // Always show generic error message to user for security
+            showToast('Failed to update profile picture. Please try again.', 'error')
+            return
+          }
+          // Parse the successful response
+          result = JSON.parse(responseText)
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError)
+          showToast('An error occurred. Please try again.', 'error')
+          return
+        }
 
         if (result.success) {
           showToast('Profile picture updated successfully!', 'success')
           // Refresh session to update avatar in AuthContext
           await refreshSession()
         } else {
-          showToast(result.error || 'Failed to update profile picture', 'error')
+          // Log detailed error but show generic message
           console.error('Failed to update profile:', result.error)
+          showToast('Failed to update profile picture. Please try again.', 'error')
         }
       }
     } catch (error) {
+      // Log detailed error for debugging
       console.error('Error uploading avatar:', error)
-      showToast('An error occurred while uploading your profile picture', 'error')
+      // Show generic error message to user for security
+      showToast(
+        'An error occurred while uploading your profile picture. Please try again.',
+        'error'
+      )
     } finally {
       setIsUploadingAvatar(false)
       // Reset file input
@@ -288,7 +385,7 @@ export default function MyProfilePage() {
                   className="profile-avatar-large"
                   src={
                     session.user.avatarUrl ||
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.1.0&auto=format&fit=crop&q=80&w=687'
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(session.user.name)}&size=400&background=6366f1&color=ffffff&bold=true`
                   }
                   alt={`${session.user.name} avatar`}
                 />
@@ -467,6 +564,29 @@ export default function MyProfilePage() {
                 </div>
                 <span className="menu-item-text">Logout</span>
               </button>
+
+              <button
+                className="profile-menu-item"
+                onClick={() => setShowDeleteConfirm(true)}
+                style={{ color: '#ef4444' }}
+              >
+                <div className="menu-item-icon" style={{ backgroundColor: '#fee2e2' }}>
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#ef4444"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </div>
+                <span className="menu-item-text">Delete Account</span>
+              </button>
             </div>
           </div>
         ) : viewMode === 'edit' ? (
@@ -622,6 +742,21 @@ export default function MyProfilePage() {
                   maxLength={64}
                 />
               </div>
+              {/* Show reCAPTCHA when rate limit exceeded */}
+              {requiresRecaptcha && config.recaptchaSiteKey && (
+                <div className="form-group">
+                  <ReCAPTCHA
+                    key={recaptchaKey}
+                    sitekey={config.recaptchaSiteKey}
+                    onChange={(token: string | null) => setRecaptchaToken(token)}
+                    onExpired={() => setRecaptchaToken(null)}
+                    onError={() => {
+                      setRecaptchaToken(null)
+                      showToast('reCAPTCHA error. Please try again.', 'error')
+                    }}
+                  />
+                </div>
+              )}
               <button
                 className="btn primary save-btn"
                 onClick={handleChangePassword}
@@ -629,7 +764,8 @@ export default function MyProfilePage() {
                   isChangingPassword ||
                   !passwordForm.currentPassword ||
                   !passwordForm.newPassword ||
-                  !passwordForm.confirmPassword
+                  !passwordForm.confirmPassword ||
+                  (requiresRecaptcha && !recaptchaToken)
                 }
               >
                 {isChangingPassword ? 'Changing Password...' : 'Change Password'}
@@ -638,6 +774,83 @@ export default function MyProfilePage() {
           </div>
         ) : null}
       </main>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => !isDeletingAccount && setShowDeleteConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              background: isDarkMode ? '#1f2937' : 'white',
+              borderRadius: 12,
+              width: 'min(480px, 92vw)',
+              padding: 24,
+              boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 12, color: '#ef4444', textAlign: 'center' }}>
+              Delete Account
+            </h2>
+            <p style={{ marginTop: 0, marginBottom: 20, color: isDarkMode ? '#d1d5db' : '#666' }}>
+              Are you sure you want to delete your account? This action cannot be undone. All your
+              data, including your profile, likes, passes, conversations, and messages will be
+              permanently deleted.
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 12,
+              }}
+            >
+              <button
+                className="btn secondary"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeletingAccount}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: isDarkMode ? '#374151' : '#f3f4f6',
+                  color: isDarkMode ? '#f3f4f6' : '#333',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: isDeletingAccount ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: isDeletingAccount ? 'not-allowed' : 'pointer',
+                  opacity: isDeletingAccount ? 0.7 : 1,
+                }}
+              >
+                {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Container */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />

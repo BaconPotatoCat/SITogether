@@ -1,12 +1,22 @@
 import { useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import dynamic from 'next/dynamic'
 import { useToast } from '../hooks/useToast'
 import ToastContainer from '../components/ToastContainer'
 import { validatePassword } from '../utils/passwordValidation'
+import { useSession } from '../contexts/AuthContext'
+import { config } from '../utils/config'
+
+// Dynamically import ReCAPTCHA to avoid SSR issues (it's a client-only library)
+const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => mod.default), {
+  ssr: false,
+})
 
 export default function Auth() {
   const router = useRouter()
+  const { refreshSession } = useSession()
+  const siteKey = config.recaptchaSiteKey
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [confirmPasswordError, setConfirmPasswordError] = useState('')
@@ -15,6 +25,9 @@ export default function Auth() {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
+  const [recaptchaKey, setRecaptchaKey] = useState(0)
+  const [requiresRecaptcha, setRequiresRecaptcha] = useState(false)
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -113,6 +126,12 @@ export default function Auth() {
         showToast('Age must be between 18 and 65.', 'error')
         return
       }
+
+      // reCAPTCHA validation for registration (only if sitekey is configured)
+      if (siteKey && !recaptchaToken) {
+        showToast('Please complete the reCAPTCHA verification.', 'error')
+        return
+      }
     }
 
     setIsLoading(true)
@@ -120,7 +139,11 @@ export default function Auth() {
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register'
       const payload = isLogin
-        ? { email: formData.email, password: formData.password }
+        ? {
+            email: formData.email,
+            password: formData.password,
+            ...(requiresRecaptcha && recaptchaToken ? { recaptchaToken } : {}),
+          }
         : {
             email: formData.email,
             password: formData.password,
@@ -128,6 +151,7 @@ export default function Auth() {
             age: formData.age ? parseInt(formData.age) : null,
             gender: formData.gender,
             course: formData.course,
+            recaptchaToken,
           }
 
       const response = await fetch(endpoint, {
@@ -140,7 +164,24 @@ export default function Auth() {
 
       const result = await response.json()
 
+      // Check if reCAPTCHA is required (rate limit exceeded)
+      if (result.requiresRecaptcha && !result.success) {
+        if (isLogin) {
+          setRequiresRecaptcha(true)
+          setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA
+        }
+        showToast(result.error || 'Please complete the reCAPTCHA verification.', 'error')
+        setIsLoading(false)
+        return
+      }
+
       if (result.success) {
+        // Reset reCAPTCHA requirement on successful login
+        if (isLogin) {
+          setRequiresRecaptcha(false)
+          setRecaptchaToken(null)
+        }
+
         if (isLogin) {
           // Check if 2FA is required
           if (result.requiresTwoFactor) {
@@ -152,9 +193,11 @@ export default function Auth() {
             }, 500)
           } else {
             showToast('Login successful!', 'success')
-            // Redirect to home page after a brief delay
+            // Refresh session to update AuthContext before redirecting
+            await refreshSession()
+            // Use window.location for a full page reload to ensure session is properly loaded
             setTimeout(() => {
-              router.push('/')
+              window.location.href = '/'
             }, 500)
           }
         } else {
@@ -175,6 +218,8 @@ export default function Auth() {
           })
           setPasswordError('')
           setConfirmPasswordError('')
+          setRecaptchaToken(null)
+          setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA by changing key
 
           // Switch to login form after successful registration
           setIsLogin(true)
@@ -264,6 +309,9 @@ export default function Auth() {
     setEmailError('')
     setUnverifiedEmail(null)
     setShowForgotPassword(false)
+    setRecaptchaToken(null)
+    setRequiresRecaptcha(false)
+    setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA by changing key
     setFormData({
       email: '',
       password: '',
@@ -273,6 +321,10 @@ export default function Auth() {
       gender: '',
       course: '',
     })
+  }
+
+  const handleRecaptchaChange = (token: string | null) => {
+    setRecaptchaToken(token)
   }
 
   return (
@@ -442,6 +494,23 @@ export default function Auth() {
                   {confirmPasswordError && (
                     <span className="error-message">{confirmPasswordError}</span>
                   )}
+                </div>
+              )}
+
+              {/* Show reCAPTCHA for registration or when rate limit exceeded on login */}
+              {((!isLogin && siteKey && typeof siteKey === 'string' && siteKey.trim() !== '') ||
+                (isLogin && requiresRecaptcha && siteKey)) && (
+                <div className="form-group">
+                  <ReCAPTCHA
+                    key={recaptchaKey}
+                    sitekey={siteKey || ''}
+                    onChange={handleRecaptchaChange}
+                    onExpired={() => setRecaptchaToken(null)}
+                    onError={() => {
+                      setRecaptchaToken(null)
+                      showToast('reCAPTCHA error. Please try again.', 'error')
+                    }}
+                  />
                 </div>
               )}
 

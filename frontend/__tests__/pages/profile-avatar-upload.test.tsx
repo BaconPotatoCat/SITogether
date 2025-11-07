@@ -88,6 +88,13 @@ describe('Profile Avatar Upload Feature', () => {
       Promise.resolve({
         ok: true,
         status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              success: true,
+              data: mockUserData,
+            })
+          ),
         json: () =>
           Promise.resolve({
             success: true,
@@ -130,11 +137,19 @@ describe('Profile Avatar Upload Feature', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        text: () => Promise.resolve(JSON.stringify({ success: true, data: mockUserData })),
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              success: true,
+              data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
+            })
+          ),
         json: () =>
           Promise.resolve({
             success: true,
@@ -248,11 +263,19 @@ describe('Profile Avatar Upload Feature', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        text: () => Promise.resolve(JSON.stringify({ success: true, data: mockUserData })),
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              success: true,
+              data: { ...mockUserData, avatarUrl: 'data:image/png;base64,newimage' },
+            })
+          ),
         json: () =>
           Promise.resolve({
             success: true,
@@ -309,6 +332,9 @@ describe('Profile Avatar Upload Feature', () => {
     const mockFetch = jest
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ success: true, data: mockUserData })),
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       })
       .mockImplementationOnce(
@@ -359,6 +385,9 @@ describe('Profile Avatar Upload Feature', () => {
     // Clean up - resolve the pending promise
     if (resolveFetch) {
       resolveFetch({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify({ success: true, data: mockUserData })),
         json: () => Promise.resolve({ success: true, data: mockUserData }),
       } as Response)
     }

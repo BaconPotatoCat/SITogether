@@ -766,6 +766,23 @@ html.dark .chat-item {
   object-fit: cover;
 }
 
+.chat-avatar.blurred {
+  filter: blur(8px);
+  -webkit-filter: blur(8px);
+}
+
+.chat-avatar-sm.blurred {
+  filter: blur(6px);
+  -webkit-filter: blur(6px);
+}
+
+.chat-name-blurred {
+  filter: blur(4px);
+  -webkit-filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
+
 .chat-body .chat-head {
   display: flex;
   justify-content: space-between;
@@ -1422,8 +1439,128 @@ html.dark .progress-bar {
   line-height: 1.4;
 }
 
+/* Premium Page Dark Mode */
+html.dark .premium-content h1 {
+  color: #f3f4f6;
+}
+
+html.dark .work-in-progress {
+  color: #d1d5db;
+}
+
+html.dark .unlock-section {
+  background: #1f2937;
+  border: 1px solid #374151;
+}
+
+html.dark .unlock-section h2 {
+  color: #f3f4f6;
+}
+
+html.dark .unlock-section p {
+  color: #d1d5db;
+}
+
+html.dark .current-points {
+  color: #818cf8;
+}
+
+html.dark .required-points {
+  color: #f3f4f6;
+}
+
+html.dark .separator {
+  color: #9ca3af;
+}
+
+html.dark .progress-bar {
+  background: #374151;
+}
+
 html.dark .premium-info {
   color: #d1d5db;
+}
+
+html.dark .loading-message {
+  color: #d1d5db;
+}
+
+html.dark .points-text,
+html.dark .progress-percentage {
+  color: #f3f4f6;
+}
+
+html.dark .tasks-header {
+  background: #1f2937;
+  border-bottom: 1px solid #374151;
+}
+
+html.dark .tasks-header:hover {
+  background: #374151;
+}
+
+html.dark .header-progress .progress-bar {
+  background: #374151;
+}
+
+html.dark .daily-tasks-popup {
+  background: #1f2937;
+  border: 1px solid #374151;
+}
+
+html.dark .daily-tasks-header h2 {
+  color: #f3f4f6;
+}
+
+html.dark .daily-tasks-loading {
+  color: #d1d5db;
+}
+
+html.dark .close-button {
+  color: #9ca3af;
+}
+
+html.dark .close-button:hover {
+  background: #374151;
+  color: #f3f4f6;
+}
+
+html.dark .points-text {
+  color: #d1d5db;
+}
+
+html.dark .progress-percentage {
+  color: #818cf8;
+}
+
+html.dark .progress-bar {
+  background: #374151;
+}
+
+html.dark .task-item {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+html.dark .task-item.completed {
+  background: #064e3b;
+  border-color: #10b981;
+}
+
+html.dark .task-name {
+  color: #f3f4f6;
+}
+
+html.dark .task-points {
+  color: #9ca3af;
+}
+
+html.dark .task-completed {
+  color: #10b981;
+}
+
+html.dark .task-uncompleted {
+  color: #9ca3af;
 }
 
 /* Discovery Page */
@@ -1441,6 +1578,11 @@ html.dark .premium-info {
 .discovery-header h2 {
   color: #333;
   margin: 0;
+  transition: color 0.3s ease;
+}
+
+html.dark .discovery-header h2 {
+  color: #f3f4f6;
 }
 
 .filter-toggle {
@@ -1478,6 +1620,12 @@ html.dark .premium-info {
   padding: 1.5rem;
   border-radius: 12px;
   margin-bottom: 2rem;
+  transition: background-color 0.3s ease;
+}
+
+html.dark .filters-section {
+  background: #1f2937;
+  border: 1px solid #374151;
 }
 
 .filter-row {
@@ -1498,6 +1646,11 @@ html.dark .premium-info {
   font-weight: 500;
   color: #333;
   font-size: 0.9rem;
+  transition: color 0.3s ease;
+}
+
+html.dark .filter-group label {
+  color: #f3f4f6;
 }
 
 .filter-group select,
@@ -1506,6 +1659,23 @@ html.dark .premium-info {
   border: 1px solid #e9ecef;
   border-radius: 6px;
   font-size: 0.9rem;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+}
+
+html.dark .filter-group select,
+html.dark .filter-group input {
+  background: #111827;
+  border-color: #374151;
+  color: #f3f4f6;
+}
+
+html.dark .filter-group select:focus,
+html.dark .filter-group input:focus {
+  border-color: #6366f1;
+  outline: none;
 }
 
 .age-range {
@@ -1761,6 +1931,11 @@ html.dark .premium-info {
   text-align: center;
   padding: 3rem;
   color: #666;
+  transition: color 0.3s ease;
+}
+
+html.dark .no-profiles {
+  color: #d1d5db;
 }
 
 .no-profiles p {
@@ -1815,6 +1990,12 @@ html.dark .premium-info {
   max-height: 85vh; /* Increase from 80vh to 85vh */
   overflow-y: auto;
   overflow-x: hidden;
+  transition: background-color 0.3s ease;
+}
+
+html.dark .filter-modal-popup {
+  background: #1f2937;
+  border: 1px solid #374151;
 }
 
 .filter-modal-mobile {

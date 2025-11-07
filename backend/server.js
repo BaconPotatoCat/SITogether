@@ -10,16 +10,39 @@ const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
-require('dotenv').config();
+const {
+  hashEmail,
+  prepareEmailForStorage,
+  encryptField,
+  decryptField,
+  decryptUserFields,
+  decryptUsersFields,
+} = require('./utils/fieldEncryption');
+const config = require('./lib/config');
 
+const {
+  loginLimiter,
+  passwordResetLimiter,
+  changePasswordLimiter,
+  registerLimiter,
+  otpLimiter,
+  resendOtpLimiter,
+  resendVerificationLimiter,
+  sensitiveDataLimiter,
+} = require('./middleware/rateLimiter');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
+
+// Trust proxy configuration
+if (!isNaN(config.trustProxy) && config.trustProxy > 0) {
+  app.set('trust proxy', config.trustProxy);
+}
 
 // Middleware
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+    origin: config.frontend.externalUrl,
     credentials: true,
   })
 );
@@ -28,6 +51,20 @@ app.use(morgan('combined'));
 // Increase body size limit to 10MB for image uploads
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Error handler for JSON parsing errors (must be after json/urlencoded middleware)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    // Log detailed error for debugging
+    console.error('JSON parsing error:', err.message);
+    // Return generic error message to user
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid request. Please try again.',
+    });
+  }
+  next(err);
+});
 
 // Basic route
 app.get('/', (req, res) => {
@@ -90,7 +127,7 @@ app.get('/api', (req, res) => {
 });
 
 // Users API route (protected)
-app.get('/api/users', authenticateToken, async (req, res) => {
+app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.userId;
 
@@ -165,10 +202,13 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt all user fields for response
+    const decryptedUsers = await decryptUsersFields(users);
+
     res.json({
       success: true,
-      data: users,
-      count: users.length,
+      data: decryptedUsers,
+      count: decryptedUsers.length,
     });
   } catch (error) {
     console.error('Prisma query error:', error);
@@ -213,9 +253,14 @@ app.get('/api/users/:id', async (req, res) => {
       });
     }
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
-      data: user,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -257,13 +302,24 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedCourse, encryptedBio, encryptedInterests] = await Promise.all([
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(course || null),
+      encryptField(bio || null),
+      encryptField(Array.isArray(interests) ? interests : [], (value) => {
+        if (!Array.isArray(value) || value.length === 0) return null;
+        return JSON.stringify(value);
+      }),
+    ]);
+
     // Prepare update data
     const updateData = {
       name,
-      age: ageNum,
-      course: course || null,
-      bio: bio || null,
-      interests: Array.isArray(interests) ? interests : [],
+      age: encryptedAge,
+      course: encryptedCourse,
+      bio: encryptedBio,
+      interests: encryptedInterests,
     };
 
     // Only update avatarUrl if provided
@@ -294,10 +350,15 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(updatedUser.email);
+    const decryptedUser = await decryptUserFields(updatedUser);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: updatedUser,
+      data: userResponse,
     });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -308,17 +369,156 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Authentication routes
-// Register endpoint
-app.post('/api/auth/register', async (req, res) => {
+// Delete user by ID (Protected - requires authentication and authorization)
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   try {
-    const { email, password, name, age, gender, course } = req.body;
+    const { id } = req.params;
+
+    // Authorization check: Users can only delete their own account
+    if (req.user.userId !== id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only delete your own account.',
+      });
+    }
+
+    // Verify user exists
+    const user = await prisma.user.findUnique({
+      where: { id: id },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Before deleting the user, find and delete conversations where both users are deleted
+    // (i.e., conversations where this user is involved AND the other user ID is already null)
+    const conversationsToDelete = await prisma.conversation.findMany({
+      where: {
+        OR: [
+          { userAId: id, userBId: null }, // This user is userA, userB is already deleted
+          { userAId: null, userBId: id }, // This user is userB, userA is already deleted
+        ],
+      },
+      select: { id: true },
+    });
+
+    // Delete conversations where both users are deleted (messages will be cascade deleted)
+    if (conversationsToDelete.length > 0) {
+      await prisma.conversation.deleteMany({
+        where: {
+          id: { in: conversationsToDelete.map((c) => c.id) },
+        },
+      });
+    }
+
+    // Also clean up any orphaned conversations (where both user IDs are already null)
+    // This handles edge cases where both users might have been deleted simultaneously
+    await prisma.conversation.deleteMany({
+      where: {
+        userAId: null,
+        userBId: null,
+      },
+    });
+
+    // Delete the user (this will set userAId/userBId to null for remaining conversations)
+    await prisma.user.delete({
+      where: { id: id },
+    });
+
+    // Clear the authentication cookie
+    res.clearCookie('token');
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+
+    // Handle specific Prisma errors
+    if (error.code === 'P2025') {
+      // Record not found
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Return detailed error in development, generic in production
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete account',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    });
+  }
+});
+
+// Authentication routes
+// Helper function to verify reCAPTCHA token
+async function verifyRecaptcha(token) {
+  if (!token) {
+    return { success: false, error: 'reCAPTCHA token is missing' };
+  }
+
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secretKey) {
+    console.warn('RECAPTCHA_SECRET_KEY is not set. Skipping reCAPTCHA verification.');
+    return { success: true }; // Skip verification if secret key is not configured
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        secret: secretKey,
+        response: token,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: 'reCAPTCHA verification failed',
+        errorCodes: data['error-codes'] || [],
+      };
+    }
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error);
+    return { success: false, error: 'Failed to verify reCAPTCHA' };
+  }
+}
+
+// Register endpoint
+app.post('/api/auth/register', registerLimiter, async (req, res) => {
+  try {
+    const { email, password, name, age, gender, course, recaptchaToken } = req.body;
 
     // Validate required fields
     if (!email || !password || !name || !age || !gender) {
       return res.status(400).json({
         success: false,
         error: 'Email, password, name, age, and gender are required',
+      });
+    }
+
+    // Verify reCAPTCHA token
+    const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+    if (!recaptchaVerification.success) {
+      return res.status(400).json({
+        success: false,
+        error: recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
       });
     }
 
@@ -359,9 +559,12 @@ app.post('/api/auth/register', async (req, res) => {
     //   });
     // }
 
-    // Check if user already exists
+    // Prepare email for storage (encrypt and hash)
+    const { emailHash, encryptedEmail } = await prepareEmailForStorage(email);
+
+    // Check if user already exists by emailHash
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (existingUser) {
@@ -375,6 +578,13 @@ app.post('/api/auth/register', async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    // Encrypt user fields for storage
+    const [encryptedAge, encryptedGender, encryptedCourse] = await Promise.all([
+      encryptField(ageNum, (value) => value.toString()),
+      encryptField(gender),
+      encryptField(course || null),
+    ]);
+
     // Generate verification token and expiration (1 hour from now)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -382,15 +592,16 @@ app.post('/api/auth/register', async (req, res) => {
     // Create user and verification token in a transaction
     const user = await prisma.user.create({
       data: {
-        email,
+        email: encryptedEmail,
+        emailHash: emailHash,
         password: hashedPassword,
         name,
-        age: ageNum,
-        gender,
+        age: encryptedAge,
+        gender: encryptedGender,
         role: 'User',
-        course,
+        course: encryptedCourse,
         bio: null,
-        interests: [],
+        interests: null,
         verified: false,
         tokens: {
           create: {
@@ -416,6 +627,11 @@ app.post('/api/auth/register', async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response (client doesn't need to see encrypted values)
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     // Create UserPoints record for the new user
     await prisma.userPoints.create({
       data: {
@@ -431,7 +647,7 @@ app.post('/api/auth/register', async (req, res) => {
       res.status(201).json({
         success: true,
         message: 'User registered successfully. Please check your email to verify your account.',
-        data: user,
+        data: userResponse,
       });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
@@ -441,7 +657,7 @@ app.post('/api/auth/register', async (req, res) => {
         success: true,
         message:
           'User registered successfully, but verification email could not be sent. Please contact support.',
-        data: user,
+        data: userResponse,
         warning: 'Verification email not sent',
       });
     }
@@ -533,7 +749,7 @@ app.get('/api/auth/verify', async (req, res) => {
 });
 
 // Resend verification email endpoint
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -544,9 +760,12 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
     });
 
     if (!user) {
@@ -563,6 +782,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
         error: 'Account is already verified. You can log in now.',
       });
     }
+
+    // Decrypt email for sending verification email
+    const decryptedEmail = await decryptField(user.email);
 
     // Generate new verification token and expiration
     const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -588,7 +810,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 
     // Send verification email
     try {
-      await sendVerificationEmail(user.email, user.name, verificationToken);
+      await sendVerificationEmail(decryptedEmail, user.name, verificationToken);
       res.status(200).json({
         success: true,
         message: 'Verification email sent successfully. Please check your email.',
@@ -622,9 +844,21 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, recaptchaToken } = req.body;
+
+    // If reCAPTCHA token is provided, verify it (rate limit was exceeded)
+    if (recaptchaToken) {
+      const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+      if (!recaptchaVerification.success) {
+        return res.status(400).json({
+          success: false,
+          error: recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
+          requiresRecaptcha: true,
+        });
+      }
+    }
 
     // Validate required fields
     if (!email || !password) {
@@ -634,9 +868,12 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -672,6 +909,9 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
+    // Decrypt email for use in response and email sending
+    const decryptedEmail = await decryptField(user.email);
+
     // Check if account is verified
     if (!user.verified) {
       return res.status(403).json({
@@ -679,7 +919,7 @@ app.post('/api/auth/login', async (req, res) => {
         error:
           'Account not verified. Please check your email and verify your account before logging in.',
         requiresVerification: true,
-        email: user.email,
+        email: decryptedEmail,
       });
     }
 
@@ -708,15 +948,13 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
     // Generate temporary JWT token for 2FA verification (valid for 10 minutes)
-    const tempToken = jwt.sign(
-      { userId: user.id, requiresTwoFactor: true },
-      process.env.JWT_SECRET,
-      { expiresIn: '10m' }
-    );
+    const tempToken = jwt.sign({ userId: user.id, requiresTwoFactor: true }, config.jwtSecret, {
+      expiresIn: '10m',
+    });
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -753,7 +991,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Verify 2FA code and complete login
-app.post('/api/auth/verify-2fa', async (req, res) => {
+app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
   try {
     const { tempToken, code } = req.body;
 
@@ -767,7 +1005,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -819,12 +1057,12 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     });
 
     // Generate final JWT token
-    const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
     // Set cookie with token
     res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.isProduction,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -935,7 +1173,7 @@ app.post('/api/auth/test-login', async (req, res) => {
 });
 
 // Resend 2FA code endpoint
-app.post('/api/auth/resend-2fa', async (req, res) => {
+app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
   try {
     const { tempToken } = req.body;
 
@@ -949,7 +1187,7 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
     // Verify temporary token
     let decoded;
     try {
-      decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+      decoded = jwt.verify(tempToken, config.jwtSecret);
     } catch (error) {
       return res.status(401).json({
         success: false,
@@ -985,6 +1223,9 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
       });
     }
 
+    // Decrypt email for sending 2FA email
+    const decryptedEmail = await decryptField(user.email);
+
     // Generate new 6-digit 2FA code
     const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -1011,7 +1252,7 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
 
     // Send 2FA email
     try {
-      await sendTwoFactorEmail(user.email, user.name, twoFactorCode);
+      await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
       res.json({
         success: true,
@@ -1055,69 +1296,87 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Change password endpoint (protected)
-app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { currentPassword, newPassword } = req.body;
+app.post(
+  '/api/auth/change-password',
+  authenticateToken,
+  changePasswordLimiter,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { currentPassword, newPassword, recaptchaToken } = req.body;
 
-    // Validate password change according to NIST 2025 guidelines
-    const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
-    if (!passwordValidation.isValid) {
-      return res.status(400).json({
+      // If reCAPTCHA token is provided, verify it (rate limit was exceeded)
+      if (recaptchaToken) {
+        const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+        if (!recaptchaVerification.success) {
+          return res.status(400).json({
+            success: false,
+            error:
+              recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
+            requiresRecaptcha: true,
+          });
+        }
+      }
+
+      // Validate password change according to NIST 2025 guidelines
+      const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join('; '),
+        });
+      }
+
+      // Find user by ID
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          password: true,
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+        });
+      }
+
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+      if (!isValidPassword) {
+        return res.status(401).json({
+          success: false,
+          error: 'Current password is incorrect',
+        });
+      }
+
+      // Hash new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update user password
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+
+      res.json({
+        success: true,
+        message: 'Password changed successfully',
+      });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({
         success: false,
-        error: passwordValidation.errors.join('; '),
+        error: 'Failed to change password',
+        message: error.message,
       });
     }
-
-    // Find user by ID
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        password: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
-
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        error: 'Current password is incorrect',
-      });
-    }
-
-    // Hash new password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update user password
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    res.json({
-      success: true,
-      message: 'Password changed successfully',
-    });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to change password',
-      message: error.message,
-    });
   }
-});
+);
 
 // Session endpoint (protected)
 app.get('/api/auth/session', authenticateToken, async (req, res) => {
@@ -1127,16 +1386,12 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       where: { id: req.user.userId },
       select: {
         id: true,
-        email: true,
         name: true,
         age: true,
-        gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
         avatarUrl: true,
-        verified: true,
       },
     });
 
@@ -1147,9 +1402,14 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
       });
     }
 
+    // Decrypt all fields for response
+    const decryptedEmail = await decryptField(user.email);
+    const decryptedUser = await decryptUserFields(user);
+    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
     res.json({
       success: true,
-      user: user,
+      user: userResponse,
     });
   } catch (error) {
     console.error('Session error:', error);
@@ -1162,7 +1422,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
 });
 
 // Forgot password endpoint (request password reset)
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -1173,9 +1433,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Hash email to find user by emailHash
+    const emailHash = hashEmail(email);
+
+    // Find user by emailHash
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { emailHash },
       select: {
         id: true,
         email: true,
@@ -1202,24 +1465,26 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
+    // Decrypt email for sending password reset email
+    const decryptedEmail = await decryptField(user.email);
+
     // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Delete any existing password reset tokens for this email
+    // Delete any existing password reset tokens for this user
     await prisma.token.deleteMany({
       where: {
-        email,
+        userId: user.id,
         type: 'PASSWORD_RESET',
       },
     });
 
-    // Create new password reset token
+    // Create new password reset token (using userId instead of email)
     const createdToken = await prisma.token.create({
       data: {
         token: resetToken,
         type: 'PASSWORD_RESET',
-        email: user.email,
         userId: user.id,
         expiresAt: resetTokenExpires,
       },
@@ -1228,7 +1493,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // Send password reset email
     const { sendPasswordResetEmail } = require('./lib/email');
     try {
-      await sendPasswordResetEmail(user.email, user.name, resetToken);
+      await sendPasswordResetEmail(decryptedEmail, user.name, resetToken);
 
       res.json({
         success: true,
@@ -1263,7 +1528,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Reset password endpoint (verify token and update password)
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
@@ -1310,9 +1575,16 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    // Find user by email
+    // Find user by userId (from token)
+    if (!resetToken.userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid password reset token',
+      });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: resetToken.email },
+      where: { id: resetToken.userId },
     });
 
     if (!user) {
@@ -1796,17 +2068,63 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
       },
     });
 
-    // Format the response
-    const likedProfiles = likes.map((like) => ({
-      id: like.liked.id,
-      name: like.liked.name,
-      age: like.liked.age,
-      gender: like.liked.gender,
-      course: like.liked.course,
-      bio: like.liked.bio,
-      interests: like.liked.interests,
-      avatarUrl: like.liked.avatarUrl,
-    }));
+    // Format the response and check if intro message exists for each profile
+    // Filter out likes where the liked user has been deleted (liked is null)
+    const validLikes = likes.filter((like) => like.liked !== null);
+
+    const likedProfiles = await Promise.all(
+      validLikes.map(async (like) => {
+        const likedId = like.liked.id;
+        // Find conversation between the two users
+        const userAId = likerId < likedId ? likerId : likedId;
+        const userBId = likerId < likedId ? likedId : likerId;
+
+        // Try to find conversation - handle case where one user might be deleted
+        let conversation = null;
+        try {
+          conversation = await prisma.conversation.findUnique({
+            where: { userAId_userBId: { userAId, userBId } },
+            include: {
+              messages: {
+                where: {
+                  senderId: likerId,
+                },
+                take: 1,
+              },
+            },
+          });
+        } catch (error) {
+          // If conversation query fails (e.g., due to null user IDs), conversation remains null
+          console.warn(
+            `Failed to find conversation for users ${userAId} and ${userBId}:`,
+            error.message
+          );
+        }
+
+        // Check if intro message exists (conversation exists and has at least one message from liker)
+        // Also check that conversation doesn't have null user IDs (both users still exist)
+        const hasIntro =
+          !!conversation &&
+          conversation.messages.length > 0 &&
+          conversation.userAId !== null &&
+          conversation.userBId !== null;
+
+        // Decrypt all user fields (including interests)
+        const decryptedUser = await decryptUserFields(like.liked);
+
+        return {
+          id: decryptedUser.id,
+          name: decryptedUser.name,
+          age: decryptedUser.age,
+          gender: decryptedUser.gender,
+          course: decryptedUser.course,
+          bio: decryptedUser.bio,
+          interests: decryptedUser.interests || [], // Ensure interests is always an array
+          avatarUrl: decryptedUser.avatarUrl,
+          hasIntro,
+        };
+      })
+    );
 
     res.json({
       success: true,
@@ -1850,28 +2168,45 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
     });
 
     // Check which likes have intro messages
+    // Filter out likes where the liked user has been deleted (liked is null)
+    const validLikes = likes.filter((like) => like.liked !== null);
     const likesWithoutIntro = [];
 
-    for (const like of likes) {
+    for (const like of validLikes) {
       const likedId = like.likedId;
       // Find conversation between the two users
       const userAId = likerId < likedId ? likerId : likedId;
       const userBId = likerId < likedId ? likedId : likerId;
 
-      const conversation = await prisma.conversation.findUnique({
-        where: { userAId_userBId: { userAId, userBId } },
-        include: {
-          messages: {
-            where: {
-              senderId: likerId,
+      // Try to find conversation - handle case where one user might be deleted
+      let conversation = null;
+      try {
+        conversation = await prisma.conversation.findUnique({
+          where: { userAId_userBId: { userAId, userBId } },
+          include: {
+            messages: {
+              where: {
+                senderId: likerId,
+              },
+              take: 1,
             },
-            take: 1,
           },
-        },
-      });
+        });
+      } catch (error) {
+        // If conversation query fails (e.g., due to null user IDs), conversation remains null
+        console.warn(
+          `Failed to find conversation for users ${userAId} and ${userBId}:`,
+          error.message
+        );
+      }
 
-      // If no conversation exists or no messages from the liker, they haven't sent an intro
-      if (!conversation || conversation.messages.length === 0) {
+      // If no conversation exists, no messages from the liker, or conversation has null user IDs, they haven't sent an intro
+      if (
+        !conversation ||
+        conversation.messages.length === 0 ||
+        conversation.userAId === null ||
+        conversation.userBId === null
+      ) {
         likesWithoutIntro.push({
           id: like.liked.id,
           name: like.liked.name,
@@ -2005,13 +2340,27 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
       const validation = validateAndSanitizeMessage(introMessage);
 
       if (validation.isValid) {
-        createdIntroMessage = await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            senderId: likerId,
-            content: validation.sanitized,
-          },
-        });
+        // Encrypt intro message content before storing (application-level encryption)
+        if (config.encryptionKey) {
+          const encryptedContent = await encryptField(validation.sanitized);
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: encryptedContent, // Store encrypted content
+            },
+          });
+        } else {
+          console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+          // Fallback: create without encryption if key is not configured
+          createdIntroMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: likerId,
+              content: validation.sanitized,
+            },
+          });
+        }
       }
       // If validation fails, we silently ignore the intro message (it's optional)
     }
@@ -2206,12 +2555,21 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create the intro message with sanitized content
+    // Encrypt intro message content before storing (application-level encryption)
+    let encryptedContent;
+    if (config.encryptionKey) {
+      encryptedContent = await encryptField(validation.sanitized);
+    } else {
+      console.warn('ENCRYPTION_KEY is not set. Intro message will not be encrypted.');
+      encryptedContent = validation.sanitized; // Fallback to unencrypted
+    }
+
+    // Create the intro message with encrypted content
     const createdIntroMessage = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         senderId: likerId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
@@ -2249,18 +2607,52 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
       },
     });
 
+    // Decrypt lastMessage content if present (application-level decryption)
     const result = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
-        const otherUser = await prisma.user.findUnique({
-          where: { id: otherUserId },
-          select: { id: true, name: true, avatarUrl: true },
-        });
+        // Handle case where other user might be deleted (null)
+        const otherUser = otherUserId
+          ? await prisma.user.findUnique({
+              where: { id: otherUserId },
+              select: { id: true, name: true, avatarUrl: true },
+            })
+          : null;
+
+        // Decrypt lastMessage if it exists
+        let lastMessage = c.messages[0] || null;
+        if (lastMessage && config.encryptionKey) {
+          try {
+            const decryptedContent = await decryptField(lastMessage.content);
+            lastMessage = {
+              ...lastMessage,
+              content: decryptedContent,
+            };
+          } catch (error) {
+            // If decryption fails, assume message is not encrypted (legacy data)
+            console.warn(
+              `Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`,
+              error.message
+            );
+          }
+        }
+
+        // Hide name, avatar, and ID when conversation is locked (before match) or when user is deleted
+        const sanitizedOtherUser =
+          otherUser && c.isLocked
+            ? {
+                name: 'Hidden User',
+                avatarUrl: null,
+              }
+            : otherUser || {
+                name: 'Deleted User',
+                avatarUrl: null,
+              };
         return {
           id: c.id,
           isLocked: c.isLocked,
-          lastMessage: c.messages[0] || null,
-          otherUser,
+          lastMessage,
+          otherUser: sanitizedOtherUser,
         };
       })
     );
@@ -2284,7 +2676,11 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     if (!conversation)
       return res.status(404).json({ success: false, error: 'Conversation not found' });
 
-    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+    // Handle null user IDs (when a user has been deleted)
+    if (
+      (conversation.userAId !== userId && conversation.userBId !== userId) ||
+      (!conversation.userAId && !conversation.userBId)
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
     }
 
@@ -2293,25 +2689,64 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
       orderBy: { createdAt: 'asc' },
     });
 
+    // Decrypt message content (application-level decryption)
+    const decryptedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        try {
+          // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
+          if (config.encryptionKey) {
+            const decryptedContent = await decryptField(msg.content);
+            return {
+              ...msg,
+              content: decryptedContent,
+            };
+          } else {
+            // No encryption key configured, return as-is
+            return msg;
+          }
+        } catch (error) {
+          // If decryption fails, assume message is not encrypted (legacy data)
+          console.warn(`Failed to decrypt message ${msg.id}, assuming unencrypted:`, error.message);
+          return msg;
+        }
+      })
+    );
+
     // Include lightweight participant details to render avatars in chat UI
+    // Handle null user IDs when a user has been deleted
     const [userA, userB] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: conversation.userAId },
-        select: { id: true, name: true, avatarUrl: true },
-      }),
-      prisma.user.findUnique({
-        where: { id: conversation.userBId },
-        select: { id: true, name: true, avatarUrl: true },
-      }),
+      conversation.userAId
+        ? prisma.user.findUnique({
+            where: { id: conversation.userAId },
+            select: { id: true, name: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
+      conversation.userBId
+        ? prisma.user.findUnique({
+            where: { id: conversation.userBId },
+            select: { id: true, name: true, avatarUrl: true },
+          })
+        : Promise.resolve(null),
     ]);
     const me = userA && userA.id === userId ? userA : userB;
+    // Hide other user's name, avatar, and ID when conversation is locked (before match) or when user is deleted
     const other = userA && userA.id === userId ? userB : userA;
+    const sanitizedOther =
+      other && conversation.isLocked
+        ? {
+            name: 'Hidden User',
+            avatarUrl: null,
+          }
+        : other || {
+            name: 'Deleted User',
+            avatarUrl: null,
+          };
 
     res.json({
       success: true,
       isLocked: conversation.isLocked,
-      messages,
-      participants: { me, other },
+      messages: decryptedMessages,
+      participants: { me, other: sanitizedOther },
       currentUserId: userId,
     });
   } catch (error) {
@@ -2347,25 +2782,50 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation)
       return res.status(404).json({ success: false, error: 'Conversation not found' });
-    if (conversation.userAId !== userId && conversation.userBId !== userId) {
+    // Handle null user IDs (when a user has been deleted)
+    if (
+      (conversation.userAId !== userId && conversation.userBId !== userId) ||
+      (!conversation.userAId && !conversation.userBId)
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    // Prevent sending messages if the other user has been deleted
+    if (!conversation.userAId || !conversation.userBId) {
+      return res
+        .status(410)
+        .json({ success: false, error: 'Cannot send message: other user has been deleted' });
     }
     if (conversation.isLocked) {
       return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
     }
 
+    // Encrypt message content before storing (application-level encryption)
+    if (!config.encryptionKey) {
+      console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
+      return res.status(500).json({ success: false, error: 'Encryption key not configured' });
+    }
+
+    const encryptedContent = await encryptField(validation.sanitized);
+
     const message = await prisma.message.create({
       data: {
         conversationId: id,
         senderId: userId,
-        content: validation.sanitized,
+        content: encryptedContent, // Store encrypted content
       },
     });
 
     // touch conversation updatedAt
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
-    res.status(201).json({ success: true, message });
+    // Return message with decrypted content for client
+    const decryptedContent = await decryptField(message.content);
+    const messageResponse = {
+      ...message,
+      content: decryptedContent, // Return decrypted content to client
+    };
+
+    res.status(201).json({ success: true, message: messageResponse });
   } catch (error) {
     console.error('Send message error:', error);
     res
@@ -2503,7 +2963,7 @@ app.use((err, req, res, _next) => {
   console.error(err.stack);
   res.status(500).json({
     message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    error: config.isDevelopment ? err.message : 'Internal server error',
   });
 });
 
@@ -2517,5 +2977,5 @@ app.use('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 SITogether Backend server is running on port ${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 Environment: ${config.nodeEnv}`);
 });

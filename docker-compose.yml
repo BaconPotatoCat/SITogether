@@ -7,10 +7,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: sitogether-frontend
-    env_file:
-      - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
+      NEXT_PUBLIC_BACKEND_INTERNALURL: ${NEXT_PUBLIC_BACKEND_INTERNALURL}
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -21,7 +21,7 @@ services:
       - /app/node_modules
       - /app/.next
     command: >
-      sh -c "npm run dev"
+      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then npm run build && npm start; else npm run dev; fi"
     networks:
       - sitogether-frontend-network
     depends_on:
@@ -40,17 +40,22 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sitogether-backend
-    env_file:
-      - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
+      JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: ${DATABASE_URL}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      NEXT_PUBLIC_FRONTEND_EXTERNALURL: ${NEXT_PUBLIC_FRONTEND_EXTERNALURL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      TRUST_PROXY: ${TRUST_PROXY}
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app
       - /app/node_modules
     command: >
-      sh -c "npx prisma db push && npm run dev"
+      sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then (npx prisma migrate deploy || npx prisma db push) && npm start; else npx prisma db push && npm run dev; fi"
     networks:
       - sitogether-frontend-network
       - sitogether-backend-network
@@ -93,10 +98,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sitogether-prisma-studio
-    env_file:
-      - .env
     environment:
-      NODE_ENV: development
+      NODE_ENV: ${NODE_ENV}
       DATABASE_URL: ${DATABASE_URL}
     ports:
       - "5555:5555"
