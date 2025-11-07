@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next'
+import { config } from '../../../utils/config'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -6,21 +7,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Only allow in test environment
-  // Check both NODE_ENV and a custom TEST_MODE variable (for runtime flexibility)
-  const isTestMode = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true'
-  if (!isTestMode) {
+  if (!config.isTest) {
     return res.status(403).json({
       success: false,
       error: 'Test login endpoint is only available in test environment',
       debug: {
         NODE_ENV: process.env.NODE_ENV,
-        TEST_MODE: process.env.TEST_MODE,
+        isTest: config.isTest,
       },
     })
   }
 
   try {
-    const backendUrl = `${process.env.NEXT_PUBLIC_BACKEND_INTERNALURL}/api/auth/test-login`
+    const backendUrl = `${config.backendInternalUrl}/api/auth/test-login`
 
     const response = await fetch(backendUrl, {
       method: 'POST',
