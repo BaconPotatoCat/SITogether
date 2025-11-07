@@ -24,6 +24,15 @@ services:
       sh -c "npm run dev"
     networks:
       - sitogether-frontend-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   # Backend service
   backend:
@@ -46,7 +55,14 @@ services:
       - sitogether-frontend-network
       - sitogether-backend-network
     depends_on:
-      - sitogether-db
+      sitogether-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:5000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Database service
   sitogether-db:
@@ -63,6 +79,12 @@ services:
     # No ports exposed - only accessible by other containers in the same networks
     networks:
       - sitogether-backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   # Prisma Studio service

@@ -6,10 +6,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Only allow in test environment
-  if (process.env.NODE_ENV !== 'test') {
+  // Check both NODE_ENV and a custom TEST_MODE variable (for runtime flexibility)
+  const isTestMode = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true'
+  if (!isTestMode) {
     return res.status(403).json({
       success: false,
       error: 'Test login endpoint is only available in test environment',
+      debug: {
+        NODE_ENV: process.env.NODE_ENV,
+        TEST_MODE: process.env.TEST_MODE,
+      },
     })
   }
 
