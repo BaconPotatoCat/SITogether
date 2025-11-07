@@ -11,6 +11,9 @@
 
 const crypto = require('crypto');
 const https = require('https');
+function getHibpHash(value) {
+  return crypto.createHash('sha1').update(value, 'utf8').digest('hex').toUpperCase();
+}
 
 /**
  * Checks if a password has been compromised using Have I Been Pwned API
@@ -19,7 +22,7 @@ const https = require('https');
  */
 async function checkPasswordPwned(password) {
   try {
-    const hash = crypto.createHash('sha1').update(password, 'utf8').digest('hex').toUpperCase();
+    const hash = getHibpHash(password);
 
     // Extract first 5 characters (prefix) and remaining 35 characters (suffix)
     const prefix = hash.substring(0, 5);

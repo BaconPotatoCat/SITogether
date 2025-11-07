@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
+const lusca = require('lusca');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
@@ -47,7 +48,11 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(cookieParser());
+app.use(lusca.csrf());
+app.use(lusca.xframe('SAMEORIGIN'));
+app.use(lusca.xssProtection(true));
 app.use(morgan('combined'));
 // Increase body size limit to 10MB for image uploads
 app.use(express.json({ limit: '10mb' }));
@@ -1949,7 +1954,7 @@ app.post('/api/admin/reports/:id/invalid', reportLimiter, authenticateAdmin, asy
 });
 
 // Update report status (Admin only)
-app.put('/api/admin/reports/:id', authenticateAdmin, async (req, res) => {
+app.put('/api/admin/reports/:id', reportLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;

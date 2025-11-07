@@ -2,23 +2,23 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const config = require('../lib/config');
 
-// Admin Authentication Middleware
 const authenticateAdmin = async (req, res, next) => {
   try {
-    // Prefer HttpOnly cookie for tokens
-    let token = req.cookies?.token;
+    // Extract token safely
+    const cookieToken = typeof req.cookies?.token === 'string' ? req.cookies.token.trim() : null;
+    const headerAuth =
+      typeof req.headers?.authorization === 'string' ? req.headers.authorization.trim() : null;
 
-    // Fallback to Authorization header if Bearer format is correct
-    if (!token && req.headers?.authorization) {
-      const authHeader = req.headers.authorization;
-      if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-        token = authHeader.split(' ')[1];
-      } else {
-        return res.status(400).json({
-          success: false,
-          error: 'Malformed authorization header. Expected Bearer token.',
-        });
-      }
+    let token = null;
+
+    // Validate header format explicitly
+    if (cookieToken) {
+      token = cookieToken;
+    } else if (
+      headerAuth &&
+      /^Bearer\s+[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$/.test(headerAuth)
+    ) {
+      token = headerAuth.split(' ')[1];
     }
 
     // Enforce presence of token
@@ -75,7 +75,6 @@ const authenticateAdmin = async (req, res, next) => {
 
     // Attach verified user to request
     req.user = { id: user.id, email: user.email, role: user.role };
-
     next();
   } catch (error) {
     console.error('Admin authentication error:', error);
