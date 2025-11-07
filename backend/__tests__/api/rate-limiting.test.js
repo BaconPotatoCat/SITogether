@@ -167,9 +167,9 @@ describe('Rate Limiting Tests', () => {
   });
 
   describe('Registration Rate Limiting', () => {
-    it('should allow requests within the limit (3 per hour)', async () => {
-      // Make 3 requests - should all succeed
-      for (let i = 0; i < 3; i++) {
+    it('should allow requests within the limit (5 per 15 minutes)', async () => {
+      // Make 5 requests - should all succeed
+      for (let i = 0; i < 5; i++) {
         const response = await request(app)
           .post('/api/auth/register')
           .send({
@@ -185,23 +185,23 @@ describe('Rate Limiting Tests', () => {
       }
     });
 
-    it('should block requests exceeding the limit (4th request)', async () => {
-      // Make 3 successful requests first
-      for (let i = 0; i < 3; i++) {
-        await request(app)
-          .post('/api/auth/register')
-          .send({
-            email: `test${i}@example.com`,
-            password: 'password123',
-            name: 'Test User',
-            age: 25,
-            gender: 'Male',
-          });
+    it('should block requests exceeding the limit (6th request with same email)', async () => {
+      const sameEmail = 'repeated@example.com';
+
+      // Make 5 successful requests with the same email
+      for (let i = 0; i < 5; i++) {
+        await request(app).post('/api/auth/register').send({
+          email: sameEmail,
+          password: 'password123',
+          name: 'Test User',
+          age: 25,
+          gender: 'Male',
+        });
       }
 
-      // 4th request should be rate limited
+      // 6th request with same email should be rate limited
       const response = await request(app).post('/api/auth/register').send({
-        email: 'test4@example.com',
+        email: sameEmail,
         password: 'password123',
         name: 'Test User',
         age: 25,
@@ -211,6 +211,46 @@ describe('Rate Limiting Tests', () => {
       expect(response.status).toBe(429);
       expect(response.body.success).toBe(false);
       expect(response.body.error).toContain('Too many registration attempts');
+    });
+
+    it('should NOT block different emails from same IP (solves shared network issue)', async () => {
+      // Simulate multiple users on the same network/IP trying to register
+      // Each user should have their own rate limit based on their email
+
+      // User 1 uses their limit (5 attempts with user1@example.com)
+      for (let i = 0; i < 5; i++) {
+        await request(app).post('/api/auth/register').send({
+          email: 'user1@example.com',
+          password: 'password123',
+          name: 'User One',
+          age: 25,
+          gender: 'Male',
+        });
+      }
+
+      // User 2 should still be able to register (different email, same IP)
+      const user2Response = await request(app).post('/api/auth/register').send({
+        email: 'user2@example.com',
+        password: 'password123',
+        name: 'User Two',
+        age: 26,
+        gender: 'Female',
+      });
+
+      expect(user2Response.status).toBe(200);
+      expect(user2Response.body.success).toBe(true);
+
+      // User 1's 6th attempt should still be blocked
+      const user1Response = await request(app).post('/api/auth/register').send({
+        email: 'user1@example.com',
+        password: 'password123',
+        name: 'User One',
+        age: 25,
+        gender: 'Male',
+      });
+
+      expect(user1Response.status).toBe(429);
+      expect(user1Response.body.error).toContain('Too many registration attempts');
     });
   });
 
