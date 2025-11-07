@@ -34,9 +34,19 @@ jobs:
           echo "🛑 Stopping existing containers..."
           docker-compose down || true
           
-          echo "🔨 Building and starting containers..."
-          if ! docker-compose up --build -d; then
-            echo "❌ Docker Compose build/start failed!"
+          echo "🔨 Building containers (no cache)..."
+          if ! docker-compose build --no-cache; then
+            echo "❌ Docker Compose build failed!"
+            echo "📋 Container logs:"
+            docker-compose logs
+            echo "📊 Container status:"
+            docker-compose ps -a
+            exit 1
+          fi
+
+          echo "🚀 Starting containers..."
+          if ! docker-compose up -d; then
+            echo "❌ Docker Compose up failed!"
             echo "📋 Container logs:"
             docker-compose logs
             echo "📊 Container status:"
