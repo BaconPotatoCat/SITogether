@@ -201,10 +201,15 @@ describe('Chat Pages - Deleted Users', () => {
         expect(screen.getByText('Message from deleted user')).toBeInTheDocument()
       })
 
-      // Should show "D" placeholder for deleted user
-      const placeholder = screen.getByText('D')
+      // Should show "D" placeholder for deleted user inside the message row
+      const deletedMessageEl = screen.getByText('Message from deleted user')
+      const messageRowEl = deletedMessageEl.closest('.chat-row')
+      expect(messageRowEl).toBeInTheDocument()
+
+      const placeholder = messageRowEl?.querySelector('.chat-avatar-sm')
       expect(placeholder).toBeInTheDocument()
-      expect(placeholder.closest('.chat-avatar-sm')).toBeInTheDocument()
+      // Verify the placeholder text is "D"
+      expect(placeholder?.textContent).toBe('D')
     })
 
     it('should not mark messages from deleted users as "mine"', async () => {

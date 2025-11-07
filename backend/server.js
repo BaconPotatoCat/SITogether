@@ -1831,16 +1831,16 @@ app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
     const decryptedReports = await Promise.all(
       reports.map(async (report) => {
         const user = report.reportedUser;
-    
+
         const decryptedReportedBy = await decryptField(report.reportedBy);
-    
+
         let decryptedUser = null;
         if (user) {
           const decryptedEmail = await decryptField(user.email);
           const decryptedUserFields = await decryptUserFields(user);
           decryptedUser = { ...decryptedUserFields, email: decryptedEmail };
         }
-    
+
         return {
           ...report,
           reportedBy: decryptedReportedBy,
@@ -1848,7 +1848,7 @@ app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
         };
       })
     );
-    
+
     res.json({
       success: true,
       data: decryptedReports,

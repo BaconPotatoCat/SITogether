@@ -39,6 +39,11 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = jest.fn()
 }
 
+// Mock window.alert for jsdom (not implemented by jsdom)
+if (typeof window !== 'undefined' && !window.alert) {
+  window.alert = jest.fn()
+}
+
 // Global handler for unhandled rejections in tests
 // Components using try-finally without catch will have unhandled rejections
 // but handle them gracefully in production via finally blocks

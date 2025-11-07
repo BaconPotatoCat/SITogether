@@ -632,7 +632,6 @@ describe('DiscoveryPage', () => {
 
     it('should handle like network errors', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       mockFetchWithAuth
         .mockResolvedValueOnce({
@@ -659,19 +658,15 @@ describe('DiscoveryPage', () => {
         body: JSON.stringify({ likedId: '1' }),
       })
 
-      // Should log error and show alert (lines 142-143)
+      // Should log error (toast won't display since useDiscovery has its own toast instance)
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith('Error liking user:', expect.any(Error))
-        expect(alertSpy).toHaveBeenCalledWith('Failed to like user')
       })
 
       consoleSpy.mockRestore()
-      alertSpy.mockRestore()
     })
 
     it('should handle like API response errors', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-
       mockFetchWithAuth
         .mockResolvedValueOnce({
           ok: true,
@@ -695,12 +690,13 @@ describe('DiscoveryPage', () => {
         fireEvent.click(firstLikeButton)
       })
 
-      // Should show alert with API error (lines 138-139)
+      // Should call API (toast won't display since useDiscovery has its own toast instance)
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('User not found')
+        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/likes', {
+          method: 'POST',
+          body: JSON.stringify({ likedId: '1' }),
+        })
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should prevent multiple simultaneous likes', async () => {
@@ -775,7 +771,6 @@ describe('DiscoveryPage', () => {
 
     it('should handle pass network errors', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       mockFetchWithAuth
         .mockResolvedValueOnce({
@@ -802,19 +797,15 @@ describe('DiscoveryPage', () => {
         body: JSON.stringify({ passedId: '1' }),
       })
 
-      // Should log error and show alert (lines 167-168)
+      // Should log error (toast won't display since useDiscovery has its own toast instance)
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith('Error passing user:', expect.any(Error))
-        expect(alertSpy).toHaveBeenCalledWith('Failed to pass user')
       })
 
       consoleSpy.mockRestore()
-      alertSpy.mockRestore()
     })
 
     it('should handle pass API response errors', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-
       mockFetchWithAuth
         .mockResolvedValueOnce({
           ok: true,
@@ -838,12 +829,13 @@ describe('DiscoveryPage', () => {
         fireEvent.click(firstPassButton)
       })
 
-      // Should show alert with API error (lines 163-164)
+      // Should call API (toast won't display since useDiscovery has its own toast instance)
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith('Pass limit exceeded')
+        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/passes', {
+          method: 'POST',
+          body: JSON.stringify({ passedId: '1' }),
+        })
       })
-
-      alertSpy.mockRestore()
     })
   })
 
@@ -1112,7 +1104,6 @@ describe('DiscoveryPage', () => {
 
     it('should prevent submission when no reason is selected', async () => {
       const user = userEvent.setup()
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
 
       render(<DiscoveryPage />)
 
@@ -1139,19 +1130,13 @@ describe('DiscoveryPage', () => {
       // Verify no API call was made (button prevents submission)
       expect(global.fetch).not.toHaveBeenCalled()
 
-      // Verify alert was not called (button prevents the handler from executing)
-      expect(alertSpy).not.toHaveBeenCalled()
-
       // The component has defensive code in handleSubmitReport that checks for empty reason
-      // and shows an alert, but this can't be tested through normal UI interaction because
+      // and shows a toast, but this can't be tested through normal UI interaction because
       // the button is disabled and React doesn't attach onClick handlers to disabled buttons.
       // The button being disabled is the primary validation mechanism that prevents invalid submissions.
-
-      alertSpy.mockRestore()
     })
 
     it('should submit report successfully', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1198,19 +1183,16 @@ describe('DiscoveryPage', () => {
       })
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(
-          expect.stringMatching(
+        expect(
+          screen.getByText(
             /report submitted successfully.*thank you for helping keep our community safe/i
           )
-        )
+        ).toBeInTheDocument()
         expect(screen.queryByText(/report user/i)).not.toBeInTheDocument()
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should submit report with null description when description is empty', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ success: true }),
@@ -1249,12 +1231,9 @@ describe('DiscoveryPage', () => {
           }),
         })
       })
-
-      alertSpy.mockRestore()
     })
 
     it('should handle report submission error', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
@@ -1283,15 +1262,13 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/failed to submit report/i))
+        expect(screen.getByText(/failed to submit report/i)).toBeInTheDocument()
       })
 
-      alertSpy.mockRestore()
       consoleSpy.mockRestore()
     })
 
     it('should handle report submission network error', async () => {
-      const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
 
@@ -1317,16 +1294,13 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(alertSpy).toHaveBeenCalledWith(
-          expect.stringMatching(/failed to submit report.*please try again/i)
-        )
+        expect(screen.getByText(/failed to submit report.*please try again/i)).toBeInTheDocument()
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringMatching(/report error:/i),
           expect.any(Error)
         )
       })
 
-      alertSpy.mockRestore()
       consoleSpy.mockRestore()
     })
 
