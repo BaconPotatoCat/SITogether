@@ -2,13 +2,26 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const config = require('../lib/config');
 
-// Middleware to authenticate and authorize admin users
+// Admin Authentication Middleware
 const authenticateAdmin = async (req, res, next) => {
   try {
-    const token =
-      (req.cookies && req.cookies.token) ||
-      (req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1]);
+    // Prefer HttpOnly cookie for tokens
+    let token = req.cookies?.token;
 
+    // Fallback to Authorization header if Bearer format is correct
+    if (!token && req.headers?.authorization) {
+      const authHeader = req.headers.authorization;
+      if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Malformed authorization header. Expected Bearer token.',
+        });
+      }
+    }
+
+    // Enforce presence of token
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -16,6 +29,7 @@ const authenticateAdmin = async (req, res, next) => {
       });
     }
 
+    // Verify token securely
     let decoded;
     try {
       decoded = jwt.verify(token, config.jwtSecret);
@@ -32,15 +46,10 @@ const authenticateAdmin = async (req, res, next) => {
       });
     }
 
-    // Fetch user securely from database using verified token payload
+    // Fetch and validate user from DB
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        banned: true,
-      },
+      select: { id: true, email: true, role: true, banned: true },
     });
 
     if (!user) {
@@ -64,12 +73,8 @@ const authenticateAdmin = async (req, res, next) => {
       });
     }
 
-    // Attach verified user to request context
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    // Attach verified user to request
+    req.user = { id: user.id, email: user.email, role: user.role };
 
     next();
   } catch (error) {

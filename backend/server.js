@@ -1755,7 +1755,7 @@ const reportLimiter = rateLimiter({
   },
 });
 
-app.post('/api/reports', authenticateToken, reportLimiter, async (req, res) => {
+app.post('/api/reports', reportLimiter, authenticateToken, async (req, res) => {
   try {
     const reporterId = req.user.userId;
     const { reportedId, reason, description } = req.body;
