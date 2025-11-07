@@ -2,16 +2,18 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const config = require('../lib/config');
 
+/**
+ * Middleware to authenticate and authorize Admin users.
+ * Access to sensitive actions is only granted after token verification.
+ */
 const authenticateAdmin = async (req, res, next) => {
   try {
-    // Extract token safely
+    // Extract token safely from cookie or Authorization header
     const cookieToken = typeof req.cookies?.token === 'string' ? req.cookies.token.trim() : null;
     const headerAuth =
       typeof req.headers?.authorization === 'string' ? req.headers.authorization.trim() : null;
 
     let token = null;
-
-    // Validate header format explicitly
     if (cookieToken) {
       token = cookieToken;
     } else if (
@@ -21,17 +23,10 @@ const authenticateAdmin = async (req, res, next) => {
       token = headerAuth.split(' ')[1];
     }
 
-    // Enforce presence of token
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required. Please log in.',
-      });
-    }
-
-    // Verify token securely
+    // Attempt verification
     let decoded;
     try {
+      if (!token) throw new Error('NoToken');
       decoded = jwt.verify(token, config.jwtSecret);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
@@ -40,13 +35,16 @@ const authenticateAdmin = async (req, res, next) => {
           error: 'Session expired. Please log in again.',
         });
       }
-      return res.status(403).json({
+      return res.status(401).json({
         success: false,
-        error: 'Invalid authentication token.',
+        error:
+          error.message === 'NoToken'
+            ? 'Authentication required. Please log in.'
+            : 'Invalid authentication token.',
       });
     }
 
-    // Fetch and validate user from DB
+    // Fetch user from database after verification
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { id: true, email: true, role: true, banned: true },
@@ -75,6 +73,8 @@ const authenticateAdmin = async (req, res, next) => {
 
     // Attach verified user to request
     req.user = { id: user.id, email: user.email, role: user.role };
+
+    // Only reach this line if all verification checks pass
     next();
   } catch (error) {
     console.error('Admin authentication error:', error);

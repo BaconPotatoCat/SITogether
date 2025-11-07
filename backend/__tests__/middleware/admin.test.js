@@ -71,7 +71,7 @@ describe('Admin Middleware', () => {
 
       await authenticateAdmin(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Invalid authentication token.',
