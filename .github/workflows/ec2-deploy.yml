@@ -1,0 +1,96 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H "$AWS_HOST" >> ~/.ssh/known_hosts
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.AWS_SSH_PRIVATE_KEY }}
+        AWS_HOST: ${{ secrets.AWS_HOST }}
+
+    - name: Deploy to AWS
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.AWS_SSH_USER }}@${{ secrets.AWS_HOST }} << 'EOF'
+          set -e  # Exit on any error
+          
+          # Navigate to project directory (adjust path as needed)
+          cd /services/SITogether
+          
+          echo "📥 Pulling latest changes..."
+          git pull origin main
+          
+          echo "🛑 Stopping existing containers..."
+          docker compose down || true
+          
+          echo "🔨 Building and starting containers..."
+          if ! docker compose up --build -d; then
+            echo "❌ Docker Compose build/start failed!"
+            echo "📋 Container logs:"
+            docker compose logs
+            echo "📊 Container status:"
+            docker compose ps -a
+            exit 1
+          fi
+          
+          echo "✅ Build completed successfully"
+          echo "📊 Container status:"
+          docker compose ps
+        EOF
+
+    - name: Verify deployment
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.AWS_SSH_USER }}@${{ secrets.AWS_HOST }} << 'EOF'
+          set -e  # Exit on any error
+          
+          cd /services/SITogether
+          
+          echo "⏳ Waiting for services to start..."
+          sleep 30
+          
+          echo "📊 Checking container health..."
+          docker compose ps
+          
+          # Check if any containers exited
+          if docker compose ps -q | xargs docker inspect -f '{{.Name}}: {{.State.Status}}' | grep -q "exited\|dead\|failed"; then
+            echo "❌ Some containers failed to start!"
+            echo "📋 Detailed container status:"
+            docker compose ps -a
+            echo "📋 Container logs:"
+            docker compose logs
+            exit 1
+          fi
+          
+          echo "🔍 Testing frontend accessibility..."
+          if ! curl -f --max-time 10 http://localhost:3000 > /dev/null 2>&1; then
+            echo "⚠️  Frontend not responding yet, but containers are running"
+            echo "📋 Frontend container logs:"
+            docker compose logs frontend
+          else
+            echo "✅ Frontend is accessible"
+          fi
+          
+          echo "🔍 Testing backend health..."
+          # Check backend health by executing curl inside the backend container
+          if ! docker compose exec -T backend curl -f --max-time 10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
+            echo "❌ Backend health check failed!"
+            echo "📋 Backend container logs:"
+            docker compose logs backend
+            exit 1
+          else
+            echo "✅ Backend health check passed"
+          fi
+          
+          echo "🎉 Deployment verification completed"
+        EOF
