@@ -5,12 +5,25 @@ echo "🔍 Starting backend initialization..."
 
 # Wait for database to be ready
 echo "⏳ Waiting for database to be ready..."
-until npx prisma db execute --stdin < /dev/null 2>/dev/null; do
-  echo "Database is unavailable - sleeping"
+MAX_RETRIES=30
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if npx prisma db execute --stdin <<< "SELECT 1;" >/dev/null 2>&1; then
+    echo "✅ Database is ready!"
+    break
+  fi
+  
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  echo "Database is unavailable - attempt $RETRY_COUNT/$MAX_RETRIES"
+  
+  if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo "❌ Database failed to become ready after $MAX_RETRIES attempts"
+    exit 1
+  fi
+  
   sleep 2
 done
-
-echo "✅ Database is ready!"
 
 # Handle database migrations/schema
 if [ "$NODE_ENV" = "production" ]; then
