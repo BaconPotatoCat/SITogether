@@ -26,6 +26,7 @@ jobs:
             BSD-3-Clause,
             ISC,
             Unlicense,
-            CC0-1.0
+            CC0-1.0,
+            AGPL-3.0
           comment-summary-in-pr: always
 
