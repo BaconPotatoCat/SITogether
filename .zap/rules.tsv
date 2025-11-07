@@ -1,0 +1,167 @@
+# OWASP ZAP Rules Configuration for Node.js/Express + Next.js Application
+# Format: Rule ID, Action (PASS, IGNORE, FAIL, INFO, WARN)
+# 
+# Actions:
+# - PASS: Rule passes (no action needed)
+# - IGNORE: Ignore this rule (for false positives)
+# - FAIL: Fail the scan if this rule triggers
+# - INFO: Log as informational
+# - WARN: Log as warning
+
+# ============================================================================
+# AUTHENTICATION & SESSION MANAGEMENT (Critical for your JWT/cookie auth)
+# ============================================================================
+
+# 10054 - Session ID in URL Rewrite - Check for session tokens in URLs
+10054	WARN	Check for session tokens exposed in URLs
+
+# 10055 - Session Fixation - Verify session tokens are regenerated on login
+10055	WARN	Session fixation vulnerability check
+
+# 10057 - Application Error Disclosure - Check for error messages exposing sensitive info
+10057	FAIL	Application errors should not expose sensitive information
+
+# 10061 - Insecure HTTP Method - Check for dangerous HTTP methods enabled
+10061	WARN	Insecure HTTP methods (PUT, DELETE, etc.) should be properly secured
+
+# ============================================================================
+# SQL INJECTION (Even with Prisma, good to check)
+# ============================================================================
+
+# 40018 - SQL Injection - Test for SQL injection vulnerabilities
+40018	FAIL	SQL injection vulnerability detected
+
+# 40019 - SQL Injection (Blind) - Test for blind SQL injection
+40019	FAIL	Blind SQL injection vulnerability detected
+
+# 40020 - SQL Injection (Time-based) - Test for time-based SQL injection
+40020	FAIL	Time-based SQL injection vulnerability detected
+
+# ============================================================================
+# CROSS-SITE SCRIPTING (XSS) - Critical for user-generated content
+# ============================================================================
+
+# 10032 - Cross Site Scripting (Reflected) - Test for reflected XSS
+10032	FAIL	Reflected XSS vulnerability detected
+
+# 10034 - Cross Site Scripting (Persistent) - Test for stored XSS
+10034	FAIL	Stored XSS vulnerability detected (user profiles, messages, etc.)
+
+# 10036 - Cross Site Scripting (DOM) - Test for DOM-based XSS
+10036	FAIL	DOM-based XSS vulnerability detected
+
+# ============================================================================
+# CSRF PROTECTION - Important for state-changing operations
+# ============================================================================
+
+# 10202 - Cross-Domain Misconfiguration - Check CORS configuration
+10202	WARN	CORS misconfiguration may allow unauthorized access
+
+# 10203 - Content Security Policy (CSP) Header Not Set - Check for CSP headers
+10203	WARN	CSP header not set - helps prevent XSS attacks
+
+# ============================================================================
+# COOKIE SECURITY - Critical for JWT cookie-based auth
+# ============================================================================
+
+# 10010 - Cookie No HttpOnly Flag - Cookies should have HttpOnly flag
+10010	FAIL	Authentication cookies must have HttpOnly flag
+
+# 10011 - Cookie Without Secure Flag - Cookies should have Secure flag in production
+10011	WARN	Secure flag should be set for cookies in production (check NODE_ENV)
+
+# 10012 - Cookie Without SameSite Attribute - Modern browsers require SameSite
+10012	WARN	Cookies should have SameSite attribute to prevent CSRF
+
+# 10054 - Session ID in URL Rewrite - Already listed above
+
+# ============================================================================
+# API SECURITY - Important for REST API endpoints
+# ============================================================================
+
+# 10020 - X-Frame-Options Header Missing - Prevents clickjacking
+10020	WARN	X-Frame-Options header should be set (Helmet should handle this)
+
+# 10021 - X-Content-Type-Options Header Missing - Prevents MIME sniffing
+10021	WARN	X-Content-Type-Options header should be set
+
+# 10024 - Server Leaks Information via "X-Powered-By" HTTP Response Header
+10024	WARN	Remove X-Powered-By header (Helmet should handle this)
+
+# 10027 - Information Disclosure - Sensitive Information in HTTP Response
+10027	FAIL	Sensitive information should not be exposed in responses
+
+# 10028 - Information Disclosure - Suspicious Comments
+10028	INFO	Check for sensitive information in comments
+
+# ============================================================================
+# INPUT VALIDATION - Important for user inputs
+# ============================================================================
+
+# 10038 - HTTP Parameter Pollution - Test for parameter pollution
+10038	WARN	HTTP parameter pollution vulnerability
+
+# 10045 - Source Code Disclosure - Check for source code exposure
+10045	FAIL	Source code should not be exposed
+
+# 10048 - Remote OS Command Injection - Test for command injection
+10048	FAIL	Command injection vulnerability detected
+
+# 10094 - Server Side Code Injection - Test for code injection
+10094	FAIL	Server-side code injection vulnerability
+
+# ============================================================================
+# FILE UPLOAD SECURITY - Important for avatar uploads
+# ============================================================================
+
+# 10046 - Path Traversal - Test for directory traversal
+10046	FAIL	Path traversal vulnerability in file operations
+
+# 10096 - File Upload - Test for insecure file upload handling
+10096	FAIL	Insecure file upload vulnerability
+
+# ============================================================================
+# PASSWORD & AUTHENTICATION - Critical for auth endpoints
+# ============================================================================
+
+# 10029 - Weak Authentication - Check for weak authentication mechanisms
+10029	WARN	Weak authentication mechanism detected
+
+# 10055 - Session Fixation - Already listed above
+
+# ============================================================================
+# INFORMATION DISCLOSURE - Check for sensitive data exposure
+# ============================================================================
+
+# 10023 - Information Disclosure - Debug Error Messages
+10023	FAIL	Debug error messages should not be exposed in production
+
+# 10025 - Information Disclosure - Sensitive Information in URL
+10025	WARN	Sensitive information should not be in URLs
+
+# 10026 - Information Disclosure - Suspicious Comments
+10026	INFO	Check for sensitive information in HTML comments
+
+# ============================================================================
+# SPECIFIC TO YOUR APPLICATION
+# ============================================================================
+
+# Ignore false positives for test endpoints (if needed)
+# Uncomment and adjust rule ID if you get false positives:
+# 100XX	IGNORE	False positive for test-login endpoint
+
+# ============================================================================
+# NOTES:
+# - FAIL rules will cause the scan to fail if vulnerabilities are found
+# - WARN rules will log warnings but won't fail the scan
+# - INFO rules provide informational messages
+# - IGNORE rules skip specific checks (use sparingly for false positives)
+# 
+# For your application, pay special attention to:
+# - Cookie security (HttpOnly, Secure, SameSite) - Critical for JWT auth
+# - XSS vulnerabilities - User profiles, messages, bios contain user input
+# - CSRF protection - State-changing operations (likes, passes, messages)
+# - SQL injection - Even with Prisma, good to verify
+# - File upload security - Avatar uploads
+# - API authentication - All protected endpoints should require auth
+# ============================================================================
