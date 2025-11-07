@@ -41,9 +41,13 @@ else
   echo "🔧 Development mode: Applying schema changes"
   
   # Try migrations first, fall back to db push
+  echo "📦 Attempting to deploy migrations..."
   if npx prisma migrate deploy 2>&1 | tee /tmp/migrate.log; then
     echo "✅ Migrations applied successfully"
   else
+    echo "⚠️  Migration deploy failed, checking error type..."
+    cat /tmp/migrate.log
+    
     # Check if it's a "no migrations found" error
     if grep -q "No migration found\|No pending migrations" /tmp/migrate.log; then
       echo "ℹ️  No migrations found, using db push"
@@ -58,6 +62,7 @@ else
   fi
 fi
 
+echo "✅ Database schema is ready!"
 echo "🚀 Starting application..."
 
 # Execute the main command

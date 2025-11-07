@@ -54,6 +54,15 @@ jobs:
             exit 1
           fi
           
+          echo "⏳ Waiting for containers to initialize (30s)..."
+          sleep 30
+          
+          echo "📊 Checking container status..."
+          docker-compose ps -a
+          
+          echo "📋 Backend initialization logs:"
+          docker-compose logs backend | head -n 50
+          
           echo "✅ Build completed successfully"
           echo "📊 Container status:"
           docker-compose ps
