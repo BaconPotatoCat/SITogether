@@ -9,7 +9,7 @@ MAX_RETRIES=30
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if npx prisma db execute --stdin <<< "SELECT 1;" >/dev/null 2>&1; then
+  if echo "SELECT 1;" | npx prisma db execute --stdin >/dev/null 2>&1; then
     echo "✅ Database is ready!"
     break
   fi
