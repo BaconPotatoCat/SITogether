@@ -135,25 +135,22 @@ export default function AdminPanel() {
     reports: Report[]
   }
 
-  const groupedReports = reports.reduce(
-    (acc, report) => {
-      const userId = report.reportedId
-      if (!acc[userId]) {
-        acc[userId] = {
-          user: (report.reportedUser || {
-            id: report.reportedId,
-            email: 'Unknown',
-            name: 'Unknown User',
-            banned: false,
-          }) as NonNullable<Report['reportedUser']> & { id: string },
-          reports: [],
-        }
+  const groupedReports = reports.reduce((acc, report) => {
+    const userId = report.reportedId
+    if (!acc[userId]) {
+      acc[userId] = {
+        user: (report.reportedUser || {
+          id: report.reportedId,
+          email: 'Unknown',
+          name: 'Unknown User',
+          banned: false,
+        }) as NonNullable<Report['reportedUser']> & { id: string },
+        reports: [],
       }
-      acc[userId].reports.push(report)
-      return acc
-    },
-    {} as Record<string, GroupedReport>
-  )
+    }
+    acc[userId].reports.push(report)
+    return acc
+  }, {} as Record<string, GroupedReport>)
 
   const groupedReportsArray = Object.values(groupedReports)
 
@@ -294,26 +291,21 @@ export default function AdminPanel() {
   }
 
   const filteredUsers = (Array.isArray(users) ? users : []).filter((user) => {
-    // Skip invalid user objects - check for null explicitly since typeof null === 'object'
+    // Skip invalid user objects
     if (
       !user ||
-      user === null ||
       typeof user !== 'object' ||
-      Array.isArray(user) ||
-      typeof user.name !== 'string' ||
-      typeof user.email !== 'string' ||
       !user.name ||
-      !user.email
+      !user.email ||
+      typeof user.name !== 'string' ||
+      typeof user.email !== 'string'
     ) {
       return false
     }
 
-    // Ensure searchTerm is a string
-    const safeSearchTerm = typeof searchTerm === 'string' ? searchTerm : ''
-
     const matchesSearch =
-      user.name.toLowerCase().includes(safeSearchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(safeSearchTerm.toLowerCase())
+      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesFilter =
       filterStatus === 'all' ||
@@ -613,9 +605,7 @@ export default function AdminPanel() {
                 <div style={{ display: 'grid', gap: '1.5rem' }}>
                   {groupedReportsArray.map((group) => {
                     const pendingCount = group.reports.filter((r) => r.status === 'Pending').length
-                    const resolvedCount = group.reports.filter(
-                      (r) => r.status === 'Resolved'
-                    ).length
+                    const resolvedCount = group.reports.filter((r) => r.status === 'Resolved').length
                     const totalCount = group.reports.length
 
                     return (
@@ -776,9 +766,7 @@ export default function AdminPanel() {
                                     </p>
                                   )}
                                 </div>
-                                <div
-                                  style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
-                                >
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                   <span
                                     style={{
                                       padding: '0.375rem 0.75rem',
@@ -809,7 +797,7 @@ export default function AdminPanel() {
                                         opacity: actionLoading === report.id ? 0.5 : 1,
                                       }}
                                     >
-                                      Invalid Report
+                                      Invalid
                                     </button>
                                   )}
                                 </div>
@@ -835,9 +823,8 @@ export default function AdminPanel() {
               )}
 
               <div style={{ marginTop: '1rem', color: '#6b7280', fontSize: '0.875rem' }}>
-                Showing {groupedReportsArray.length} user
-                {groupedReportsArray.length !== 1 ? 's' : ''} with {reports.length} total report
-                {reports.length !== 1 ? 's' : ''}
+                Showing {groupedReportsArray.length} user{groupedReportsArray.length !== 1 ? 's' : ''} with{' '}
+                {reports.length} total report{reports.length !== 1 ? 's' : ''}
               </div>
             </div>
           )}

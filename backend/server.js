@@ -74,22 +74,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // API routes
 app.get('/api', (req, res) => {
   res.json({
     message: 'Welcome to SITogether API',
     version: '1.0.0',
     endpoints: {
-      health: '/health',
       api: '/api',
       users: 'GET /api/users (protected)',
       auth: {
@@ -1508,10 +1498,19 @@ app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
       },
     });
 
+    // Decrypt all fields for response
+    const decryptedUsers = await Promise.all(
+      users.map(async (user) => {
+        const decryptedEmail = await decryptField(user.email);
+        const decryptedUser = await decryptUserFields(user);
+        return { ...decryptedUser, email: decryptedEmail };
+      })
+    );
+
     res.json({
       success: true,
-      data: users,
-      count: users.length,
+      data: decryptedUsers,
+      count: decryptedUsers.length,
     });
   } catch (error) {
     console.error('Admin users fetch error:', error);
@@ -1748,10 +1747,31 @@ app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
       },
     });
 
+    const decryptedReports = await Promise.all(
+      reports.map(async (report) => {
+        const user = report.reportedUser;
+    
+        const decryptedReportedBy = await decryptField(report.reportedBy);
+    
+        let decryptedUser = null;
+        if (user) {
+          const decryptedEmail = await decryptField(user.email);
+          const decryptedUserFields = await decryptUserFields(user);
+          decryptedUser = { ...decryptedUserFields, email: decryptedEmail };
+        }
+    
+        return {
+          ...report,
+          reportedBy: decryptedReportedBy,
+          reportedUser: decryptedUser,
+        };
+      })
+    );
+    
     res.json({
       success: true,
-      data: reports,
-      count: reports.length,
+      data: decryptedReports,
+      count: decryptedReports.length,
     });
   } catch (error) {
     console.error('Fetch reports error:', error);

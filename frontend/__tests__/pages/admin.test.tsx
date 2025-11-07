@@ -472,7 +472,7 @@ describe('AdminPanel', () => {
       fireEvent.click(reportsTab)
 
       await waitFor(() => {
-        expect(screen.getByText('Invalid Report')).toBeInTheDocument()
+        expect(screen.getByText('Invalid')).toBeInTheDocument()
       })
     })
 
@@ -504,10 +504,10 @@ describe('AdminPanel', () => {
       fireEvent.click(reportsTab)
 
       await waitFor(() => {
-        expect(screen.getByText('Invalid Report')).toBeInTheDocument()
+        expect(screen.getByText('Invalid')).toBeInTheDocument()
       })
 
-      const invalidButton = screen.getByText('Invalid Report')
+      const invalidButton = screen.getByText('Invalid')
       fireEvent.click(invalidButton)
 
       // Wait for confirmation modal
