@@ -26,6 +26,7 @@ export default function Auth() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
   const [recaptchaKey, setRecaptchaKey] = useState(0)
+  const [requiresRecaptcha, setRequiresRecaptcha] = useState(false)
   const { toasts, showToast, removeToast } = useToast()
   const [formData, setFormData] = useState({
     email: '',
@@ -137,7 +138,11 @@ export default function Auth() {
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register'
       const payload = isLogin
-        ? { email: formData.email, password: formData.password }
+        ? {
+            email: formData.email,
+            password: formData.password,
+            ...(requiresRecaptcha && recaptchaToken ? { recaptchaToken } : {}),
+          }
         : {
             email: formData.email,
             password: formData.password,
@@ -158,7 +163,24 @@ export default function Auth() {
 
       const result = await response.json()
 
+      // Check if reCAPTCHA is required (rate limit exceeded)
+      if (result.requiresRecaptcha && !result.success) {
+        if (isLogin) {
+          setRequiresRecaptcha(true)
+          setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA
+        }
+        showToast(result.error || 'Please complete the reCAPTCHA verification.', 'error')
+        setIsLoading(false)
+        return
+      }
+
       if (result.success) {
+        // Reset reCAPTCHA requirement on successful login
+        if (isLogin) {
+          setRequiresRecaptcha(false)
+          setRecaptchaToken(null)
+        }
+
         if (isLogin) {
           // Check if 2FA is required
           if (result.requiresTwoFactor) {
@@ -287,6 +309,7 @@ export default function Auth() {
     setUnverifiedEmail(null)
     setShowForgotPassword(false)
     setRecaptchaToken(null)
+    setRequiresRecaptcha(false)
     setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA by changing key
     setFormData({
       email: '',
@@ -473,23 +496,25 @@ export default function Auth() {
                 </div>
               )}
 
-              {!isLogin &&
+              {/* Show reCAPTCHA for registration or when rate limit exceeded on login */}
+              {((!isLogin &&
                 config.recaptchaSiteKey &&
                 typeof config.recaptchaSiteKey === 'string' &&
-                config.recaptchaSiteKey.trim() !== '' && (
-                  <div className="form-group">
-                    <ReCAPTCHA
-                      key={recaptchaKey}
-                      sitekey={config.recaptchaSiteKey}
-                      onChange={handleRecaptchaChange}
-                      onExpired={() => setRecaptchaToken(null)}
-                      onError={() => {
-                        setRecaptchaToken(null)
-                        showToast('reCAPTCHA error. Please try again.', 'error')
-                      }}
-                    />
-                  </div>
-                )}
+                config.recaptchaSiteKey.trim() !== '') ||
+                (isLogin && requiresRecaptcha && config.recaptchaSiteKey)) && (
+                <div className="form-group">
+                  <ReCAPTCHA
+                    key={recaptchaKey}
+                    sitekey={config.recaptchaSiteKey || ''}
+                    onChange={handleRecaptchaChange}
+                    onExpired={() => setRecaptchaToken(null)}
+                    onError={() => {
+                      setRecaptchaToken(null)
+                      showToast('reCAPTCHA error. Please try again.', 'error')
+                    }}
+                  />
+                </div>
+              )}
 
               <button type="submit" className="btn primary auth-submit" disabled={isLoading}>
                 {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}

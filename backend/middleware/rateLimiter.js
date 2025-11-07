@@ -82,18 +82,26 @@ const keyGenerator = (req) => {
 /**
  * Rate limiter for login endpoint
  * Prevents brute force attacks
+ * Allows bypass with valid reCAPTCHA token when rate limit is exceeded
  */
 const loginLimiter = rateLimit({
   windowMs: LOGIN_WINDOW_MS,
   max: LOGIN_MAX_ATTEMPTS,
   message: {
     success: false,
-    error: `Too many login attempts. Please try again after ${formatTimeWindow(LOGIN_WINDOW_MS)}.`,
+    error: `Too many login attempts. Please complete the reCAPTCHA verification to continue.`,
+    requiresRecaptcha: true,
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skipSuccessfulRequests: false, // Count all requests, even successful ones
   keyGenerator: keyGenerator, // Use custom key generator for secure IP handling
+  // Skip rate limiting if reCAPTCHA token is provided (will be verified in endpoint)
+  skip: (req) => {
+    // If reCAPTCHA token is provided, skip rate limiting
+    // The endpoint will verify the token
+    return !!req.body?.recaptchaToken;
+  },
 });
 
 /**
@@ -111,6 +119,31 @@ const passwordResetLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   keyGenerator: keyGenerator,
+});
+
+/**
+ * Rate limiter for change password endpoint
+ * Prevents brute force attacks on password changes
+ * Allows bypass with valid reCAPTCHA token when rate limit is exceeded
+ */
+const changePasswordLimiter = rateLimit({
+  windowMs: LOGIN_WINDOW_MS, // Use same window as login (15 minutes)
+  max: LOGIN_MAX_ATTEMPTS, // Use same max attempts as login (5)
+  message: {
+    success: false,
+    error: `Too many password change attempts. Please complete the reCAPTCHA verification to continue.`,
+    requiresRecaptcha: true,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+  // Skip rate limiting if reCAPTCHA token is provided (will be verified in endpoint)
+  skip: (req) => {
+    // If reCAPTCHA token is provided, skip rate limiting
+    // The endpoint will verify the token
+    return !!req.body?.recaptchaToken;
+  },
 });
 
 /**
@@ -201,6 +234,7 @@ const sensitiveDataLimiter = rateLimit({
 module.exports = {
   loginLimiter,
   passwordResetLimiter,
+  changePasswordLimiter,
   registerLimiter,
   otpLimiter,
   resendOtpLimiter,
