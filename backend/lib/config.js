@@ -13,6 +13,7 @@ const requiredEnvVars = [
   'EMAIL_USER',
   'EMAIL_PASSWORD',
   'NEXT_PUBLIC_FRONTEND_EXTERNALURL',
+  'RECAPTCHA_SECRET_KEY',
 ];
 
 // Validate required environment variables (skip in test mode)
@@ -52,6 +53,7 @@ if (isTest) {
   process.env.EMAIL_PASSWORD = process.env.EMAIL_PASSWORD || 'test-password';
   process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL =
     process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL || 'http://localhost:3000';
+  process.env.RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || 'test-recaptcha-secret';
 }
 
 const config = {
@@ -76,6 +78,9 @@ const config = {
   frontend: {
     externalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL || 'http://localhost:3000',
   },
+
+  // reCAPTCHA secret (server-side)
+  recaptchaSecretKey: process.env.RECAPTCHA_SECRET_KEY,
 
   // Encryption
   encryptionKey: process.env.ENCRYPTION_KEY,

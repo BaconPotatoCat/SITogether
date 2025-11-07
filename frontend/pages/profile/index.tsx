@@ -1,5 +1,6 @@
 import Head from 'next/head'
 import React, { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -7,6 +8,12 @@ import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 import { fetchWithAuth } from '../../utils/api'
 import { validatePasswordChange } from '../../utils/passwordValidation'
+import { config } from '../../utils/config'
+
+// Dynamically import ReCAPTCHA to avoid SSR issues
+const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => mod.default), {
+  ssr: false,
+})
 
 type ViewMode = 'menu' | 'edit' | 'changePassword'
 
@@ -32,6 +39,9 @@ export default function MyProfilePage() {
     newPassword: '',
     confirmPassword: '',
   })
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
+  const [recaptchaKey, setRecaptchaKey] = useState(0)
+  const [requiresRecaptcha, setRequiresRecaptcha] = useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Initialize edit form when session loads
@@ -106,6 +116,8 @@ export default function MyProfilePage() {
       newPassword: '',
       confirmPassword: '',
     })
+    setRequiresRecaptcha(false)
+    setRecaptchaToken(null)
     setViewMode('menu')
   }
 
@@ -127,6 +139,12 @@ export default function MyProfilePage() {
       return
     }
 
+    // Check if reCAPTCHA is required
+    if (requiresRecaptcha && !recaptchaToken) {
+      showToast('Please complete the reCAPTCHA verification.', 'error')
+      return
+    }
+
     try {
       setIsChangingPassword(true)
 
@@ -140,12 +158,22 @@ export default function MyProfilePage() {
           body: JSON.stringify({
             currentPassword: passwordForm.currentPassword,
             newPassword: passwordForm.newPassword,
+            ...(requiresRecaptcha && recaptchaToken ? { recaptchaToken } : {}),
           }),
         },
         false
       )
 
       const result = await response.json()
+
+      // Check if reCAPTCHA is required (rate limit exceeded)
+      if (result.requiresRecaptcha && !result.success) {
+        setRequiresRecaptcha(true)
+        setRecaptchaKey((prev) => prev + 1) // Reset reCAPTCHA
+        showToast(result.error || 'Please complete the reCAPTCHA verification.', 'error')
+        setIsChangingPassword(false)
+        return
+      }
 
       if (response.ok && result.success) {
         setViewMode('menu')
@@ -154,6 +182,8 @@ export default function MyProfilePage() {
           newPassword: '',
           confirmPassword: '',
         })
+        setRequiresRecaptcha(false)
+        setRecaptchaToken(null)
         showToast('Password changed successfully!', 'success')
       } else {
         // Handle different error cases
@@ -712,6 +742,21 @@ export default function MyProfilePage() {
                   maxLength={64}
                 />
               </div>
+              {/* Show reCAPTCHA when rate limit exceeded */}
+              {requiresRecaptcha && config.recaptchaSiteKey && (
+                <div className="form-group">
+                  <ReCAPTCHA
+                    key={recaptchaKey}
+                    sitekey={config.recaptchaSiteKey}
+                    onChange={(token: string | null) => setRecaptchaToken(token)}
+                    onExpired={() => setRecaptchaToken(null)}
+                    onError={() => {
+                      setRecaptchaToken(null)
+                      showToast('reCAPTCHA error. Please try again.', 'error')
+                    }}
+                  />
+                </div>
+              )}
               <button
                 className="btn primary save-btn"
                 onClick={handleChangePassword}
@@ -719,7 +764,8 @@ export default function MyProfilePage() {
                   isChangingPassword ||
                   !passwordForm.currentPassword ||
                   !passwordForm.newPassword ||
-                  !passwordForm.confirmPassword
+                  !passwordForm.confirmPassword ||
+                  (requiresRecaptcha && !recaptchaToken)
                 }
               >
                 {isChangingPassword ? 'Changing Password...' : 'Change Password'}

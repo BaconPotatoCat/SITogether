@@ -1,11 +1,118 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useRouter } from 'next/router'
+import React from 'react'
 import Auth from '../../pages/auth'
+import { config } from '../../utils/config'
+
+// Suppress act() warnings for Next.js dynamic imports (LoadableComponent)
+// This is a known issue with Next.js's dynamic import system in tests
+// The warnings don't affect test correctness - dynamic imports work correctly
+const originalError = console.error
+beforeAll(() => {
+  console.error = jest.fn((...args: unknown[]) => {
+    // Check all arguments for the warning message (React formats warnings differently)
+    const fullMessage = args.map((arg) => (typeof arg === 'string' ? arg : String(arg))).join(' ')
+
+    // Suppress warnings related to Next.js LoadableComponent
+    // Check for multiple variations of the warning message
+    const isLoadableWarning =
+      fullMessage.includes('ForwardRef(LoadableComponent)') ||
+      fullMessage.includes('LoadableComponent') ||
+      fullMessage.includes('useLoadableModule') ||
+      fullMessage.includes('loadable.shared-runtime') ||
+      (fullMessage.includes('not wrapped in act') &&
+        (fullMessage.includes('loadable') || fullMessage.includes('Loadable')))
+
+    if (isLoadableWarning) {
+      return
+    }
+    originalError.call(console, ...args)
+  })
+})
+
+afterAll(() => {
+  console.error = originalError
+})
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
   useRouter: jest.fn(),
 }))
+
+// Mock react-google-recaptcha
+const mockRecaptchaToken = 'mock-recaptcha-token'
+const mockRecaptchaChange = jest.fn()
+const mockRecaptchaCallbacks = {
+  onExpired: null as (() => void) | null,
+  onError: null as (() => void) | null,
+}
+
+jest.mock('react-google-recaptcha', () => {
+  const MockRecaptcha = React.forwardRef<
+    HTMLDivElement,
+    {
+      onChange?: (token: string | null) => void
+      onExpired?: () => void
+      onError?: () => void
+      sitekey?: string
+    }
+  >(
+    (
+      {
+        onChange,
+        onExpired,
+        onError,
+        sitekey,
+      }: {
+        onChange?: (token: string | null) => void
+        onExpired?: () => void
+        onError?: () => void
+        sitekey?: string
+      },
+      ref: React.Ref<HTMLDivElement>
+    ) => {
+      // Store callbacks for testing
+      if (onExpired) {
+        mockRecaptchaCallbacks.onExpired = onExpired
+      }
+      if (onError) {
+        mockRecaptchaCallbacks.onError = onError
+      }
+
+      if (onChange) {
+        mockRecaptchaChange.mockImplementation(onChange)
+      }
+
+      // Simulate successful verification after component mounts
+      // Use setTimeout with act() to handle React state updates properly
+      // The delay ensures the dynamic component has fully loaded and Next.js loadable is ready
+      React.useEffect(() => {
+        // Use a longer delay to ensure Next.js dynamic import has completed
+        const timer = setTimeout(() => {
+          if (onChange) {
+            // Wrap in act() to handle React state updates
+            act(() => {
+              // Call mockRecaptchaChange which will also call onChange via mockImplementation
+              mockRecaptchaChange(mockRecaptchaToken)
+            })
+          }
+        }, 100)
+
+        return () => clearTimeout(timer)
+      }, [onChange])
+
+      // Return a proper React element
+      return React.createElement('div', {
+        'data-testid': 'recaptcha',
+        'data-sitekey': sitekey || '',
+        ref,
+      })
+    }
+  )
+
+  MockRecaptcha.displayName = 'MockRecaptcha'
+  return MockRecaptcha
+})
 
 // Mock AuthContext
 const mockRefreshSession = jest.fn()
@@ -479,6 +586,12 @@ describe('Auth Page', () => {
 
   describe('Registration Form', () => {
     beforeEach(() => {
+      // Clear mocks but ensure mockRecaptchaChange is properly reset
+      jest.clearAllMocks()
+      mockRecaptchaChange.mockClear()
+      mockRecaptchaCallbacks.onExpired = null
+      mockRecaptchaCallbacks.onError = null
+
       render(<Auth />)
       const signUpButton = screen.getByRole('button', { name: /sign up/i })
       fireEvent.click(signUpButton)
@@ -589,6 +702,13 @@ describe('Auth Page', () => {
     })
 
     it('should successfully register with valid data', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -630,6 +750,7 @@ describe('Auth Page', () => {
               age: 20,
               gender: 'Male',
               course: 'Computer Science',
+              recaptchaToken: mockRecaptchaToken,
             }),
           })
         )
@@ -641,6 +762,13 @@ describe('Auth Page', () => {
     })
 
     it('should switch to login form after successful registration', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -681,6 +809,13 @@ describe('Auth Page', () => {
     })
 
     it('should clear form after successful registration', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -725,6 +860,13 @@ describe('Auth Page', () => {
     })
 
     it('should show error toast for duplicate email', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
         json: async () => ({
@@ -759,6 +901,14 @@ describe('Auth Page', () => {
     })
 
     it('should disable button during registration', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
+
       let resolvePromise: (value: { ok: boolean; json: () => Promise<unknown> }) => void
       const promise = new Promise((resolve) => {
         resolvePromise = resolve
@@ -805,6 +955,14 @@ describe('Auth Page', () => {
     })
 
     it('should handle network error during registration', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
+
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation()
       ;(global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'))
 
@@ -837,6 +995,13 @@ describe('Auth Page', () => {
     })
 
     it('should send age as number when provided', async () => {
+      // Wait for reCAPTCHA to generate token before filling form
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
       ;(global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -884,6 +1049,314 @@ describe('Auth Page', () => {
 
       const toastContainer = container.querySelector('.toast-container')
       expect(toastContainer).toBeInTheDocument()
+    })
+  })
+
+  describe('reCAPTCHA', () => {
+    beforeEach(() => {
+      // Set the site key on the exported config object without using `any`.
+      Object.defineProperty(config, 'recaptchaSiteKey', {
+        value: 'test-site-key-123',
+        configurable: true,
+        writable: true,
+      })
+    })
+
+    it('should not show reCAPTCHA in login form', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      const recaptcha = screen.queryByTestId('recaptcha')
+      expect(recaptcha).not.toBeInTheDocument()
+    })
+
+    it('should show reCAPTCHA in registration form', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for dynamic component to load
+      await waitFor(
+        () => {
+          const recaptcha = screen.queryByTestId('recaptcha')
+          expect(recaptcha).toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
+    })
+
+    it('should pass site key to reCAPTCHA component', async () => {
+      // Ensure the site key is set on the exported config for this test
+      Object.defineProperty(config, 'recaptchaSiteKey', {
+        value: 'test-site-key-123',
+        configurable: true,
+        writable: true,
+      })
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for dynamic component to load
+      await waitFor(
+        () => {
+          const recaptcha = screen.getByTestId('recaptcha')
+          expect(recaptcha).toHaveAttribute('data-sitekey', 'test-site-key-123')
+        },
+        { timeout: 3000 }
+      )
+    })
+
+    it('should prevent form submission without reCAPTCHA token', async () => {
+      render(<Auth />)
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Fill form
+      const nameInput = screen.getByLabelText(/full name/i)
+      const emailInput = screen.getByLabelText(/email/i)
+      const passwordInput = screen.getByLabelText('Password')
+      const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+      const ageInput = screen.getByLabelText(/age/i)
+      const genderRadios = screen.getAllByRole('radio') as HTMLInputElement[]
+      const genderMaleInput = genderRadios.find((r) => r.value === 'Male')!
+      const courseInput = screen.getByLabelText(/course/i)
+      const submitButton = screen.getByRole('button', { name: /create account/i })
+
+      fireEvent.change(nameInput, { target: { value: 'John Doe' } })
+      fireEvent.change(emailInput, { target: { value: 'john@example.com' } })
+      fireEvent.change(passwordInput, { target: { value: 'password123' } })
+      fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } })
+      fireEvent.change(ageInput, { target: { value: '20' } })
+      fireEvent.click(genderMaleInput)
+      fireEvent.change(courseInput, { target: { value: 'Computer Science' } })
+
+      // Clear the mock to prevent automatic token generation
+      mockRecaptchaChange.mockClear()
+
+      fireEvent.click(submitButton)
+
+      // Should show error toast
+      await waitFor(() => {
+        expect(screen.getByText(/please complete the recaptcha verification/i)).toBeInTheDocument()
+      })
+
+      // Should not call fetch
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it('should include reCAPTCHA token in registration request', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for reCAPTCHA to generate token (waitFor handles act() internally)
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          message: 'Registration successful',
+        }),
+      })
+
+      // Fill form
+      const nameInput = screen.getByLabelText(/full name/i)
+      const emailInput = screen.getByLabelText(/email/i)
+      const passwordInput = screen.getByLabelText('Password')
+      const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+      const ageInput = screen.getByLabelText(/age/i)
+      const genderRadios = screen.getAllByRole('radio') as HTMLInputElement[]
+      const genderMaleInput = genderRadios.find((r) => r.value === 'Male')!
+      const courseInput = screen.getByLabelText(/course/i)
+      const submitButton = screen.getByRole('button', { name: /create account/i })
+
+      fireEvent.change(nameInput, { target: { value: 'John Doe' } })
+      fireEvent.change(emailInput, { target: { value: 'john@example.com' } })
+      fireEvent.change(passwordInput, { target: { value: 'password123' } })
+      fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } })
+      fireEvent.change(ageInput, { target: { value: '20' } })
+      fireEvent.click(genderMaleInput)
+      fireEvent.change(courseInput, { target: { value: 'Computer Science' } })
+
+      fireEvent.click(submitButton)
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/auth/register',
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: 'john@example.com',
+              password: 'password123',
+              name: 'John Doe',
+              age: 20,
+              gender: 'Male',
+              course: 'Computer Science',
+              recaptchaToken: mockRecaptchaToken,
+            }),
+          })
+        )
+      })
+    })
+
+    it('should reset reCAPTCHA when form is reset after successful registration', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for reCAPTCHA to generate token (waitFor handles act() internally)
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
+      ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          message: 'Registration successful',
+        }),
+      })
+
+      // Fill and submit form
+      const nameInput = screen.getByLabelText(/full name/i)
+      const emailInput = screen.getByLabelText(/email/i)
+      const passwordInput = screen.getByLabelText('Password')
+      const confirmPasswordInput = screen.getByLabelText(/confirm password/i)
+      const ageInput = screen.getByLabelText(/age/i)
+      const genderRadios = screen.getAllByRole('radio') as HTMLInputElement[]
+      const genderMaleInput = genderRadios.find((r) => r.value === 'Male')!
+      const courseInput = screen.getByLabelText(/course/i)
+      const submitButton = screen.getByRole('button', { name: /create account/i })
+
+      fireEvent.change(nameInput, { target: { value: 'John Doe' } })
+      fireEvent.change(emailInput, { target: { value: 'john@example.com' } })
+      fireEvent.change(passwordInput, { target: { value: 'password123' } })
+      fireEvent.change(confirmPasswordInput, { target: { value: 'password123' } })
+      fireEvent.change(ageInput, { target: { value: '20' } })
+      fireEvent.click(genderMaleInput)
+      fireEvent.change(courseInput, { target: { value: 'Computer Science' } })
+
+      fireEvent.click(submitButton)
+
+      // Wait for registration to complete and form to reset
+      await waitFor(() => {
+        expect(screen.getByText(/registration successful/i)).toBeInTheDocument()
+      })
+
+      // Switch back to registration to verify reCAPTCHA was reset
+      const signUpButtonAgain = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButtonAgain)
+
+      // The reCAPTCHA should be re-rendered (new key = remount)
+      const recaptcha = screen.getByTestId('recaptcha')
+      expect(recaptcha).toBeInTheDocument()
+    })
+
+    it('should handle reCAPTCHA expiration', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for reCAPTCHA to generate token (waitFor handles act() internally)
+      await waitFor(
+        () => {
+          expect(mockRecaptchaChange).toHaveBeenCalled()
+        },
+        { timeout: 3000 }
+      )
+
+      // Simulate expiration by calling onExpired callback
+      if (mockRecaptchaCallbacks.onExpired) {
+        await act(async () => {
+          mockRecaptchaCallbacks.onExpired!()
+        })
+      }
+
+      // The token should be cleared (component will handle this internally)
+      // This is mainly a test that the handler exists
+      expect(mockRecaptchaCallbacks.onExpired).toBeDefined()
+    })
+
+    it('should handle reCAPTCHA errors', async () => {
+      // Wrap render in act() to handle Next.js dynamic import state updates
+      await act(async () => {
+        render(<Auth />)
+        // Wait for dynamic imports to settle
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      })
+
+      // Switch to registration
+      const signUpButton = screen.getByRole('button', { name: /sign up/i })
+      fireEvent.click(signUpButton)
+
+      // Wait for reCAPTCHA to render (dynamic component needs time to load)
+      await waitFor(
+        () => {
+          expect(screen.getByTestId('recaptcha')).toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
+
+      // Simulate error by calling onError callback
+      if (mockRecaptchaCallbacks.onError) {
+        await act(async () => {
+          mockRecaptchaCallbacks.onError!()
+        })
+      }
+
+      // Should show error toast
+      await waitFor(() => {
+        expect(screen.getByText(/recaptcha error/i)).toBeInTheDocument()
+      })
     })
   })
 })

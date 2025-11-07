@@ -13,12 +13,24 @@ const getBackendUrl = () => {
   return process.env.NEXT_PUBLIC_BACKEND_INTERNALURL
 }
 
+// Provide a default reCAPTCHA site key when running tests so components
+// relying on the key can render without requiring env setup.
+const getRecaptchaKey = () => {
+  if (isTest) {
+    return process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || 'test-site-key-123'
+  }
+  return process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+}
+
 export const config = {
   // Backend API URL (internal URL for server-to-server communication)
   backendInternalUrl: getBackendUrl(),
 
   // Frontend URL (external URL for client-side)
   frontendExternalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
+
+  // reCAPTCHA Configuration
+  recaptchaSiteKey: getRecaptchaKey(),
 
   // Environment
   nodeEnv: process.env.NODE_ENV || 'development',

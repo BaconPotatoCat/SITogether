@@ -10,6 +10,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV}
       NEXT_PUBLIC_BACKEND_INTERNALURL: ${NEXT_PUBLIC_BACKEND_INTERNALURL}
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -39,6 +40,7 @@ services:
       NEXT_PUBLIC_FRONTEND_EXTERNALURL: ${NEXT_PUBLIC_FRONTEND_EXTERNALURL}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       TRUST_PROXY: ${TRUST_PROXY}
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app

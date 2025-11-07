@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const backendUrl = `${config.backendInternalUrl}/api/auth/change-password`
 
-    const { currentPassword, newPassword } = req.body
+    const { currentPassword, newPassword, recaptchaToken } = req.body
 
     // Basic validation (length, format) - full security check happens on backend
     const passwordValidation = validatePasswordChange(currentPassword, newPassword)
@@ -28,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body: JSON.stringify({
         currentPassword,
         newPassword,
+        ...(recaptchaToken ? { recaptchaToken } : {}),
       }),
     })
 
