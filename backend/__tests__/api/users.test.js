@@ -1,39 +1,18 @@
 const request = require('supertest');
 const express = require('express');
-
-// Mock JWT
-jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn((token, _secret) => {
-    // eslint-disable-next-line security/detect-possible-timing-attacks
-    if (token === 'valid-user-token') {
-      return { userId: 'test-user' };
-    }
-    // eslint-disable-next-line security/detect-possible-timing-attacks
-    if (token === 'invalid-token') {
-      throw new Error('Invalid token');
-    }
-    throw new Error('Invalid token');
-  }),
-  sign: jest.fn((_payload, _secret, _options) => 'valid-user-token'),
-}));
+const jwt = require('jsonwebtoken');
+const { authenticateToken } = require('../../middleware/auth');
 
 // Mock Prisma client
-jest.mock('@prisma/client', () => {
-  const mockPrisma = {
-    user: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-    },
-  };
-  return {
-    PrismaClient: jest.fn(() => mockPrisma),
-  };
-});
+const mockPrismaClient = {
+  user: {
+    findMany: jest.fn(),
+  },
+};
 
-const { PrismaClient } = require('@prisma/client');
-const mockPrismaClient = new PrismaClient();
-
-const { authenticateToken } = require('../../middleware/auth');
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn(() => mockPrismaClient),
+}));
 
 describe('Users API Endpoints', () => {
   let app;
@@ -106,11 +85,12 @@ describe('Users API Endpoints', () => {
       ];
 
       mockPrismaClient.user.findMany.mockResolvedValue(mockUsers);
-      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'test-user', banned: false });
+
+      const token = jwt.sign({ userId: 'test-user' }, process.env.JWT_SECRET);
 
       const response = await request(app)
         .get('/api/users')
-        .set('Cookie', ['token=valid-user-token']);
+        .set('Cookie', [`token=${token}`]);
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -136,11 +116,12 @@ describe('Users API Endpoints', () => {
       const mockUsers = [{ id: 'user-1', verified: true, name: 'Verified User' }];
 
       mockPrismaClient.user.findMany.mockResolvedValue(mockUsers);
-      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'test-user', banned: false });
+
+      const token = jwt.sign({ userId: 'test-user' }, process.env.JWT_SECRET);
 
       const response = await request(app)
         .get('/api/users')
-        .set('Cookie', ['token=valid-user-token']);
+        .set('Cookie', [`token=${token}`]);
 
       expect(response.status).toBe(200);
       expect(mockPrismaClient.user.findMany).toHaveBeenCalledWith(
@@ -152,11 +133,12 @@ describe('Users API Endpoints', () => {
 
     it('should return empty array when no verified users exist', async () => {
       mockPrismaClient.user.findMany.mockResolvedValue([]);
-      mockPrismaClient.user.findUnique.mockResolvedValue({ id: 'test-user', banned: false });
+
+      const token = jwt.sign({ userId: 'test-user' }, process.env.JWT_SECRET);
 
       const response = await request(app)
         .get('/api/users')
-        .set('Cookie', ['token=valid-user-token']);
+        .set('Cookie', [`token=${token}`]);
 
       expect(response.status).toBe(200);
       expect(response.body.users).toHaveLength(0);

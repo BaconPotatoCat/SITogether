@@ -1,9 +1,8 @@
 const jwt = require('jsonwebtoken');
-const prisma = require('../lib/prisma');
 const config = require('../lib/config');
 
 // Middleware to verify JWT token
-const authenticateToken = async (req, res, next) => {
+const authenticateToken = (req, res, next) => {
   // Get token from cookie or Authorization header
   const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
 
@@ -17,30 +16,6 @@ const authenticateToken = async (req, res, next) => {
   try {
     // Verify token
     const decoded = jwt.verify(token, config.jwtSecret);
-
-    // Check if user is banned
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        banned: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid token. User not found.',
-      });
-    }
-
-    if (user.banned) {
-      return res.status(403).json({
-        success: false,
-        error: 'Your account has been banned. Please contact support for more information.',
-        banned: true,
-      });
-    }
 
     // Attach user info to request
     req.user = decoded;

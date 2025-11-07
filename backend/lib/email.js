@@ -6,13 +6,6 @@ const config = require('./config');
  * Uses Gmail service for sending verification emails
  */
 const createTransporter = () => {
-  // Validate email credentials
-  if (!config.email.user || !config.email.password) {
-    throw new Error(
-      'Email credentials (EMAIL_USER and EMAIL_PASSWORD) are required. Please set these environment variables.'
-    );
-  }
-
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {

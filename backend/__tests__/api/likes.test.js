@@ -1,49 +1,30 @@
 const request = require('supertest');
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const { authenticateToken } = require('../../middleware/auth');
 
-// Mock JWT
-jest.mock('jsonwebtoken', () => {
-  const mockJwt = {
-    verify: jest.fn(),
-    sign: jest.fn(),
-  };
-  return mockJwt;
-});
+// Mock Prisma client
+const mockPrismaClient = {
+  userLikes: {
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    delete: jest.fn(),
+    findMany: jest.fn(),
+  },
+  user: {
+    findUnique: jest.fn(),
+  },
+  userPoints: {
+    findUnique: jest.fn(),
+  },
+  conversation: {
+    findUnique: jest.fn(),
+  },
+};
 
-const jwt = require('jsonwebtoken');
-
-// Mock lib/prisma first (it's used by @prisma/client)
-jest.mock('../../lib/prisma', () => {
-  const mockPrismaClient = {
-    userLikes: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      delete: jest.fn(),
-      findMany: jest.fn(),
-    },
-    user: {
-      findUnique: jest.fn(),
-    },
-    userPoints: {
-      findUnique: jest.fn(),
-    },
-    conversation: {
-      findUnique: jest.fn(),
-    },
-  };
-  return mockPrismaClient;
-});
-
-jest.mock('@prisma/client', () => {
-  // Require lib/prisma to get the mocked instance
-  const libPrisma = require('../../lib/prisma');
-  return {
-    PrismaClient: jest.fn(() => libPrisma),
-  };
-});
-
-const mockPrismaClient = require('../../lib/prisma');
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn(() => mockPrismaClient),
+}));
 
 describe('Likes API Endpoints', () => {
   let app;
@@ -200,20 +181,6 @@ describe('Likes API Endpoints', () => {
       }
     });
 
-    // Set up JWT mocks
-    jwt.sign.mockImplementation((payload, _secret, _options) => {
-      return `mock-token-${payload.userId}`;
-    });
-
-    jwt.verify.mockImplementation((token, _secret) => {
-      // eslint-disable-next-line security/detect-possible-timing-attacks
-      if (token && typeof token === 'string' && token.startsWith('mock-token-')) {
-        const userId = token.replace('mock-token-', '');
-        return { userId };
-      }
-      throw new Error('Invalid token');
-    });
-
     app.get('/api/likes', authenticateToken, async (req, res) => {
       try {
         const likerId = req.user.userId;
@@ -290,18 +257,6 @@ describe('Likes API Endpoints', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock user lookup for authentication middleware
-    mockPrismaClient.user.findUnique.mockImplementation((query) => {
-      // For authentication checks (querying by id with select for banned)
-      if (query.where && query.where.id && query.select && query.select.banned !== undefined) {
-        return Promise.resolve({
-          id: query.where.id,
-          banned: false,
-        });
-      }
-      // For other queries, return null by default (tests will override)
-      return Promise.resolve(null);
-    });
   });
 
   describe('POST /api/likes', () => {
@@ -362,19 +317,7 @@ describe('Likes API Endpoints', () => {
     });
 
     it('should return 404 if liked user not found', async () => {
-      // Mock auth check to work, but route handler check to return null
-      mockPrismaClient.user.findUnique.mockImplementation((query) => {
-        const isAuthCheck = query.select && query.select.banned !== undefined;
-        if (isAuthCheck) {
-          // Auth check - return valid user for authentication
-          return Promise.resolve({
-            id: query.where.id,
-            banned: false,
-          });
-        }
-        // Route handler check for likedId - return null to test 404
-        return Promise.resolve(null);
-      });
+      mockPrismaClient.user.findUnique.mockResolvedValue(null);
 
       const token = jwt.sign({ userId: 'user-1' }, process.env.JWT_SECRET);
 

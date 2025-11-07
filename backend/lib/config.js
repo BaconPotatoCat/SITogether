@@ -17,31 +17,15 @@ const requiredEnvVars = [
 ];
 
 // Validate required environment variables (skip in test mode)
-// Critical vars (JWT_SECRET, DATABASE_URL) must be present
-// Email vars can be missing and will fail gracefully when used
-const criticalVars = ['JWT_SECRET', 'DATABASE_URL'];
-const missingCriticalVars = criticalVars.filter((varName) => !process.env[varName]);
 const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
 
-if (missingCriticalVars.length > 0 && !isTest) {
-  console.error('❌ Missing critical environment variables:');
-  missingCriticalVars.forEach((varName) => {
+if (missingVars.length > 0 && !isTest) {
+  console.error('❌ Missing required environment variables:');
+  missingVars.forEach((varName) => {
     console.error(`   - ${varName}`);
   });
-  console.error('\nPlease set these variables in your .env file or Docker environment.');
+  console.error('\nPlease set these variables in your .env file.');
   process.exit(1);
-}
-
-// Warn about missing non-critical vars (email, frontend URL)
-const missingNonCriticalVars = missingVars.filter((varName) => !criticalVars.includes(varName));
-if (missingNonCriticalVars.length > 0 && !isTest) {
-  console.warn('⚠️  Missing optional environment variables (some features may not work):');
-  missingNonCriticalVars.forEach((varName) => {
-    console.warn(`   - ${varName}`);
-  });
-  console.warn(
-    '\nEmail features will fail when used. Frontend URL defaults to http://localhost:3000'
-  );
 }
 
 // In test mode, provide defaults for missing variables
@@ -76,7 +60,7 @@ const config = {
 
   // Frontend URLs (for generating email links)
   frontend: {
-    externalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL || 'http://localhost:3000',
+    externalUrl: process.env.NEXT_PUBLIC_FRONTEND_EXTERNALURL,
   },
 
   // reCAPTCHA secret (server-side)
