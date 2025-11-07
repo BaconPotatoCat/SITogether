@@ -23,6 +23,7 @@ const config = require('./lib/config');
 const {
   loginLimiter,
   passwordResetLimiter,
+  changePasswordLimiter,
   registerLimiter,
   otpLimiter,
   resendOtpLimiter,
@@ -458,16 +459,66 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Authentication routes
+// Helper function to verify reCAPTCHA token
+async function verifyRecaptcha(token) {
+  if (!token) {
+    return { success: false, error: 'reCAPTCHA token is missing' };
+  }
+
+  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secretKey) {
+    console.warn('RECAPTCHA_SECRET_KEY is not set. Skipping reCAPTCHA verification.');
+    return { success: true }; // Skip verification if secret key is not configured
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        secret: secretKey,
+        response: token,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: 'reCAPTCHA verification failed',
+        errorCodes: data['error-codes'] || [],
+      };
+    }
+  } catch (error) {
+    console.error('reCAPTCHA verification error:', error);
+    return { success: false, error: 'Failed to verify reCAPTCHA' };
+  }
+}
+
 // Register endpoint
 app.post('/api/auth/register', registerLimiter, async (req, res) => {
   try {
-    const { email, password, name, age, gender, course } = req.body;
+    const { email, password, name, age, gender, course, recaptchaToken } = req.body;
 
     // Validate required fields
     if (!email || !password || !name || !age || !gender) {
       return res.status(400).json({
         success: false,
         error: 'Email, password, name, age, and gender are required',
+      });
+    }
+
+    // Verify reCAPTCHA token
+    const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+    if (!recaptchaVerification.success) {
+      return res.status(400).json({
+        success: false,
+        error: recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
       });
     }
 
@@ -795,7 +846,19 @@ app.post('/api/auth/resend-verification', resendVerificationLimiter, async (req,
 // Login endpoint
 app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, recaptchaToken } = req.body;
+
+    // If reCAPTCHA token is provided, verify it (rate limit was exceeded)
+    if (recaptchaToken) {
+      const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+      if (!recaptchaVerification.success) {
+        return res.status(400).json({
+          success: false,
+          error: recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
+          requiresRecaptcha: true,
+        });
+      }
+    }
 
     // Validate required fields
     if (!email || !password) {
@@ -1142,69 +1205,87 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 // Change password endpoint (protected)
-app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { currentPassword, newPassword } = req.body;
+app.post(
+  '/api/auth/change-password',
+  authenticateToken,
+  changePasswordLimiter,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { currentPassword, newPassword, recaptchaToken } = req.body;
 
-    // Validate password change according to NIST 2025 guidelines
-    const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
-    if (!passwordValidation.isValid) {
-      return res.status(400).json({
+      // If reCAPTCHA token is provided, verify it (rate limit was exceeded)
+      if (recaptchaToken) {
+        const recaptchaVerification = await verifyRecaptcha(recaptchaToken);
+        if (!recaptchaVerification.success) {
+          return res.status(400).json({
+            success: false,
+            error:
+              recaptchaVerification.error || 'reCAPTCHA verification failed. Please try again.',
+            requiresRecaptcha: true,
+          });
+        }
+      }
+
+      // Validate password change according to NIST 2025 guidelines
+      const passwordValidation = await validatePasswordChange(currentPassword, newPassword);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join('; '),
+        });
+      }
+
+      // Find user by ID
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          password: true,
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+        });
+      }
+
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+
+      if (!isValidPassword) {
+        return res.status(401).json({
+          success: false,
+          error: 'Current password is incorrect',
+        });
+      }
+
+      // Hash new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update user password
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+
+      res.json({
+        success: true,
+        message: 'Password changed successfully',
+      });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({
         success: false,
-        error: passwordValidation.errors.join('; '),
+        error: 'Failed to change password',
+        message: error.message,
       });
     }
-
-    // Find user by ID
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        password: true,
-      },
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
-
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        error: 'Current password is incorrect',
-      });
-    }
-
-    // Hash new password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update user password
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    res.json({
-      success: true,
-      message: 'Password changed successfully',
-    });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to change password',
-      message: error.message,
-    });
   }
-});
+);
 
 // Session endpoint (protected)
 app.get('/api/auth/session', authenticateToken, async (req, res) => {

@@ -33,7 +33,7 @@ describe('Auth API Endpoints', () => {
     // Add auth routes (simplified for testing)
     app.post('/api/auth/register', async (req, res) => {
       try {
-        const { email, password, name, age, gender, course } = req.body;
+        const { email, password, name, age, gender, course, recaptchaToken } = req.body;
 
         // Validation
         if (!email || !password || !name || !age || !gender) {
@@ -41,6 +41,28 @@ describe('Auth API Endpoints', () => {
             success: false,
             error: 'Email, password, name, age, and gender are required',
           });
+        }
+
+        // Verify reCAPTCHA token (if secret key is set)
+        const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+        if (secretKey) {
+          if (!recaptchaToken) {
+            return res.status(400).json({
+              success: false,
+              error: 'reCAPTCHA token is missing',
+            });
+          }
+
+          // Mock reCAPTCHA verification
+          // In tests, we'll mock the global fetch to simulate Google's response
+          const mockRecaptchaResponse = global.mockRecaptchaResponse || { success: true };
+          if (!mockRecaptchaResponse.success) {
+            return res.status(400).json({
+              success: false,
+              error:
+                mockRecaptchaResponse.error || 'reCAPTCHA verification failed. Please try again.',
+            });
+          }
         }
 
         // Gender validation
@@ -107,13 +129,27 @@ describe('Auth API Endpoints', () => {
 
     app.post('/api/auth/login', async (req, res) => {
       try {
-        const { email, password } = req.body;
+        const { email, password, recaptchaToken } = req.body;
 
         if (!email || !password) {
           return res.status(400).json({
             success: false,
             error: 'Email and password are required',
           });
+        }
+
+        // Verify reCAPTCHA token if provided (rate limit was exceeded)
+        if (recaptchaToken) {
+          // Mock reCAPTCHA verification
+          const mockRecaptchaResponse = global.mockRecaptchaResponse || { success: true };
+          if (!mockRecaptchaResponse.success) {
+            return res.status(400).json({
+              success: false,
+              error:
+                mockRecaptchaResponse.error || 'reCAPTCHA verification failed. Please try again.',
+              requiresRecaptcha: true,
+            });
+          }
         }
 
         const user = await mockPrismaClient.user.findUnique({
@@ -213,7 +249,21 @@ describe('Auth API Endpoints', () => {
     app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
       try {
         const userId = req.user.userId;
-        const { currentPassword, newPassword } = req.body;
+        const { currentPassword, newPassword, recaptchaToken } = req.body;
+
+        // Verify reCAPTCHA token if provided (rate limit was exceeded)
+        if (recaptchaToken) {
+          // Mock reCAPTCHA verification
+          const mockRecaptchaResponse = global.mockRecaptchaResponse || { success: true };
+          if (!mockRecaptchaResponse.success) {
+            return res.status(400).json({
+              success: false,
+              error:
+                mockRecaptchaResponse.error || 'reCAPTCHA verification failed. Please try again.',
+              requiresRecaptcha: true,
+            });
+          }
+        }
 
         // Validate required fields
         if (!currentPassword || !newPassword) {
@@ -298,6 +348,17 @@ describe('Auth API Endpoints', () => {
   });
 
   describe('POST /api/auth/register', () => {
+    beforeEach(() => {
+      // Reset reCAPTCHA mock
+      global.mockRecaptchaResponse = { success: true };
+      delete process.env.RECAPTCHA_SECRET_KEY;
+    });
+
+    afterEach(() => {
+      delete global.mockRecaptchaResponse;
+      delete process.env.RECAPTCHA_SECRET_KEY;
+    });
+
     it('should register a new user with valid data', async () => {
       // Mock HIBP API to return empty (password not found)
       const https = require('https');
@@ -349,6 +410,7 @@ describe('Auth API Endpoints', () => {
         age: 25,
         gender: 'Male',
         course: 'CS',
+        recaptchaToken: 'valid-token',
       });
 
       // Wait for async operations
@@ -460,6 +522,172 @@ describe('Auth API Endpoints', () => {
       expect(response.body.error).toContain('at least 8 characters');
     });
 
+    it('should return 400 if reCAPTCHA token is missing when secret key is set', async () => {
+      process.env.RECAPTCHA_SECRET_KEY = 'test-secret-key';
+
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'test@example.com',
+        password: 'validpass123',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+        course: 'CS',
+        // recaptchaToken is missing
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('reCAPTCHA token is missing');
+    });
+
+    it('should return 400 if reCAPTCHA verification fails', async () => {
+      process.env.RECAPTCHA_SECRET_KEY = 'test-secret-key';
+      global.mockRecaptchaResponse = { success: false, error: 'reCAPTCHA verification failed' };
+
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'test@example.com',
+        password: 'validpass123',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+        course: 'CS',
+        recaptchaToken: 'invalid-token',
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('reCAPTCHA verification failed');
+    });
+
+    it('should allow registration without reCAPTCHA when secret key is not set', async () => {
+      // Ensure RECAPTCHA_SECRET_KEY is not set
+      delete process.env.RECAPTCHA_SECRET_KEY;
+
+      // Mock HIBP API
+      const https = require('https');
+      const mockRequest = {
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, callback) => {
+          if (event === 'data') {
+            setTimeout(() => callback(''), 0);
+          } else if (event === 'end') {
+            setTimeout(() => callback(), 0);
+          }
+        }),
+      };
+
+      https.request = jest.fn((options, callback) => {
+        setTimeout(() => {
+          if (callback) callback(mockResponse);
+        }, 0);
+        return mockRequest;
+      });
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(null);
+      mockPrismaClient.user.create.mockResolvedValue({
+        id: 'user-1',
+        email: 'test@example.com',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+        verified: false,
+      });
+      bcrypt.hash.mockResolvedValue('hashed_password');
+
+      const response = await request(app).post('/api/auth/register').send({
+        email: 'test@example.com',
+        password: 'validpass123',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+        course: 'CS',
+        // No recaptchaToken provided
+      });
+
+      // Wait for async operations
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('User registered successfully');
+    });
+
     it('should return 400 if password is found in data breaches', async () => {
       // Mock HIBP API to return compromised password
       const https = require('https');
@@ -508,6 +736,15 @@ describe('Auth API Endpoints', () => {
   });
 
   describe('POST /api/auth/login', () => {
+    beforeEach(() => {
+      // Reset reCAPTCHA mock
+      global.mockRecaptchaResponse = { success: true };
+    });
+
+    afterEach(() => {
+      delete global.mockRecaptchaResponse;
+    });
+
     it('should login with valid credentials', async () => {
       const mockUser = {
         id: 'user-1',
@@ -590,6 +827,75 @@ describe('Auth API Endpoints', () => {
       expect(response.body.requiresVerification).toBe(true);
       expect(response.body.error).toContain('not verified');
     });
+
+    it('should login successfully with valid reCAPTCHA token when rate limit exceeded', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed_password',
+        verified: true,
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+      global.mockRecaptchaResponse = { success: true };
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'password123',
+        recaptchaToken: 'valid-recaptcha-token',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Login successful');
+    });
+
+    it('should return 400 if reCAPTCHA verification fails', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed_password',
+        verified: true,
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+      global.mockRecaptchaResponse = { success: false, error: 'reCAPTCHA verification failed' };
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'password123',
+        recaptchaToken: 'invalid-recaptcha-token',
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('reCAPTCHA verification failed');
+      expect(response.body.requiresRecaptcha).toBe(true);
+    });
+
+    it('should allow login without reCAPTCHA when not provided', async () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        password: 'hashed_password',
+        verified: true,
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+
+      const response = await request(app).post('/api/auth/login').send({
+        email: 'test@example.com',
+        password: 'password123',
+        // No recaptchaToken provided
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Login successful');
+    });
   });
 
   describe('POST /api/auth/logout', () => {
@@ -655,6 +961,15 @@ describe('Auth API Endpoints', () => {
   describe('POST /api/auth/change-password', () => {
     const userId = 'user-123';
     const token = jwt.sign({ userId }, process.env.JWT_SECRET);
+
+    beforeEach(() => {
+      // Reset reCAPTCHA mock
+      global.mockRecaptchaResponse = { success: true };
+    });
+
+    afterEach(() => {
+      delete global.mockRecaptchaResponse;
+    });
 
     it('should successfully change password with valid credentials', async () => {
       const mockUser = {
@@ -893,6 +1208,88 @@ describe('Auth API Endpoints', () => {
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('Failed to change password');
+    });
+
+    it('should successfully change password with valid reCAPTCHA token when rate limit exceeded', async () => {
+      const mockUser = {
+        id: userId,
+        password: 'hashed_old_password',
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+      bcrypt.hash.mockResolvedValue('hashed_new_password');
+      mockPrismaClient.user.update.mockResolvedValue({
+        id: userId,
+        password: 'hashed_new_password',
+      });
+      global.mockRecaptchaResponse = { success: true };
+
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', [`token=${token}`])
+        .send({
+          currentPassword: 'oldpass123',
+          newPassword: 'newpass123',
+          recaptchaToken: 'valid-recaptcha-token',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Password changed successfully');
+    });
+
+    it('should return 400 if reCAPTCHA verification fails', async () => {
+      const mockUser = {
+        id: userId,
+        password: 'hashed_old_password',
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+      global.mockRecaptchaResponse = { success: false, error: 'reCAPTCHA verification failed' };
+
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', [`token=${token}`])
+        .send({
+          currentPassword: 'oldpass123',
+          newPassword: 'newpass123',
+          recaptchaToken: 'invalid-recaptcha-token',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('reCAPTCHA verification failed');
+      expect(response.body.requiresRecaptcha).toBe(true);
+    });
+
+    it('should allow password change without reCAPTCHA when not provided', async () => {
+      const mockUser = {
+        id: userId,
+        password: 'hashed_old_password',
+      };
+
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+      bcrypt.hash.mockResolvedValue('hashed_new_password');
+      mockPrismaClient.user.update.mockResolvedValue({
+        id: userId,
+        password: 'hashed_new_password',
+      });
+
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Cookie', [`token=${token}`])
+        .send({
+          currentPassword: 'oldpass123',
+          newPassword: 'newpass123',
+          // No recaptchaToken provided
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Password changed successfully');
     });
 
     it('should hash new password with bcrypt', async () => {
