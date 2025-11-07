@@ -16,6 +16,7 @@ const ReCAPTCHA = dynamic(() => import('react-google-recaptcha').then((mod) => m
 export default function Auth() {
   const router = useRouter()
   const { refreshSession } = useSession()
+  const siteKey = config.recaptchaSiteKey
   const [isLogin, setIsLogin] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [confirmPasswordError, setConfirmPasswordError] = useState('')
@@ -127,7 +128,7 @@ export default function Auth() {
       }
 
       // reCAPTCHA validation for registration (only if sitekey is configured)
-      if (config.recaptchaSiteKey && !recaptchaToken) {
+      if (siteKey && !recaptchaToken) {
         showToast('Please complete the reCAPTCHA verification.', 'error')
         return
       }
@@ -497,15 +498,12 @@ export default function Auth() {
               )}
 
               {/* Show reCAPTCHA for registration or when rate limit exceeded on login */}
-              {((!isLogin &&
-                config.recaptchaSiteKey &&
-                typeof config.recaptchaSiteKey === 'string' &&
-                config.recaptchaSiteKey.trim() !== '') ||
-                (isLogin && requiresRecaptcha && config.recaptchaSiteKey)) && (
+              {((!isLogin && siteKey && typeof siteKey === 'string' && siteKey.trim() !== '') ||
+                (isLogin && requiresRecaptcha && siteKey)) && (
                 <div className="form-group">
                   <ReCAPTCHA
                     key={recaptchaKey}
-                    sitekey={config.recaptchaSiteKey || ''}
+                    sitekey={siteKey || ''}
                     onChange={handleRecaptchaChange}
                     onExpired={() => setRecaptchaToken(null)}
                     onError={() => {

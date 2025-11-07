@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useRouter } from 'next/router'
 import React from 'react'
 import Auth from '../../pages/auth'
+import { config } from '../../utils/config'
 
 // Suppress act() warnings for Next.js dynamic imports (LoadableComponent)
 // This is a known issue with Next.js's dynamic import system in tests
@@ -1346,7 +1347,12 @@ describe('Auth Page', () => {
 
   describe('reCAPTCHA', () => {
     beforeEach(() => {
-      process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY = 'test-site-key'
+      // Set the site key on the exported config object without using `any`.
+      Object.defineProperty(config, 'recaptchaSiteKey', {
+        value: 'test-site-key-123',
+        configurable: true,
+        writable: true,
+      })
     })
 
     it('should not show reCAPTCHA in login form', async () => {
@@ -1384,7 +1390,12 @@ describe('Auth Page', () => {
     })
 
     it('should pass site key to reCAPTCHA component', async () => {
-      process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY = 'test-site-key-123'
+      // Ensure the site key is set on the exported config for this test
+      Object.defineProperty(config, 'recaptchaSiteKey', {
+        value: 'test-site-key-123',
+        configurable: true,
+        writable: true,
+      })
       // Wrap render in act() to handle Next.js dynamic import state updates
       await act(async () => {
         render(<Auth />)
