@@ -41,10 +41,8 @@ export async function middleware(request: NextRequest) {
 
     // Check admin status via frontend API route
     try {
-      // Use absolute URL for the API route
-      const protocol = request.nextUrl.protocol
-      const host = request.nextUrl.host
-      const adminCheckUrl = `${protocol}//${host}/api/auth/admin-check`
+      // Use relative path for the API route to avoid SSRF
+      const adminCheckUrl = `/api/auth/admin-check`
 
       const response = await fetch(adminCheckUrl, {
         method: 'GET',

@@ -1,21 +1,38 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const config = require('../lib/config');
 
+// Middleware to authenticate and authorize admin users
 const authenticateAdmin = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    const token =
+      (req.cookies && req.cookies.token) ||
+      (req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1]);
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: 'Access denied. No token provided.',
+        error: 'Authentication required. Please log in.',
       });
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.jwtSecret);
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          error: 'Session expired. Please log in again.',
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid authentication token.',
+      });
+    }
 
-    // Get user and check if admin
+    // Fetch user securely from database using verified token payload
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: {
@@ -36,7 +53,7 @@ const authenticateAdmin = async (req, res, next) => {
     if (user.banned) {
       return res.status(403).json({
         success: false,
-        error: 'Account has been banned.',
+        error: 'Access denied. Account has been banned.',
       });
     }
 
@@ -47,23 +64,17 @@ const authenticateAdmin = async (req, res, next) => {
       });
     }
 
-    req.user = decoded;
-    req.user.role = user.role;
+    // Attach verified user to request context
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
     next();
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid token.',
-      });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        error: 'Token expired.',
-      });
-    }
-    return res.status(500).json({
+    console.error('Admin authentication error:', error);
+    res.status(500).json({
       success: false,
       error: 'Internal server error.',
     });

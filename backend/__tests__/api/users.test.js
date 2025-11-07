@@ -14,6 +14,12 @@ jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrismaClient),
 }));
 
+jest.mock('lusca', () => ({
+  csrf: () => (req, res, next) => next(),
+  xframe: () => (req, res, next) => next(),
+  xssProtection: () => (req, res, next) => next(),
+}));
+
 describe('Users API Endpoints', () => {
   let app;
 
@@ -22,6 +28,8 @@ describe('Users API Endpoints', () => {
     app.use(express.json());
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+    const lusca = require('lusca');
+    app.use(lusca.csrf());
 
     // Add users route
     app.get('/api/users', authenticateToken, async (req, res) => {

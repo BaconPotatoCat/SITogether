@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
@@ -1545,7 +1546,15 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
 const { authenticateAdmin } = require('./middleware/admin');
 
 // Admin check endpoint (returns 403 if not admin)
-app.get('/api/auth/admin-check', authenticateAdmin, async (req, res) => {
+const adminCheckLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many admin check requests, please try again later.',
+  },
+});
+app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (req, res) => {
   res.json({
     success: true,
     message: 'Admin access granted',
@@ -1553,7 +1562,13 @@ app.get('/api/auth/admin-check', authenticateAdmin, async (req, res) => {
 });
 
 // Get all users (Admin only)
-app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
+const adminRateLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each admin to 20 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -1604,7 +1619,16 @@ app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
 });
 
 // Ban user (Admin only)
-app.post('/api/admin/users/:id/ban', authenticateAdmin, async (req, res) => {
+// Rate limiter for admin-ban actions - max 10 requests per minute per IP
+const adminBanLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  message: {
+    success: false,
+    error: 'Too many admin ban/unban requests from this IP, please try again later.',
+  },
+});
+app.post('/api/admin/users/:id/ban', adminBanLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1658,8 +1682,8 @@ app.post('/api/admin/users/:id/ban', authenticateAdmin, async (req, res) => {
       }),
     ]);
 
-    console.log(`Banned user ${id} and resolved ${reportsUpdated.count} pending reports`);
-
+    const sanitizedId = String(id).replace(/[\r\n]/g, '');
+    console.log(`Banned user ${sanitizedId} and resolved ${reportsUpdated.count} pending reports`);
     res.json({
       success: true,
       message: 'User banned successfully',
@@ -1676,7 +1700,7 @@ app.post('/api/admin/users/:id/ban', authenticateAdmin, async (req, res) => {
 });
 
 // Unban user (Admin only)
-app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1722,7 +1746,16 @@ app.post('/api/admin/users/:id/unban', authenticateAdmin, async (req, res) => {
 });
 
 // Create a report (Authenticated users)
-app.post('/api/reports', authenticateToken, async (req, res) => {
+const reportLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 5, // limit each IP/user to 5 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many reports created from this IP, please try again later.',
+  },
+});
+
+app.post('/api/reports', authenticateToken, reportLimiter, async (req, res) => {
   try {
     const reporterId = req.user.userId;
     const { reportedId, reason, description } = req.body;
@@ -1805,7 +1838,7 @@ app.post('/api/reports', authenticateToken, async (req, res) => {
 });
 
 // Get all reports (Admin only)
-app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
+app.get('/api/admin/reports', adminCheckLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -1866,10 +1899,11 @@ app.get('/api/admin/reports', authenticateAdmin, async (req, res) => {
 
 // Mark report as invalid (resolves without banning) (Admin only)
 // This route must be defined BEFORE the more general /api/admin/reports/:id route
-app.post('/api/admin/reports/:id/invalid', authenticateAdmin, async (req, res) => {
+app.post('/api/admin/reports/:id/invalid', reportLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`Marking report ${id} as invalid`);
+    const sanitizedId = id.replace(/[\r\n]/g, '');
+    console.log(`Marking report (id="${sanitizedId}") as invalid`);
 
     // Check if report exists
     const report = await prisma.report.findUnique({

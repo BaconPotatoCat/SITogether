@@ -61,7 +61,7 @@ describe('Admin Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'Access denied. No token provided.',
+        error: 'Authentication required. Please log in.',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -71,10 +71,10 @@ describe('Admin Middleware', () => {
 
       await authenticateAdmin(req, res, next);
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'Invalid token.',
+        error: 'Invalid authentication token.',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -107,7 +107,7 @@ describe('Admin Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'Account has been banned.',
+        error: 'Access denied. Account has been banned.',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -143,7 +143,7 @@ describe('Admin Middleware', () => {
       await authenticateAdmin(req, res, next);
 
       expect(req.user).toBeDefined();
-      expect(req.user.userId).toBe('admin-user-id');
+      expect(req.user.id).toBe('admin-user-id');
       expect(req.user.role).toBe('Admin');
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('Admin Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'Token expired.',
+        error: 'Session expired. Please log in again.',
       });
       expect(next).not.toHaveBeenCalled();
     });

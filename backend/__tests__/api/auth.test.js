@@ -13,6 +13,12 @@ const mockPrismaClient = {
   },
 };
 
+jest.mock('lusca', () => ({
+  csrf: () => (req, res, next) => next(),
+  xframe: () => (req, res, next) => next(),
+  xssProtection: () => (req, res, next) => next(),
+}));
+
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrismaClient),
 }));
@@ -29,6 +35,9 @@ describe('Auth API Endpoints', () => {
     app.use(express.json());
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+
+    const lusca = require('lusca');
+    app.use(lusca.csrf());
 
     // Add auth routes (simplified for testing)
     app.post('/api/auth/register', async (req, res) => {
