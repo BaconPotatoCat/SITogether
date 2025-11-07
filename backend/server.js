@@ -38,8 +38,24 @@ if (!isNaN(config.trustProxy) && config.trustProxy > 0) {
   app.set('trust proxy', config.trustProxy);
 }
 
-// Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'", 'https:'],
+        frameAncestors: ["'none'"],
+      },
+    },
+    frameguard: {
+      action: 'deny',
+    },
+  })
+);
 app.use(
   cors({
     origin: config.frontend.externalUrl,
