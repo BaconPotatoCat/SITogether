@@ -19,8 +19,8 @@ const PASSWORD_RESET_MAX_ATTEMPTS = 3;
 
 // Registration endpoint configuration
 // Prevents fake account creation
-const REGISTER_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const REGISTER_MAX_ATTEMPTS = 3;
+const REGISTER_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const REGISTER_MAX_ATTEMPTS = 5;
 
 // OTP/MFA verification configuration
 // Prevents OTP brute force
@@ -149,18 +149,26 @@ const changePasswordLimiter = rateLimit({
 /**
  * Rate limiter for registration endpoint
  * Prevents fake account creation
+ * Uses IP + email combination to avoid blocking legitimate users on shared networks
  */
 const registerLimiter = rateLimit({
   windowMs: REGISTER_WINDOW_MS,
   max: REGISTER_MAX_ATTEMPTS,
   message: {
     success: false,
-    error: `Too many registration attempts. Please try again after ${formatTimeWindow(REGISTER_WINDOW_MS)}.`,
+    error: `Too many registration attempts for this email. Please try again after ${formatTimeWindow(REGISTER_WINDOW_MS)}.`,
   },
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
-  keyGenerator: keyGenerator,
+  // Use IP + email as key to prevent blocking other users on same network
+  keyGenerator: (req) => {
+    const ip = keyGenerator(req);
+    const email = req.body?.email || 'no-email';
+    // Combine IP and email for unique key per user
+    // This prevents one user from blocking others on the same network
+    return `${ip}:${email.toLowerCase()}`;
+  },
 });
 
 /**
