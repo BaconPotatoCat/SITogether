@@ -32,21 +32,21 @@ jobs:
           git pull origin main
           
           echo "🛑 Stopping existing containers..."
-          docker compose down || true
+          docker-compose down || true
           
           echo "🔨 Building and starting containers..."
-          if ! docker compose up --build -d; then
+          if ! docker-compose up --build -d; then
             echo "❌ Docker Compose build/start failed!"
             echo "📋 Container logs:"
-            docker compose logs
+            docker-compose logs
             echo "📊 Container status:"
-            docker compose ps -a
+            docker-compose ps -a
             exit 1
           fi
           
           echo "✅ Build completed successfully"
           echo "📊 Container status:"
-          docker compose ps
+          docker-compose ps
         EOF
 
     - name: Verify deployment
@@ -60,15 +60,15 @@ jobs:
           sleep 30
           
           echo "📊 Checking container health..."
-          docker compose ps
+          docker-compose ps
           
           # Check if any containers exited
-          if docker compose ps -q | xargs docker inspect -f '{{.Name}}: {{.State.Status}}' | grep -q "exited\|dead\|failed"; then
+          if docker-compose ps -q | xargs docker inspect -f '{{.Name}}: {{.State.Status}}' | grep -q "exited\|dead\|failed"; then
             echo "❌ Some containers failed to start!"
             echo "📋 Detailed container status:"
-            docker compose ps -a
+            docker-compose ps -a
             echo "📋 Container logs:"
-            docker compose logs
+            docker-compose logs
             exit 1
           fi
           
@@ -76,17 +76,17 @@ jobs:
           if ! curl -f --max-time 10 http://localhost:3000 > /dev/null 2>&1; then
             echo "⚠️  Frontend not responding yet, but containers are running"
             echo "📋 Frontend container logs:"
-            docker compose logs frontend
+            docker-compose logs frontend
           else
             echo "✅ Frontend is accessible"
           fi
           
           echo "🔍 Testing backend health..."
           # Check backend health by executing curl inside the backend container
-          if ! docker compose exec -T backend curl -f --max-time 10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
+          if ! docker-compose exec -T backend curl -f --max-time 10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
             echo "❌ Backend health check failed!"
             echo "📋 Backend container logs:"
-            docker compose logs backend
+            docker-compose logs backend
             exit 1
           else
             echo "✅ Backend health check passed"
