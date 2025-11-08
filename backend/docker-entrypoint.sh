@@ -3,27 +3,48 @@ set -e
 
 echo "🔍 Starting backend initialization..."
 
-# Wait for database to be ready
-echo "⏳ Waiting for database to be ready..."
-MAX_RETRIES=30
-RETRY_COUNT=0
+# In test mode, rely on docker-compose healthchecks and skip Prisma DB wait
+if [ "$NODE_ENV" = "test" ]; then
+  echo "🧪 Test mode detected: skipping explicit DB readiness loop (compose healthcheck ensures readiness)"
+  echo "🛠️  Applying schema with prisma db push (test mode)"
+  # Try up to 3 times to account for slight race conditions
+  if ! npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee /tmp/dbpush.log; then
+    echo "⚠️  prisma db push failed (attempt 1). Waiting and retrying..."
+    sleep 5
+    if ! npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee -a /tmp/dbpush.log; then
+      echo "⚠️  prisma db push failed (attempt 2). Waiting and retrying..."
+      sleep 5
+      # Last attempt but don't fail the container in test runs
+      npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee -a /tmp/dbpush.log || true
+    fi
+  fi
+else
+  # Wait for database to be ready (non-test modes)
+  echo "⏳ Waiting for database to be ready..."
+  MAX_RETRIES=30
+  RETRY_COUNT=0
 
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if echo "SELECT 1;" | npx prisma db execute --stdin >/dev/null 2>&1; then
-    echo "✅ Database is ready!"
-    break
-  fi
-  
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  echo "Database is unavailable - attempt $RETRY_COUNT/$MAX_RETRIES"
-  
-  if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo "❌ Database failed to become ready after $MAX_RETRIES attempts"
-    exit 1
-  fi
-  
-  sleep 2
-done
+  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if echo "SELECT 1;" | npx prisma db execute --stdin 2> /tmp/dbcheck.err 1> /tmp/dbcheck.out; then
+      echo "✅ Database is ready!"
+      break
+    fi
+
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "Database is unavailable - attempt $RETRY_COUNT/$MAX_RETRIES"
+
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+      echo "❌ Database failed to become ready after $MAX_RETRIES attempts"
+      echo "--- prisma db execute stderr ---"
+      cat /tmp/dbcheck.err || true
+      echo "--- prisma db execute stdout ---"
+      cat /tmp/dbcheck.out || true
+      exit 1
+    fi
+
+    sleep 2
+  done
+fi
 
 # Handle database migrations/schema
 if [ "$NODE_ENV" = "production" ]; then
