@@ -10,10 +10,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const baseUrl = config.backendInternalUrl
     const { id } = req.query
 
-    if (!id || typeof id !== 'string') {
+    // Strict validation for report ID: allow only UUID or alphanumeric (adjust if needed)
+    const safeIdPattern = /^[a-zA-Z0-9-]+$/
+    if (
+      !id ||
+      typeof id !== 'string' ||
+      !safeIdPattern.test(id)
+    ) {
       return res.status(400).json({
         success: false,
-        error: 'Report ID is required',
+        error: 'Invalid Report ID',
       })
     }
 
