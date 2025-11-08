@@ -43,6 +43,11 @@ export const ensureCsrfToken = async (): Promise<string | null> => {
   }
 }
 
+// Remove CR and LF characters for log safety
+function sanitizeForLog(str: string): string {
+  return typeof str === "string" ? str.replace(/[\r\n]/g, "") : str;
+}
+
 // Utility function to make authenticated API calls (client-side)
 // @param redirectOn401 - If true (default), redirects to /auth on 401. If false, returns the response for custom handling.
 export const fetchWithAuth = async (
@@ -67,9 +72,9 @@ export const fetchWithAuth = async (
     }
     if (csrf) {
       headers['x-csrf-token'] = csrf
-      console.log('[fetchWithAuth] Added CSRF token to headers for:', url)
+      console.log('[fetchWithAuth] Added CSRF token to headers for:', sanitizeForLog(url))
     } else {
-      console.warn('CSRF token unavailable for request:', url)
+      console.warn('CSRF token unavailable for request:', sanitizeForLog(url))
     }
   }
 
