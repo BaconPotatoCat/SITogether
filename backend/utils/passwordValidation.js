@@ -13,13 +13,24 @@ const crypto = require('crypto');
 const https = require('https');
 
 /**
+ * Hashes a string using SHA-1 **only for HIBP API queries**.
+ * @param {string} input - string to hash (password for HIBP check)
+ * @returns {string} SHA-1 hash in uppercase
+ */
+// codeql[js/insecure-hash-for-password]: safe usage - HIBP k-Anonymity API
+// codeql[js/insufficient-work-factor-for-hash]: safe usage - hash is only for HIBP lookup
+function hashForHIBP(input) {
+  return crypto.createHash('sha1').update(input, 'utf8').digest('hex').toUpperCase();
+}
+
+/**
  * Checks if a password has been compromised using Have I Been Pwned API
  * @param {string} password
  * @returns {Promise<boolean>}
  */
 async function checkPasswordPwned(password) {
   try {
-    const hash = crypto.createHash('sha1').update(password, 'utf8').digest('hex').toUpperCase();
+    const hash = hashForHIBP(password);
 
     // Extract first 5 characters (prefix) and remaining 35 characters (suffix)
     const prefix = hash.substring(0, 5);

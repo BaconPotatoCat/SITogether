@@ -9,8 +9,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const backendUrl = `${config.backendInternalUrl}/api/points/claim-daily`
 
-    // Get token from cookie
+    // Get token and CSRF token from cookies
     const token = req.cookies.token
+    const csrfToken = req.headers['x-csrf-token']
+    const sid = req.cookies.sid
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -19,6 +21,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Add authorization header if token exists
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
+    }
+
+    // Forward CSRF token if present
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken as string
+    }
+
+    // Forward cookies (including session cookie)
+    let cookieHeader = ''
+    if (token) cookieHeader += `token=${token}; `
+    if (sid) cookieHeader += `sid=${sid}; `
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader.trim()
     }
 
     const response = await fetch(backendUrl, {

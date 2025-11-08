@@ -14,10 +14,14 @@ A modern frontend web application built with Next.js and TypeScript, containeriz
 - **Premium System**: Points-based premium features with daily tasks and unlocks
 - **Social Features**: Like/unlike users, pass functionality, and connection matching
 - **Advanced Filtering**: Premium filtering by age, gender, course, and interests
+- **User Reporting System**: Report users with reason selection and optional descriptions from Discovery Page and Chat
+- **Admin Panel**: Comprehensive user and report management interface for administrators
+- **User Management**: Admin features for banning/unbanning users and resetting passwords
+- **Report Management**: Admin interface to view, filter, and manage user reports with status tracking
 - **Profile Management**: User profiles with detailed information
 - **Swipe Interface**: Tinder-style card swipe for finding study buddies
 - **Containerization**: Docker Compose for easy development
-- **Modern UI**: Clean and responsive design with toast notifications
+- **Modern UI**: Clean and responsive design with toast notifications and custom confirmation modals
 
 ## 📁 Project Structure
 
@@ -110,6 +114,8 @@ The application uses JWT (JSON Web Tokens) for authentication with a NextAuth.js
 - **Logout**: Clears the authentication token and redirects to login
 - **Protected Routes**: All pages except `/auth`, `/verify`, and `/reset-password` require authentication
 - **Protected APIs**: `/api/users` and other endpoints require valid tokens
+- **Admin Routes**: Admin-only endpoints require authentication and 'Admin' role
+- **Banned User Prevention**: Banned users are blocked from accessing protected routes
 
 #### Using Sessions in Components
 
@@ -220,7 +226,8 @@ npm run security:audit
 ### What Gets Tested
 
 **Backend:**
-- ✅ Authentication middleware (JWT validation, token expiry)
+- ✅ Authentication middleware (JWT validation, token expiry, banned user checks)
+- ✅ Admin authentication middleware (role-based access control)
 - ✅ Registration API (validation, duplicate users, password hashing)
 - ✅ Login API (credentials validation, account verification)
 - ✅ Email verification (token generation, expiration, cleanup)
@@ -229,11 +236,15 @@ npm run security:audit
 - ✅ Users API (authorization, filtering verified users)
 - ✅ Points system (daily rewards, premium unlocks)
 - ✅ Social features (likes, passes, matching)
+- ✅ User reporting system (report creation, reason validation)
+- ✅ Admin APIs (user management, ban/unban, password reset, report management)
 - ✅ Security checks (SQL injection, XSS prevention, email enumeration prevention)
 
 **Frontend:**
-- ✅ Custom hooks (useToast, useSession)
-- ✅ Components (LoadingSpinner, ToastContainer)
+- ✅ Custom hooks (useToast, useSession, useDiscovery)
+- ✅ Components (LoadingSpinner, ToastContainer, ConfirmModal, DiscoveryPage, FilterModal)
+- ✅ Admin Panel (user management, report management, ban/unban functionality)
+- ✅ Report functionality (DiscoveryPage and Chat page reporting)
 - ✅ API utilities (fetchWithAuth, error handling)
 - ✅ TypeScript type checking
 - ✅ Next.js build validation

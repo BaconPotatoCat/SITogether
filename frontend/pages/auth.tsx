@@ -278,6 +278,7 @@ export default function Auth() {
     }
 
     setIsLoading(true)
+
     try {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',

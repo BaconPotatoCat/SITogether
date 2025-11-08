@@ -483,6 +483,10 @@ html.dark .nav-mobile {
   border-top-color: #374151;
 }
 
+.nav-mobile-admin {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
 .tab-link {
   text-align: center;
   padding: 0.6rem 0.75rem;

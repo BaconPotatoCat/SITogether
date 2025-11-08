@@ -6,7 +6,10 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
+const lusca = require('lusca');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
@@ -46,7 +49,68 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(cookieParser());
+// Provide a session so lusca CSRF can store tokens; without this, lusca throws.
+app.use(
+  session({
+    name: 'sid',
+    // Use the application JWT secret directly; config.js already validates presence of JWT_SECRET.
+    secret: config.jwtSecret,
+    resave: false,
+    saveUninitialized: true, // Send session cookie even for new sessions (needed for CSRF)
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      // Always false: backend runs behind reverse proxy that terminates HTTPS
+      secure: false,
+      maxAge: 1000 * 60 * 60 * 2, // 2 hours
+    },
+  })
+);
+// Enable CSRF protection (required for cookie-based auth)
+// CSRF configuration
+// For GET/HEAD/OPTIONS we run lusca to seed a token (no validation)
+// For mutating methods we validate, except selected auth endpoints that are safe pre-auth
+const csrfProtection = lusca.csrf({ header: 'x-csrf-token' });
+const csrfExemptPaths = new Set([
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/resend-verification',
+  '/api/auth/verify-2fa',
+  '/api/auth/resend-2fa',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/test-login',
+]);
+app.use((req, res, next) => {
+  const method = req.method;
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    // Seed token for reads; lusca won't enforce
+    return csrfProtection(req, res, next);
+  }
+  if (csrfExemptPaths.has(req.path)) {
+    // Allow specific auth endpoints without CSRF (pre-auth flows)
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
+
+// Expose CSRF token as a readable cookie to help SPA/Next.js fetch it easily
+app.use((req, res, next) => {
+  if (res.locals && res.locals._csrf) {
+    res.cookie('XSRF-TOKEN', res.locals._csrf, {
+      httpOnly: false, // must be readable by frontend JS
+      sameSite: 'lax',
+      secure: false, // Backend runs behind reverse proxy
+      maxAge: 1000 * 60 * 60, // 1 hour
+      path: '/', // Ensure cookie is available for all paths
+    });
+  }
+  next();
+});
+app.use(lusca.xframe('SAMEORIGIN'));
+app.use(lusca.xssProtection(true));
 app.use(morgan('combined'));
 // Increase body size limit to 10MB for image uploads
 app.use(express.json({ limit: '10mb' }));
@@ -75,13 +139,21 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
+// CSRF token fetch endpoint (frontend should call this on app load and include the returned token
+// in the `X-CSRF-Token` header for all state-changing POST/PUT/DELETE requests including login/register).
+// Lusca places the token in res.locals._csrf for GET requests after the csrf middleware runs.
+app.get('/api/auth/csrf', (req, res) => {
+  if (!res.locals._csrf) {
+    return res.status(500).json({ success: false, error: 'CSRF token unavailable' });
+  }
+
+  // Lusca has already stored the token in the session during middleware execution
+  // Mark session as initialized to ensure it gets saved and sid cookie is sent
+  if (req.session) {
+    req.session.csrfInitialized = true;
+  }
+
+  res.json({ success: true, csrfToken: res.locals._csrf });
 });
 
 // API routes
@@ -90,7 +162,6 @@ app.get('/api', (req, res) => {
     message: 'Welcome to SITogether API',
     version: '1.0.0',
     endpoints: {
-      health: '/health',
       api: '/api',
       users: 'GET /api/users (protected)',
       auth: {
@@ -103,8 +174,7 @@ app.get('/api', (req, res) => {
         logout: 'POST /api/auth/logout',
         changePassword: 'POST /api/auth/change-password (protected)',
         session: 'GET /api/auth/session (protected)',
-        forgotPassword: 'POST /api/auth/forgot-password',
-        resetPassword: 'POST /api/auth/reset-password',
+        resetPassword: 'POST /api/auth/reset-password (protected - authenticated users only)',
       },
       points: {
         getPoints: 'GET /api/points (protected)',
@@ -180,6 +250,9 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
     const users = await prisma.user.findMany({
       where: {
         verified: true,
+        role: {
+          not: 'Admin', // Exclude admin accounts from discovery
+        },
         id: {
           notIn: excludedIds,
         },
@@ -189,7 +262,6 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
         name: true,
         age: true,
         gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
@@ -235,7 +307,6 @@ app.get('/api/users/:id', async (req, res) => {
         name: true,
         age: true,
         gender: true,
-        role: true,
         course: true,
         bio: true,
         interests: true,
@@ -247,6 +318,20 @@ app.get('/api/users/:id', async (req, res) => {
     });
 
     if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Hide admin accounts from normal users (return 404)
+    // Check role internally without exposing it
+    const userWithRole = await prisma.user.findUnique({
+      where: { id: id },
+      select: { role: true },
+    });
+
+    if (userWithRole && userWithRole.role === 'Admin') {
       return res.status(404).json({
         success: false,
         error: 'User not found',
@@ -430,8 +515,12 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
       where: { id: id },
     });
 
-    // Clear the authentication cookie
-    res.clearCookie('token');
+    // Clear the authentication cookie (must match original cookie options)
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+    });
 
     res.json({
       success: true,
@@ -956,6 +1045,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
       await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
+      // Initialize session for CSRF (so sid cookie is sent)
+      if (req.session) {
+        req.session.pendingAuth = true;
+      }
+
       res.json({
         success: true,
         message: 'Please check your email for the verification code',
@@ -1059,10 +1153,16 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
     // Generate final JWT token
     const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
+    // Initialize/update session for CSRF (so sid cookie is sent)
+    if (req.session) {
+      req.session.userId = userId;
+      req.session.authenticated = true;
+    }
+
     // Set cookie with token
     res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: config.isProduction,
+      secure: false,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -1153,7 +1253,7 @@ app.post('/api/auth/test-login', async (req, res) => {
     // Set cookie with token
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour
     });
@@ -1288,7 +1388,35 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
 
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('token');
+  // Clear auth token (must match original cookie options)
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+  });
+
+  // Clear CSRF token cookie (must match original cookie options)
+  res.clearCookie('XSRF-TOKEN', {
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
+  });
+
+  // Destroy session and clear session cookie
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+    });
+  }
+
+  res.clearCookie('sid', {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+  });
+
   res.json({
     success: true,
     message: 'Logged out successfully',
@@ -1392,6 +1520,7 @@ app.get('/api/auth/session', authenticateToken, async (req, res) => {
         bio: true,
         interests: true,
         avatarUrl: true,
+        role: true,
       },
     });
 
@@ -1539,27 +1668,19 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       });
     }
 
-    // Validate password according to NIST 2025 guidelines
-    const passwordValidation = await validatePassword(newPassword);
-    if (!passwordValidation.isValid) {
-      return res.status(400).json({
-        success: false,
-        error: passwordValidation.errors.join('; '),
-      });
-    }
-
-    // Find password reset token
+    // Find password reset token with user
     const resetToken = await prisma.token.findFirst({
       where: {
         token,
         type: 'PASSWORD_RESET',
       },
+      include: { user: true },
     });
 
     if (!resetToken) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid or expired password reset token',
+        error: 'Invalid or expired reset token',
       });
     }
 
@@ -1571,7 +1692,7 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       });
       return res.status(400).json({
         success: false,
-        error: 'Password reset token has expired. Please request a new one.',
+        error: 'Reset token has expired. Please request a new password reset.',
       });
     }
 
@@ -1594,24 +1715,33 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       });
     }
 
+    // Validate password according to NIST 2025 guidelines
+    const passwordValidation = await validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+
     // Hash new password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    // Update user password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword },
-    });
-
-    // Delete the used reset token
-    await prisma.token.delete({
-      where: { id: resetToken.id },
-    });
+    // Update user password and delete the token in a transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetToken.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.token.delete({
+        where: { id: resetToken.id },
+      }),
+    ]);
 
     res.json({
       success: true,
-      message: 'Password has been reset successfully. You can now log in with your new password.',
+      message: 'Password has been reset successfully.',
     });
   } catch (error) {
     console.error('Reset password error:', error);
@@ -1623,7 +1753,476 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
   }
 });
 
-// Points API routes (protected)
+// ============================================
+// ADMIN ROUTES
+// ============================================
+
+const { authenticateAdmin } = require('./middleware/admin');
+
+// Admin check endpoint (returns 403 if not admin)
+const adminCheckLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many admin check requests, please try again later.',
+  },
+});
+app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Admin access granted',
+  });
+});
+
+// Get all users (Admin only)
+const adminRateLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each admin to 20 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        age: true,
+        gender: true,
+        role: true,
+        course: true,
+        verified: true,
+        banned: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            reports: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Decrypt all fields for response
+    const decryptedUsers = await Promise.all(
+      users.map(async (user) => {
+        const decryptedEmail = await decryptField(user.email);
+        const decryptedUser = await decryptUserFields(user);
+        return { ...decryptedUser, email: decryptedEmail };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: decryptedUsers,
+      count: decryptedUsers.length,
+    });
+  } catch (error) {
+    console.error('Admin users fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch users',
+      message: error.message,
+    });
+  }
+});
+
+// Ban user (Admin only)
+// Rate limiter for admin-ban actions - max 10 requests per minute per IP
+const adminBanLimiter = rateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  message: {
+    success: false,
+    error: 'Too many admin ban/unban requests from this IP, please try again later.',
+  },
+});
+app.post('/api/admin/users/:id/ban', adminBanLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Prevent banning admin users (check role internally)
+    const userRole = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (userRole && userRole.role === 'Admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot ban admin users',
+      });
+    }
+
+    // Ban the user and resolve all their reports
+    const [bannedUser, reportsUpdated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: {
+          banned: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          banned: true,
+        },
+      }),
+      prisma.report.updateMany({
+        where: {
+          reportedId: id,
+          status: 'Pending',
+        },
+        data: {
+          status: 'Resolved',
+        },
+      }),
+    ]);
+
+    const sanitizedId = String(id).replace(/[\r\n]/g, '');
+    console.log(`Banned user ${sanitizedId} and resolved ${reportsUpdated.count} pending reports`);
+    res.json({
+      success: true,
+      message: 'User banned successfully',
+      data: bannedUser,
+    });
+  } catch (error) {
+    console.error('Ban user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to ban user',
+      message: error.message,
+    });
+  }
+});
+
+// Unban user (Admin only)
+app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Unban the user
+    const unbannedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        banned: false,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        banned: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'User unbanned successfully',
+      data: unbannedUser,
+    });
+  } catch (error) {
+    console.error('Unban user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to unban user',
+      message: error.message,
+    });
+  }
+});
+
+// Create a report (Authenticated users)
+const reportLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 5, // limit each IP/user to 5 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many reports created from this IP, please try again later.',
+  },
+});
+
+app.post('/api/reports', reportLimiter, authenticateToken, async (req, res) => {
+  try {
+    const reporterId = req.user.userId;
+    const { reportedId, reason, description } = req.body;
+
+    // Validation
+    if (!reportedId || !reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'reportedId and reason are required',
+      });
+    }
+
+    // Cannot report yourself
+    if (reporterId === reportedId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot report yourself',
+      });
+    }
+
+    // Get reporter's email
+    const reporter = await prisma.user.findUnique({
+      where: { id: reporterId },
+      select: { id: true, email: true },
+    });
+
+    if (!reporter) {
+      return res.status(401).json({
+        success: false,
+        error: 'Reporter not found',
+      });
+    }
+
+    // Check if reported user exists
+    const reportedUser = await prisma.user.findUnique({
+      where: { id: reportedId },
+      select: { id: true },
+    });
+
+    if (!reportedUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Create report
+    const report = await prisma.report.create({
+      data: {
+        reportedId,
+        reportedBy: reporter.email,
+        reason,
+        description: description || null,
+        status: 'Pending',
+      },
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Report submitted successfully',
+      data: report,
+    });
+  } catch (error) {
+    console.error('Create report error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create report',
+      message: error.message,
+    });
+  }
+});
+
+// Get all reports (Admin only)
+app.get('/api/admin/reports', adminCheckLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    const whereClause = status ? { status: status } : {};
+
+    const reports = await prisma.report.findMany({
+      where: whereClause,
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            banned: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const decryptedReports = await Promise.all(
+      reports.map(async (report) => {
+        const user = report.reportedUser;
+
+        const decryptedReportedBy = await decryptField(report.reportedBy);
+
+        let decryptedUser = null;
+        if (user) {
+          const decryptedEmail = await decryptField(user.email);
+          const decryptedUserFields = await decryptUserFields(user);
+          decryptedUser = { ...decryptedUserFields, email: decryptedEmail };
+        }
+
+        return {
+          ...report,
+          reportedBy: decryptedReportedBy,
+          reportedUser: decryptedUser,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: decryptedReports,
+      count: decryptedReports.length,
+    });
+  } catch (error) {
+    console.error('Fetch reports error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch reports',
+      message: error.message,
+    });
+  }
+});
+
+// Mark report as invalid (resolves without banning) (Admin only)
+// This route must be defined BEFORE the more general /api/admin/reports/:id route
+app.post('/api/admin/reports/:id/invalid', reportLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sanitizedId = id.replace(/[\r\n]/g, '');
+    console.log(`Marking report (id="${sanitizedId}") as invalid`);
+
+    // Check if report exists
+    const report = await prisma.report.findUnique({
+      where: { id },
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found',
+      });
+    }
+
+    // Update report status to Resolved
+    const updatedReport = await prisma.report.update({
+      where: { id },
+      data: { status: 'Resolved' },
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            banned: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Report marked as invalid and resolved',
+      data: updatedReport,
+    });
+  } catch (error) {
+    console.error('Mark report as invalid error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to mark report as invalid',
+      message: error.message,
+    });
+  }
+});
+
+// Update report status (Admin only)
+app.put('/api/admin/reports/:id', reportLimiter, authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    const validStatuses = ['Pending', 'Resolved'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status. Must be one of: Pending, Resolved',
+      });
+    }
+
+    // Check if report exists
+    const report = await prisma.report.findUnique({
+      where: { id },
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found',
+      });
+    }
+
+    // Update report
+    const updatedReport = await prisma.report.update({
+      where: { id },
+      data: { status },
+      include: {
+        reportedUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            banned: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Report updated successfully',
+      data: updatedReport,
+    });
+  } catch (error) {
+    console.error('Update report error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update report',
+      message: error.message,
+    });
+  }
+});
+
+// ============================================
+// POINTS API ROUTES (protected)
+// ============================================
 
 // Get user points
 app.get('/api/points', authenticateToken, async (req, res) => {
@@ -1656,7 +2255,7 @@ app.get('/api/points', authenticateToken, async (req, res) => {
             dailyLikeClaimedDate: true,
           },
         });
-        console.log(`✓ Created UserPoints record for user ${userId}`);
+        console.log(`âœ“ Created UserPoints record for user ${userId}`);
       } catch (createError) {
         console.error(`Failed to create UserPoints for user ${userId}:`, createError);
         return res.status(500).json({
@@ -2044,10 +2643,15 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
-    // Get all likes by the current user
+    // Get all likes by the current user (excluding admin accounts)
     const likes = await prisma.userLikes.findMany({
       where: {
         likerId: likerId,
+        liked: {
+          role: {
+            not: 'Admin', // Exclude admin accounts
+          },
+        },
       },
       include: {
         liked: {
@@ -2146,10 +2750,15 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
-    // Get all likes by the current user
+    // Get all likes by the current user (excluding admin accounts)
     const likes = await prisma.userLikes.findMany({
       where: {
         likerId: likerId,
+        liked: {
+          role: {
+            not: 'Admin', // Exclude admin accounts
+          },
+        },
       },
       include: {
         liked: {
@@ -2608,7 +3217,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
     });
 
     // Decrypt lastMessage content if present (application-level decryption)
-    const result = await Promise.all(
+    const conversationResults = await Promise.all(
       conversations.map(async (c) => {
         const otherUserId = c.userAId === userId ? c.userBId : c.userAId;
         // Handle case where other user might be deleted (null)
@@ -2618,6 +3227,19 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
               select: { id: true, name: true, avatarUrl: true },
             })
           : null;
+
+        // Check if other user is admin (without exposing role)
+        const otherUserRole = otherUserId
+          ? await prisma.user.findUnique({
+              where: { id: otherUserId },
+              select: { role: true },
+            })
+          : null;
+
+        // Exclude conversations with admin accounts
+        if (otherUserRole && otherUserRole.role === 'Admin') {
+          return null;
+        }
 
         // Decrypt lastMessage if it exists
         let lastMessage = c.messages[0] || null;
@@ -2656,6 +3278,9 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         };
       })
     );
+
+    // Filter out null results (admin conversations)
+    const result = conversationResults.filter((r) => r !== null);
 
     res.json({ success: true, conversations: result });
   } catch (error) {

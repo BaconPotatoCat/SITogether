@@ -57,6 +57,8 @@ const mockUserData = {
 describe('Profile Avatar Upload Feature', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Suppress console warnings during tests
+    jest.spyOn(console, 'warn').mockImplementation(() => {})
     ;(useRouter as jest.Mock).mockReturnValue({
       push: mockPush,
       isReady: true,
@@ -102,6 +104,10 @@ describe('Profile Avatar Upload Feature', () => {
           }),
       })
     ) as unknown as jest.Mock
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
   it('should have a file input for avatar upload', async () => {

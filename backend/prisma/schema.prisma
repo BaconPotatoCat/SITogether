@@ -24,6 +24,7 @@ model User {
   interests String?      // Encrypted interests data at rest (stored as encrypted JSON string, nullable)
   avatarUrl String?      @map("avatar_url")
   verified  Boolean      @default(false)
+  banned    Boolean      @default(false)
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
   tokens    Token[]
@@ -37,9 +38,25 @@ model User {
   conversationsA Conversation[] @relation("UserAConversations")
   conversationsB Conversation[] @relation("UserBConversations")
   sentMessages   Message[]      @relation("UserSentMessages")
+  reports    Report[] @relation("ReportedUser")
 
   @@index([emailHash])
   @@map("users")
+}
+
+model Report {
+  id          String   @id @default(uuid()) @db.Uuid
+  reportedId  String   @map("reported_id") @db.Uuid
+  reportedBy  String   @map("reported_by")
+  reason      String
+  description String?
+  status      String   @default("Pending") // Pending, Reviewed, Resolved
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reportedUser User @relation("ReportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
 }
 
 model Token {

@@ -1,9 +1,11 @@
 import type { AppProps } from 'next/app'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import { useEffect } from 'react'
 import { AuthProvider, useSession } from '../contexts/AuthContext'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { ensureCsrfToken } from '../utils/api'
 import '../styles/globals.css'
 
 function Navigation() {
@@ -11,6 +13,7 @@ function Navigation() {
   const { session, status, signOut } = useSession()
   const isActive = (path: string) => router.pathname === path
   const isAuthenticated = status === 'authenticated'
+  const isAdmin = session?.user?.role === 'Admin'
 
   const handleLogout = async () => {
     await signOut()
@@ -43,6 +46,11 @@ function Navigation() {
             <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">
               Chat
             </Link>
+            {isAdmin && (
+              <Link className={isActive('/admin') ? 'nav-link active' : 'nav-link'} href="/admin">
+                Admin
+              </Link>
+            )}
             {isAuthenticated ? (
               <div className="profile-dropdown">
                 <div className="nav-profile">
@@ -93,7 +101,7 @@ function Navigation() {
         </div>
       </nav>
 
-      <nav className="nav-mobile">
+      <nav className={`nav-mobile ${isAdmin ? 'nav-mobile-admin' : ''}`}>
         <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
           Discover
         </Link>
@@ -108,6 +116,11 @@ function Navigation() {
         <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">
           Chat
         </Link>
+        {isAdmin && (
+          <Link className={isActive('/admin') ? 'tab-link active' : 'tab-link'} href="/admin">
+            Admin
+          </Link>
+        )}
         {isAuthenticated ? (
           <Link className={isActive('/profile') ? 'tab-link active' : 'tab-link'} href="/profile">
             Profile
@@ -125,6 +138,13 @@ function Navigation() {
 function AppContent({ Component, pageProps }: AppProps) {
   const { status } = useSession()
   const router = useRouter()
+
+  // Initialize CSRF token on mount for authenticated users
+  useEffect(() => {
+    if (status === 'authenticated') {
+      ensureCsrfToken().catch((err) => console.error('Failed to initialize CSRF token:', err))
+    }
+  }, [status])
 
   // Don't show loading spinner on auth page
   const isAuthPage = router.pathname === '/auth'

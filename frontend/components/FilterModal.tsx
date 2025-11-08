@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import Slider from '@mui/material/Slider'
+import { Slider } from '@mui/material'
 
 interface FilterOptions {
   gender: string

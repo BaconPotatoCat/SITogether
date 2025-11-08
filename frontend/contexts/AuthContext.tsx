@@ -9,6 +9,7 @@ interface User {
   bio?: string
   interests?: string[]
   avatarUrl?: string
+  role?: string
 }
 
 interface Session {

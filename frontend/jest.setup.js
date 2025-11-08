@@ -14,7 +14,7 @@ jest.mock('next/head', () => {
       React.useEffect(() => {
         const childrenArray = React.Children.toArray(children)
         const titleElement = childrenArray.find(
-          child => React.isValidElement(child) && child.type === 'title'
+          (child) => React.isValidElement(child) && child.type === 'title'
         )
         if (titleElement && React.isValidElement(titleElement)) {
           // Handle both string and array children
@@ -39,6 +39,11 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = jest.fn()
 }
 
+// Mock window.alert for jsdom (not implemented by jsdom)
+if (typeof window !== 'undefined' && !window.alert) {
+  window.alert = jest.fn()
+}
+
 // Global handler for unhandled rejections in tests
 // Components using try-finally without catch will have unhandled rejections
 // but handle them gracefully in production via finally blocks
@@ -48,4 +53,3 @@ process.prependListener('unhandledRejection', (reason, promise) => {
   // Tests will verify component behavior instead
   // The rejection is caught and handled gracefully
 })
-

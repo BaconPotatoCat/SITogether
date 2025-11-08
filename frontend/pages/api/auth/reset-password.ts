@@ -9,12 +9,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const backendUrl = `${config.backendInternalUrl}/api/auth/reset-password`
 
+    // Get authentication token from cookies (required for reset-password)
+    const token = req.cookies.token
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+      })
+    }
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      Cookie: `token=${token}`,
+    }
+
     const response = await fetch(backendUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(req.body),
+      credentials: 'include',
     })
 
     const data = await response.json()

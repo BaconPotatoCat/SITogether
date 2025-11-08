@@ -27,6 +27,12 @@ jest.mock('../../utils/messageValidation', () => ({
   validateAndSanitizeMessage: (...args) => mockValidateAndSanitizeMessage(...args),
 }));
 
+jest.mock('lusca', () => ({
+  csrf: () => (req, res, next) => next(),
+  xframe: () => (req, res, next) => next(),
+  xssProtection: () => (req, res, next) => next(),
+}));
+
 describe('Conversations API Endpoints', () => {
   let app;
   let mockAuthToken;
@@ -37,6 +43,9 @@ describe('Conversations API Endpoints', () => {
     app.use(express.json());
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+
+    const lusca = require('lusca');
+    app.use(lusca.csrf());
 
     // Mock authenticateToken middleware
     app.use('/api/conversations/:id/messages', authenticateToken);

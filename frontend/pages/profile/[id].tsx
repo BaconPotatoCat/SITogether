@@ -25,6 +25,7 @@ export default function ProfilePage() {
   const { session } = useSession()
   const idParam = router.query.id
   const id = typeof idParam === 'string' ? idParam : null
+  const fromAdmin = router.query.from === 'admin'
   const [profile, setProfile] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -106,12 +107,24 @@ export default function ProfilePage() {
             The profile you&apos;re looking for doesn&apos;t exist or may have been removed.
           </p>
           <div style={{ display: 'flex', gap: '1rem' }}>
-            <Link className="btn primary" href="/" style={{ textAlign: 'center' }}>
-              Back to Discover
-            </Link>
-            <Link className="btn ghost" href="/profile" style={{ textAlign: 'center' }}>
-              My Profile
-            </Link>
+            {fromAdmin ? (
+              <button
+                onClick={() => router.push('/admin')}
+                className="btn primary"
+                style={{ textAlign: 'center' }}
+              >
+                Back to Admin Panel
+              </button>
+            ) : (
+              <>
+                <Link className="btn primary" href="/" style={{ textAlign: 'center' }}>
+                  Back to Discover
+                </Link>
+                <Link className="btn ghost" href="/profile" style={{ textAlign: 'center' }}>
+                  My Profile
+                </Link>
+              </>
+            )}
           </div>
         </main>
       </>
@@ -154,9 +167,19 @@ export default function ProfilePage() {
               )}
             </div>
             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-              <Link className="btn ghost" href="/" style={{ textAlign: 'center' }}>
-                Back to Discover
-              </Link>
+              {fromAdmin ? (
+                <button
+                  onClick={() => router.push('/admin')}
+                  className="btn ghost"
+                  style={{ textAlign: 'center' }}
+                >
+                  Back to Admin Panel
+                </button>
+              ) : (
+                <Link className="btn ghost" href="/" style={{ textAlign: 'center' }}>
+                  Back to Discover
+                </Link>
+              )}
             </div>
           </div>
         </article>

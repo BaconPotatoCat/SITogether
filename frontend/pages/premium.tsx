@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useSession } from '../contexts/AuthContext'
+import { fetchWithAuth } from '../utils/api'
 import DailyTasksComponent from '../components/DailyTasksComponent'
 import DiscoveryPage from '../components/DiscoveryPage'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface PremiumStatus {
   isPremiumActive: boolean
@@ -18,6 +21,7 @@ export default function Premium() {
   const [tasksCollapsed, setTasksCollapsed] = useState(false)
   const [previousPoints, setPreviousPoints] = useState(0)
   const { status, session } = useSession()
+  const { toasts, showToast, removeToast } = useToast()
 
   useEffect(() => {
     // Check premium status when component mounts and user is authenticated
@@ -53,7 +57,7 @@ export default function Premium() {
 
     setUnlockingPremium(true)
     try {
-      const response = await fetch('/api/points/unlock-premium', { method: 'POST' })
+      const response = await fetchWithAuth('/api/points/unlock-premium', { method: 'POST' })
       const data = await response.json()
       if (data.success) {
         setPremiumStatus((prev) =>
@@ -67,11 +71,11 @@ export default function Premium() {
             : null
         )
       } else {
-        alert(data.error || 'Failed to unlock premium')
+        showToast(data.error || 'Failed to unlock premium', 'error')
       }
     } catch (error) {
       console.error('Failed to unlock premium:', error)
-      alert('Failed to unlock premium')
+      showToast('Failed to unlock premium', 'error')
     } finally {
       setUnlockingPremium(false)
     }
@@ -217,6 +221,7 @@ export default function Premium() {
           )}
         </div>
       </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

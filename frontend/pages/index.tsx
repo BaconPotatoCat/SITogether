@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { fetchWithAuth } from '../utils/api'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -27,10 +29,6 @@ export default function Home() {
   const [drag, setDrag] = useState({ x: 0, y: 0, active: false })
   const startRef = useRef<{ x: number; y: number } | null>(null)
 
-  // Health check state
-  const [healthCheckResult, setHealthCheckResult] = useState<string | null>(null)
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false)
-
   // Tutorial state
   const [runTutorial, setRunTutorial] = useState(false)
 
@@ -40,6 +38,14 @@ export default function Home() {
 
   // Fade-out control when removing
   const [removing, setRemoving] = useState<null | 'like' | 'pass'>(null)
+
+  // Report modal state
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportingUserId, setReportingUserId] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const { toasts, showToast, removeToast } = useToast()
 
   // Fetch users from database on component mount
   useEffect(() => {
@@ -136,6 +142,52 @@ export default function Home() {
   }
 
   const onPass = () => handleSwipeAction('/api/passes', { passedId: topCard.id }, -500, 'pass')
+
+  const handleReportClick = (userId: string) => {
+    setReportingUserId(userId)
+    setShowReportModal(true)
+    setReportReason('')
+    setReportDescription('')
+  }
+
+  const handleSubmitReport = async () => {
+    if (!reportingUserId || !reportReason.trim()) {
+      showToast('Please select a reason for reporting', 'warning')
+      return
+    }
+
+    setIsSubmittingReport(true)
+    try {
+      const response = await fetchWithAuth('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          reportedId: reportingUserId,
+          reason: reportReason,
+          description: reportDescription.trim() || null,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
+        )
+        setShowReportModal(false)
+        setReportingUserId(null)
+        setReportReason('')
+        setReportDescription('')
+      } else {
+        showToast(result.error || 'Failed to submit report', 'error')
+      }
+    } catch (error) {
+      showToast('Failed to submit report. Please try again.', 'error')
+      console.error('Report error:', error)
+    } finally {
+      setIsSubmittingReport(false)
+    }
+  }
 
   const pointerDown = (clientX: number, clientY: number) => {
     startRef.current = { x: clientX, y: clientY }
@@ -284,35 +336,6 @@ export default function Home() {
     }
   }
 
-  // Health check function - now calls frontend API route which proxies to backend
-  const checkBackendHealth = async () => {
-    setIsCheckingHealth(true)
-    setHealthCheckResult(null)
-
-    try {
-      // Call the frontend API route which will proxy the request to the backend container
-      const response = await fetch('/api/health')
-      const result = await response.json()
-
-      if (result.success) {
-        const data = result.data
-        setHealthCheckResult(
-          `✅ Backend is healthy!\nStatus: ${data.status}\nUptime: ${Math.round(data.uptime)}s\nTimestamp: ${data.timestamp}\n\n🔗 Request made by: Frontend Container → Backend Container`
-        )
-      } else {
-        setHealthCheckResult(
-          `❌ ${result.error}\n\n🔗 Request made by: Frontend Container → Backend Container`
-        )
-      }
-    } catch (error) {
-      setHealthCheckResult(
-        `❌ Failed to connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}\n\n🔗 Request made by: Frontend Container → Backend Container`
-      )
-    } finally {
-      setIsCheckingHealth(false)
-    }
-  }
-
   return (
     <>
       <Head>
@@ -375,53 +398,6 @@ export default function Home() {
             },
           }}
         />
-        {/* Temporary Health Check Section */}
-        <section
-          style={{
-            padding: '20px',
-            marginBottom: '20px',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '8px',
-            border: '1px solid #e9ecef',
-          }}
-        >
-          <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#333' }}>
-            🔧 Backend Health Check (Temporary)
-          </h2>
-          <button
-            onClick={checkBackendHealth}
-            disabled={isCheckingHealth}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: isCheckingHealth ? '#6c757d' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isCheckingHealth ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              marginBottom: '15px',
-            }}
-          >
-            {isCheckingHealth ? '🔄 Checking...' : '🏥 Check Backend Health'}
-          </button>
-
-          {healthCheckResult && (
-            <div
-              style={{
-                padding: '15px',
-                backgroundColor: healthCheckResult.includes('✅') ? '#d4edda' : '#f8d7da',
-                border: `1px solid ${healthCheckResult.includes('✅') ? '#c3e6cb' : '#f5c6cb'}`,
-                borderRadius: '4px',
-                color: healthCheckResult.includes('✅') ? '#155724' : '#721c24',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                whiteSpace: 'pre-line',
-              }}
-            >
-              {healthCheckResult}
-            </div>
-          )}
-        </section>
 
         <section className="swipe-section">
           {loading ? (
@@ -618,11 +594,169 @@ export default function Home() {
                 <button className="btn primary" onClick={onLike} data-tutorial="like-button">
                   Like
                 </button>
+                <button
+                  className="btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    if (topCard) {
+                      handleReportClick(topCard.id)
+                    }
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  title="Report user"
+                  type="button"
+                  style={{
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#c82333'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#dc3545'
+                  }}
+                >
+                  🚩 Report
+                </button>
               </div>
             </>
           )}
         </section>
+
+        {/* Report Modal */}
+        {showReportModal && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+            onClick={() => {
+              if (!isSubmittingReport) {
+                setShowReportModal(false)
+                setReportingUserId(null)
+              }
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                padding: '24px',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: '90vh',
+                overflow: 'auto',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Report User</h2>
+              <p style={{ marginBottom: '20px', color: '#666' }}>
+                Please select a reason for reporting this user. All reports are reviewed by our
+                moderation team.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                  Reason <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  disabled={isSubmittingReport}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="">Select a reason...</option>
+                  <option value="Inappropriate Content">Inappropriate Content</option>
+                  <option value="Harassment">Harassment</option>
+                  <option value="Spam">Spam</option>
+                  <option value="Fake Profile">Fake Profile</option>
+                  <option value="Inappropriate Behavior">Inappropriate Behavior</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  disabled={isSubmittingReport}
+                  placeholder="Please provide any additional information..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    if (!isSubmittingReport) {
+                      setShowReportModal(false)
+                      setReportingUserId(null)
+                    }
+                  }}
+                  disabled={isSubmittingReport}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: isSubmittingReport ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={isSubmittingReport || !reportReason.trim()}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor:
+                      isSubmittingReport || !reportReason.trim() ? '#6c757d' : '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: isSubmittingReport || !reportReason.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

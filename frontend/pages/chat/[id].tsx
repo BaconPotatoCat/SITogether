@@ -2,6 +2,9 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { sanitizeForDisplay } from '../../utils/messageValidation'
+import { fetchWithAuth } from '../../utils/api'
+import ToastContainer from '../../components/ToastContainer'
+import { useToast } from '../../hooks/useToast'
 
 interface Message {
   id: string
@@ -28,6 +31,11 @@ export default function ConversationPage() {
   const [me, setMe] = useState<Participant | null>(null)
   const [other, setOther] = useState<Participant | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false)
+  const { toasts, showToast, removeToast } = useToast()
 
   useEffect(() => {
     if (!id || typeof id !== 'string') return
@@ -85,15 +93,14 @@ export default function ConversationPage() {
     const { validateMessageContent } = await import('../../utils/messageValidation')
     const validation = validateMessageContent(text)
     if (!validation.isValid) {
-      alert(validation.error || 'Invalid message')
+      showToast(validation.error || 'Invalid message', 'error')
       return
     }
 
     setSending(true)
     try {
-      const res = await fetch(`/api/conversations/${id}/messages`, {
+      const res = await fetchWithAuth(`/api/conversations/${id}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text.trim() }),
       })
       const data = await res.json()
@@ -104,7 +111,7 @@ export default function ConversationPage() {
       }
       if (res.status === 400) {
         // Validation error from backend
-        alert(data.error || 'Invalid message')
+        showToast(data.error || 'Invalid message', 'error')
         return
       }
       if (data.success) {
@@ -114,6 +121,51 @@ export default function ConversationPage() {
       }
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleReportClick = () => {
+    if (!other) return
+    setShowReportModal(true)
+    setReportReason('')
+    setReportDescription('')
+  }
+
+  const handleSubmitReport = async () => {
+    if (!other || !reportReason.trim()) {
+      showToast('Please select a reason for reporting', 'warning')
+      return
+    }
+
+    setIsSubmittingReport(true)
+    try {
+      const response = await fetchWithAuth('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          reportedId: other.id,
+          reason: reportReason,
+          description: reportDescription.trim() || null,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        showToast(
+          'Report submitted successfully. Thank you for helping keep our community safe.',
+          'success'
+        )
+        setShowReportModal(false)
+        setReportReason('')
+        setReportDescription('')
+      } else {
+        showToast(result.error || 'Failed to submit report', 'error')
+      }
+    } catch (error) {
+      showToast('Failed to submit report. Please try again.', 'error')
+      console.error('Report error:', error)
+    } finally {
+      setIsSubmittingReport(false)
     }
   }
 
@@ -137,6 +189,76 @@ export default function ConversationPage() {
           <>
             {isLocked && (
               <div className="lock-banner">🔒 Chat is locked until you both like each other.</div>
+            )}
+
+            {/* Chat Header with Other User Info and Report Button */}
+            {other && messages.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  border: '1px solid #e9ecef',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {other.avatarUrl ? (
+                    <img
+                      src={other.avatarUrl}
+                      alt={`${other.name} avatar`}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ddd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        color: '#666',
+                      }}
+                    >
+                      {(other.name || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{other.name}</h3>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
+                      Active conversation
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleReportClick}
+                  title="Report user"
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                  }}
+                >
+                  🚩 Report
+                </button>
+              </div>
             )}
 
             <div className="chat-thread">
@@ -230,7 +352,139 @@ export default function ConversationPage() {
             </form>
           </>
         )}
+
+        {/* Report Modal */}
+        {showReportModal && other && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+            onClick={() => {
+              if (!isSubmittingReport) {
+                setShowReportModal(false)
+              }
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                padding: '24px',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: '90vh',
+                overflow: 'auto',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Report User</h2>
+              <p style={{ marginBottom: '20px', color: '#666' }}>
+                Reporting: <strong>{other.name}</strong>
+              </p>
+              <p style={{ marginBottom: '20px', color: '#666' }}>
+                Please select a reason for reporting this user. All reports are reviewed by our
+                moderation team.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                  Reason <span style={{ color: '#dc3545' }}>*</span>
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  disabled={isSubmittingReport}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                  }}
+                >
+                  <option value="">Select a reason...</option>
+                  <option value="Inappropriate Content">Inappropriate Content</option>
+                  <option value="Harassment">Harassment</option>
+                  <option value="Spam">Spam</option>
+                  <option value="Fake Profile">Fake Profile</option>
+                  <option value="Inappropriate Behavior">Inappropriate Behavior</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  disabled={isSubmittingReport}
+                  placeholder="Please provide any additional information..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    if (!isSubmittingReport) {
+                      setShowReportModal(false)
+                    }
+                  }}
+                  disabled={isSubmittingReport}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: isSubmittingReport ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitReport}
+                  disabled={isSubmittingReport || !reportReason.trim()}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor:
+                      isSubmittingReport || !reportReason.trim() ? '#6c757d' : '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: isSubmittingReport || !reportReason.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

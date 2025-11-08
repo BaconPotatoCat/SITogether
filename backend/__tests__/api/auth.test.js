@@ -13,6 +13,12 @@ const mockPrismaClient = {
   },
 };
 
+jest.mock('lusca', () => ({
+  csrf: () => (req, res, next) => next(),
+  xframe: () => (req, res, next) => next(),
+  xssProtection: () => (req, res, next) => next(),
+}));
+
 jest.mock('@prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrismaClient),
 }));
@@ -29,6 +35,9 @@ describe('Auth API Endpoints', () => {
     app.use(express.json());
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+
+    const lusca = require('lusca');
+    app.use(lusca.csrf());
 
     // Add auth routes (simplified for testing)
     app.post('/api/auth/register', async (req, res) => {
@@ -972,6 +981,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should successfully change password with valid credentials', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const mockUser = {
         id: userId,
         password: 'hashed_old_password',
@@ -1005,6 +1015,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 400 when current password is missing', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -1018,6 +1029,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 400 when new password is missing', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -1040,6 +1052,7 @@ describe('Auth API Endpoints', () => {
       mockRequest.on.mockReturnValue(mockRequest);
       https.request = jest.fn().mockReturnValue(mockRequest);
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -1065,6 +1078,7 @@ describe('Auth API Endpoints', () => {
       mockRequest.on.mockReturnValue(mockRequest);
       https.request = jest.fn().mockReturnValue(mockRequest);
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const longPassword = 'a'.repeat(65);
       const response = await request(app)
         .post('/api/auth/change-password')
@@ -1121,6 +1135,7 @@ describe('Auth API Endpoints', () => {
       mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
       bcrypt.compare.mockResolvedValue(true);
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -1137,6 +1152,7 @@ describe('Auth API Endpoints', () => {
     });
 
     it('should return 401 when current password is incorrect', async () => {
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const mockUser = {
         id: userId,
         password: 'hashed_old_password',
@@ -1162,7 +1178,8 @@ describe('Auth API Endpoints', () => {
 
     it('should return 404 when user is not found', async () => {
       mockPrismaClient.user.findUnique.mockResolvedValue(null);
-
+      // Mock auth check to work, but route handler check to return null
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       const response = await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
@@ -1306,6 +1323,7 @@ describe('Auth API Endpoints', () => {
         password: 'hashed_new_password',
       });
 
+      const token = jwt.sign({ userId }, process.env.JWT_SECRET);
       await request(app)
         .post('/api/auth/change-password')
         .set('Cookie', [`token=${token}`])
