@@ -1091,6 +1091,97 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
   }
 });
 
+// Test authentication endpoint (bypasses 2FA for security scanning tools)
+// Only available in test mode
+app.post('/api/auth/test-login', async (req, res) => {
+  // Only allow in test environment
+  if (process.env.NODE_ENV !== 'test') {
+    return res.status(403).json({
+      success: false,
+      error: 'Test login endpoint is only available in test environment',
+    });
+  }
+
+  try {
+    const { email, password } = req.body;
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required',
+      });
+    }
+
+    // Only allow test users (email must contain 'zap-test' or 'test')
+    if (!email.includes('zap-test') && !email.includes('test@')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Test login only available for test users',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        verified: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password',
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password',
+      });
+    }
+
+    // Check if account is verified
+    if (!user.verified) {
+      return res.status(403).json({
+        success: false,
+        error: 'Account not verified',
+      });
+    }
+
+    // Generate JWT token (bypass 2FA for test users)
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    // Set cookie with token
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 1000, // 1 hour
+    });
+
+    res.json({
+      success: true,
+      message: 'Test login successful (2FA bypassed)',
+    });
+  } catch (error) {
+    console.error('Test login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to login',
+      message: error.message,
+    });
+  }
+});
+
 // Resend 2FA code endpoint
 app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
   try {
