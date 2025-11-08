@@ -80,7 +80,8 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # init.sql is commented out - Prisma migrations handle schema creation
+      # - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     # No ports exposed - only accessible by other containers in the same networks
     networks:
       - sitogether-backend-network

@@ -8,14 +8,14 @@ if [ "$NODE_ENV" = "test" ]; then
   echo "🧪 Test mode detected: skipping explicit DB readiness loop (compose healthcheck ensures readiness)"
   echo "🛠️  Applying schema with prisma db push (test mode)"
   # Try up to 3 times to account for slight race conditions
-  if ! npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee /tmp/dbpush.log; then
+  if ! npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma 2>&1 | tee /tmp/dbpush.log; then
     echo "⚠️  prisma db push failed (attempt 1). Waiting and retrying..."
     sleep 5
-    if ! npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee -a /tmp/dbpush.log; then
+    if ! npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma 2>&1 | tee -a /tmp/dbpush.log; then
       echo "⚠️  prisma db push failed (attempt 2). Waiting and retrying..."
       sleep 5
       # Last attempt but don't fail the container in test runs
-      npx prisma db push --accept-data-loss --skip-generate 2>&1 | tee -a /tmp/dbpush.log || true
+      npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma 2>&1 | tee -a /tmp/dbpush.log || true
     fi
   fi
 else
@@ -25,7 +25,7 @@ else
   RETRY_COUNT=0
 
   while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if echo "SELECT 1;" | npx prisma db execute --stdin 2> /tmp/dbcheck.err 1> /tmp/dbcheck.out; then
+    if echo "SELECT 1;" | npx prisma db execute --stdin --schema=./prisma/schema.prisma 2> /tmp/dbcheck.err 1> /tmp/dbcheck.out; then
       echo "✅ Database is ready!"
       break
     fi
@@ -51,7 +51,7 @@ if [ "$NODE_ENV" = "production" ]; then
   echo "🚀 Production mode: Running migrations"
   
   # Try to run migrations
-  if npx prisma migrate deploy; then
+  if npx prisma migrate deploy --schema=./prisma/schema.prisma; then
     echo "✅ Migrations applied successfully"
   else
     echo "❌ Migration failed - exiting"
@@ -63,7 +63,7 @@ else
   
   # Try migrations first, fall back to db push
   echo "📦 Attempting to deploy migrations..."
-  if npx prisma migrate deploy 2>&1 | tee /tmp/migrate.log; then
+  if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1 | tee /tmp/migrate.log; then
     echo "✅ Migrations applied successfully"
   else
     echo "⚠️  Migration deploy failed, checking error type..."
@@ -72,13 +72,13 @@ else
     # Check if it's a "no migrations found" error
     if grep -q "No migration found\|No pending migrations" /tmp/migrate.log; then
       echo "ℹ️  No migrations found, using db push"
-      npx prisma db push --accept-data-loss --skip-generate
+      npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma
     elif grep -q "database schema is not empty" /tmp/migrate.log; then
       echo "⚠️  Database not empty, using db push with accept-data-loss"
-      npx prisma db push --accept-data-loss --skip-generate
+      npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma
     else
       echo "❌ Migration error - using db push as fallback"
-      npx prisma db push --accept-data-loss --skip-generate
+      npx prisma db push --accept-data-loss --skip-generate --schema=./prisma/schema.prisma
     fi
   fi
 fi
