@@ -33,6 +33,21 @@ jobs:
           
           echo "🛑 Stopping existing containers..."
           docker-compose down || true
+
+          echo "🧮 Disk usage before cleanup:"
+          df -h || true
+          docker system df -v || true
+
+          echo "🧹 Cleaning up Docker resources (images, cache, stopped containers, networks)..."
+          # Avoid pruning volumes to keep persistent data (e.g., database)
+          docker builder prune -af || true
+          docker image prune -af || true
+          docker container prune -f || true
+          docker network prune -f || true
+
+          echo "🧮 Disk usage after cleanup:"
+          df -h || true
+          docker system df -v || true
           
           echo "🔨 Building containers (no cache)..."
           if ! docker-compose build --no-cache; then
