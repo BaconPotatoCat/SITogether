@@ -51,11 +51,20 @@ if [ "$NODE_ENV" = "production" ]; then
   echo "🚀 Production mode: Running migrations"
   
   # Try to run migrations
-  if npx prisma migrate deploy --schema=./prisma/schema.prisma; then
+  if npx prisma migrate deploy --schema=./prisma/schema.prisma 2>&1 | tee /tmp/prod-migrate.log; then
     echo "✅ Migrations applied successfully"
   else
-    echo "❌ Migration failed - exiting"
-    exit 1
+    # Check if schema is not empty (existing database)
+    if grep -q "database schema is not empty" /tmp/prod-migrate.log; then
+      echo "⚠️  Existing database detected - baselining with current migration"
+      # Mark the current migration as applied without running it
+      npx prisma migrate resolve --applied 20251108085256_init --schema=./prisma/schema.prisma
+      echo "✅ Database baselined successfully"
+    else
+      echo "❌ Migration failed - exiting"
+      cat /tmp/prod-migrate.log
+      exit 1
+    fi
   fi
   
 else
