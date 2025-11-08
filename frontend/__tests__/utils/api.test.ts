@@ -8,14 +8,19 @@ Object.defineProperty(window, 'location', {
 })
 
 describe('fetchWithAuth', () => {
+  let consoleWarnSpy: jest.SpyInstance
+
   beforeEach(() => {
     global.fetch = jest.fn()
     window.location.href = ''
     document.cookie = ''
+    // Suppress console.warn during tests
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
+    consoleWarnSpy.mockRestore()
   })
 
   it('should make a fetch request with credentials included', async () => {
@@ -28,6 +33,7 @@ describe('fetchWithAuth', () => {
     await fetchWithAuth('/api/test')
 
     expect(global.fetch).toHaveBeenCalledWith('/api/test', {
+      method: 'GET',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
@@ -49,6 +55,7 @@ describe('fetchWithAuth', () => {
     })
 
     expect(global.fetch).toHaveBeenCalledWith('/api/test', {
+      method: 'GET',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
@@ -179,6 +186,7 @@ describe('fetchWithAuthSSR', () => {
       cookies: {
         token: 'test-token-123',
       },
+      headers: {},
     } as unknown as NextApiRequest
 
     await fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test', {
@@ -191,7 +199,7 @@ describe('fetchWithAuthSSR', () => {
       body: JSON.stringify({ test: 'data' }),
       headers: {
         'Content-Type': 'application/json',
-        Cookie: 'token=test-token-123',
+        Cookie: 'token=test-token-123;',
       },
     })
   })
@@ -205,6 +213,7 @@ describe('fetchWithAuthSSR', () => {
 
     const mockReq = {
       cookies: {},
+      headers: {},
     } as unknown as NextApiRequest
 
     await fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test', {
@@ -233,6 +242,7 @@ describe('fetchWithAuthSSR', () => {
       cookies: {
         token: 'test-token',
       },
+      headers: {},
     } as unknown as NextApiRequest
 
     await fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test', {
@@ -245,7 +255,7 @@ describe('fetchWithAuthSSR', () => {
       headers: {
         'Content-Type': 'application/json',
         'Custom-Header': 'value',
-        Cookie: 'token=test-token',
+        Cookie: 'token=test-token;',
       },
     })
   })
@@ -259,6 +269,7 @@ describe('fetchWithAuthSSR', () => {
 
     const mockReq = {
       cookies: {},
+      headers: {},
     } as unknown as NextApiRequest
 
     const response = await fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test')
@@ -276,6 +287,7 @@ describe('fetchWithAuthSSR', () => {
       cookies: {
         token: 'test-token',
       },
+      headers: {},
     } as unknown as NextApiRequest
 
     await expect(fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test')).rejects.toThrow(
@@ -292,6 +304,7 @@ describe('fetchWithAuthSSR', () => {
 
     const mockReq = {
       cookies: undefined,
+      headers: {},
     } as unknown as NextApiRequest
 
     await fetchWithAuthSSR(mockReq, 'http://localhost:5000/api/test')

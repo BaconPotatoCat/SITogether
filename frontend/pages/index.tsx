@@ -158,10 +158,8 @@ export default function Home() {
 
     setIsSubmittingReport(true)
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           reportedId: reportingUserId,
           reason: reportReason,

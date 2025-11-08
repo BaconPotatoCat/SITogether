@@ -38,6 +38,7 @@ const { authenticateAdmin } = require('../../middleware/admin');
 
 describe('Admin Middleware', () => {
   let req, res, next;
+  let consoleErrorSpy;
 
   beforeEach(() => {
     req = {
@@ -50,6 +51,13 @@ describe('Admin Middleware', () => {
     };
     next = jest.fn();
     jest.clearAllMocks();
+    // Suppress console.error during tests
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    // Restore console.error after each test
+    consoleErrorSpy.mockRestore();
   });
 
   describe('authenticateAdmin', () => {

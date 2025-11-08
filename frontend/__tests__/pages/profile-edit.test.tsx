@@ -4,6 +4,7 @@ import MyProfilePage from '../../pages/profile/index'
 import { useSession } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useToast } from '../../hooks/useToast'
+import { fetchWithAuth } from '../../utils/api'
 
 jest.mock('../../contexts/AuthContext', () => ({
   useSession: jest.fn(),
@@ -16,6 +17,9 @@ jest.mock('../../contexts/ThemeContext', () => ({
 jest.mock('../../hooks/useToast', () => ({
   useToast: jest.fn(),
 }))
+
+jest.mock('../../utils/api')
+const mockFetchWithAuth = fetchWithAuth as jest.MockedFunction<typeof fetchWithAuth>
 
 jest.mock('../../components/ToastContainer', () => {
   return function ToastContainer() {
@@ -49,8 +53,14 @@ const mockUserData = {
 }
 
 describe('Profile Edit Feature', () => {
+  let consoleWarnSpy: jest.SpyInstance
+  let consoleErrorSpy: jest.SpyInstance
+
   beforeEach(() => {
     jest.clearAllMocks()
+    // Suppress console.warn and console.error during tests
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     ;(useTheme as jest.Mock).mockReturnValue({
       isDarkMode: false,
       toggleDarkMode: jest.fn(),
@@ -69,17 +79,21 @@ describe('Profile Edit Feature', () => {
       refreshSession: mockRefreshSession,
     })
 
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            success: true,
-            data: mockUserData,
-          }),
-      })
-    ) as unknown as jest.Mock
+    // Mock fetchWithAuth instead of global.fetch
+    mockFetchWithAuth.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: mockUserData,
+      }),
+    } as Response)
+  })
+
+  afterEach(() => {
+    // Restore console methods after each test
+    consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   it('should switch to edit mode when Edit Profile button is clicked', async () => {
@@ -140,24 +154,15 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should save profile changes when Save Changes button is clicked', async () => {
-    const mockFetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ success: true, data: mockUserData }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () =>
-          Promise.resolve({
-            success: true,
-            data: { ...mockUserData, name: 'Updated Name' },
-          }),
-      })
-
-    global.fetch = mockFetch as unknown as typeof fetch
+    // Mock fetchWithAuth for this test - no initial fetch needed
+    mockFetchWithAuth.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { ...mockUserData, name: 'Updated Name' },
+      }),
+    } as Response)
 
     render(<MyProfilePage />)
 
@@ -178,13 +183,10 @@ describe('Profile Edit Feature', () => {
     fireEvent.click(saveButton)
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(mockFetchWithAuth).toHaveBeenCalledWith(
         '/api/users/user-123',
         expect.objectContaining({
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: expect.stringContaining('Updated Name'),
         })
       )
@@ -213,17 +215,15 @@ describe('Profile Edit Feature', () => {
       refreshSession: mockRefreshSessionLocal,
     })
 
-    const mockFetch = jest.fn().mockResolvedValueOnce({
+    // Mock fetchWithAuth for this test
+    mockFetchWithAuth.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: () =>
-        Promise.resolve({
-          success: true,
-          data: updatedUserData,
-        }),
-    })
-
-    global.fetch = mockFetch as unknown as typeof fetch
+      json: async () => ({
+        success: true,
+        data: updatedUserData,
+      }),
+    } as Response)
 
     const { rerender } = render(<MyProfilePage />)
 
@@ -274,17 +274,14 @@ describe('Profile Edit Feature', () => {
   })
 
   it('should display error message when save fails', async () => {
-    const mockFetch = jest.fn().mockResolvedValueOnce({
+    mockFetchWithAuth.mockResolvedValueOnce({
       ok: true,
       status: 500,
-      json: () =>
-        Promise.resolve({
-          success: false,
-          error: 'Failed to update profile',
-        }),
-    })
-
-    global.fetch = mockFetch as unknown as typeof fetch
+      json: async () => ({
+        success: false,
+        error: 'Failed to update profile',
+      }),
+    } as Response)
 
     render(<MyProfilePage />)
 

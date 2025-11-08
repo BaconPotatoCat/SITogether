@@ -3,6 +3,7 @@ import FilterModal from './FilterModal'
 import { useDiscovery } from '../hooks/useDiscovery'
 import ToastContainer from './ToastContainer'
 import { useToast } from '../hooks/useToast'
+import { fetchWithAuth } from '../utils/api'
 
 interface DiscoveryPageProps {
   isPremium?: boolean
@@ -50,12 +51,11 @@ export default function DiscoveryPage({ isPremium = false }: DiscoveryPageProps)
       return
     }
 
+    console.log('[DiscoveryPage] Submitting report for user:', reportingUserId)
     setIsSubmittingReport(true)
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           reportedId: reportingUserId,
           reason: reportReason,

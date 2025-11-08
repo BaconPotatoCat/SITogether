@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useSession } from '../contexts/AuthContext'
+import { fetchWithAuth } from '../utils/api'
 import DailyTasksComponent from '../components/DailyTasksComponent'
 import DiscoveryPage from '../components/DiscoveryPage'
 import ToastContainer from '../components/ToastContainer'
@@ -56,7 +57,7 @@ export default function Premium() {
 
     setUnlockingPremium(true)
     try {
-      const response = await fetch('/api/points/unlock-premium', { method: 'POST' })
+      const response = await fetchWithAuth('/api/points/unlock-premium', { method: 'POST' })
       const data = await response.json()
       if (data.success) {
         setPremiumStatus((prev) =>

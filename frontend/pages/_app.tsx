@@ -1,9 +1,11 @@
 import type { AppProps } from 'next/app'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import { useEffect } from 'react'
 import { AuthProvider, useSession } from '../contexts/AuthContext'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { ensureCsrfToken } from '../utils/api'
 import '../styles/globals.css'
 
 function Navigation() {
@@ -136,6 +138,13 @@ function Navigation() {
 function AppContent({ Component, pageProps }: AppProps) {
   const { status } = useSession()
   const router = useRouter()
+
+  // Initialize CSRF token on mount for authenticated users
+  useEffect(() => {
+    if (status === 'authenticated') {
+      ensureCsrfToken().catch((err) => console.error('Failed to initialize CSRF token:', err))
+    }
+  }, [status])
 
   // Don't show loading spinner on auth page
   const isAuthPage = router.pathname === '/auth'

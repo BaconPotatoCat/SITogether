@@ -2,6 +2,7 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { sanitizeForDisplay } from '../../utils/messageValidation'
+import { fetchWithAuth } from '../../utils/api'
 import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 
@@ -98,9 +99,8 @@ export default function ConversationPage() {
 
     setSending(true)
     try {
-      const res = await fetch(`/api/conversations/${id}/messages`, {
+      const res = await fetchWithAuth(`/api/conversations/${id}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text.trim() }),
       })
       const data = await res.json()
@@ -139,10 +139,8 @@ export default function ConversationPage() {
 
     setIsSubmittingReport(true)
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           reportedId: other.id,
           reason: reportReason,

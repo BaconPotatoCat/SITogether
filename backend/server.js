@@ -58,17 +58,56 @@ app.use(
     // Use the application JWT secret directly; config.js already validates presence of JWT_SECRET.
     secret: config.jwtSecret,
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true, // Send session cookie even for new sessions (needed for CSRF)
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
-      secure: config.isProduction,
+      // Always false: backend runs behind reverse proxy that terminates HTTPS
+      secure: false,
       maxAge: 1000 * 60 * 60 * 2, // 2 hours
     },
   })
 );
 // Enable CSRF protection (required for cookie-based auth)
-app.use(lusca.csrf());
+// CSRF configuration
+// For GET/HEAD/OPTIONS we run lusca to seed a token (no validation)
+// For mutating methods we validate, except selected auth endpoints that are safe pre-auth
+const csrfProtection = lusca.csrf({ header: 'x-csrf-token' });
+const csrfExemptPaths = new Set([
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/resend-verification',
+  '/api/auth/verify-2fa',
+  '/api/auth/resend-2fa',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/test-login',
+]);
+app.use((req, res, next) => {
+  const method = req.method;
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    // Seed token for reads; lusca won't enforce
+    return csrfProtection(req, res, next);
+  }
+  if (csrfExemptPaths.has(req.path)) {
+    // Allow specific auth endpoints without CSRF (pre-auth flows)
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
+
+// Expose CSRF token as a readable cookie to help SPA/Next.js fetch it easily
+app.use((req, res, next) => {
+  if (res.locals && res.locals._csrf) {
+    res.cookie('XSRF-TOKEN', res.locals._csrf, {
+      httpOnly: false, // must be readable by frontend JS
+      sameSite: 'lax',
+      secure: false, // Backend runs behind reverse proxy
+      maxAge: 1000 * 60 * 60, // 1 hour
+    });
+  }
+  next();
+});
 app.use(lusca.xframe('SAMEORIGIN'));
 app.use(lusca.xssProtection(true));
 app.use(morgan('combined'));
@@ -97,6 +136,23 @@ app.get('/', (req, res) => {
     status: 'success',
     timestamp: new Date().toISOString(),
   });
+});
+
+// CSRF token fetch endpoint (frontend should call this on app load and include the returned token
+// in the `X-CSRF-Token` header for all state-changing POST/PUT/DELETE requests including login/register).
+// Lusca places the token in res.locals._csrf for GET requests after the csrf middleware runs.
+app.get('/api/auth/csrf', (req, res) => {
+  if (!res.locals._csrf) {
+    return res.status(500).json({ success: false, error: 'CSRF token unavailable' });
+  }
+
+  // Lusca has already stored the token in the session during middleware execution
+  // Mark session as initialized to ensure it gets saved and sid cookie is sent
+  if (req.session) {
+    req.session.csrfInitialized = true;
+  }
+
+  res.json({ success: true, csrfToken: res.locals._csrf });
 });
 
 // API routes
@@ -458,8 +514,12 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
       where: { id: id },
     });
 
-    // Clear the authentication cookie
-    res.clearCookie('token');
+    // Clear the authentication cookie (must match original cookie options)
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+    });
 
     res.json({
       success: true,
@@ -984,6 +1044,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
       await sendTwoFactorEmail(decryptedEmail, user.name, twoFactorCode);
 
+      // Initialize session for CSRF (so sid cookie is sent)
+      if (req.session) {
+        req.session.pendingAuth = true;
+      }
+
       res.json({
         success: true,
         message: 'Please check your email for the verification code',
@@ -1087,10 +1152,16 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
     // Generate final JWT token
     const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
+    // Initialize/update session for CSRF (so sid cookie is sent)
+    if (req.session) {
+      req.session.userId = userId;
+      req.session.authenticated = true;
+    }
+
     // Set cookie with token
     res.cookie('token', finalToken, {
       httpOnly: true,
-      secure: config.isProduction,
+      secure: false,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
@@ -1181,7 +1252,7 @@ app.post('/api/auth/test-login', async (req, res) => {
     // Set cookie with token
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false,
       sameSite: 'lax',
       maxAge: 60 * 60 * 1000, // 1 hour
     });
@@ -1316,7 +1387,35 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
 
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('token');
+  // Clear auth token (must match original cookie options)
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+  });
+
+  // Clear CSRF token cookie (must match original cookie options)
+  res.clearCookie('XSRF-TOKEN', {
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
+  });
+
+  // Destroy session and clear session cookie
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+      }
+    });
+  }
+
+  res.clearCookie('sid', {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+  });
+
   res.json({
     success: true,
     message: 'Logged out successfully',

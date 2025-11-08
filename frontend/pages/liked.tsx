@@ -92,10 +92,8 @@ export default function LikedProfiles() {
 
     setIsSubmittingReport(true)
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           reportedId: selectedProfile.id,
           reason: reportReason,

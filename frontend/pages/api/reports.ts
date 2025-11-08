@@ -22,12 +22,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ success: false, error: 'reportedId and reason are required' })
     }
 
-    // Forward the request to the backend
+    // Read CSRF token header from client request (set by fetchWithAuth)
+    const csrfTokenHeader = (req.headers['x-csrf-token'] || req.headers['X-CSRF-Token']) as
+      | string
+      | undefined
+
+    // Gather cookies to forward to backend (JWT token + session id for CSRF validation)
+    const sid = req.cookies.sid
+    const cookieHeader = sid ? `token=${token}; sid=${sid}` : `token=${token}`
+
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Cookie: `token=${token}`,
+        Cookie: cookieHeader,
+        ...(csrfTokenHeader ? { 'x-csrf-token': csrfTokenHeader } : {}),
       },
       body: JSON.stringify({ reportedId, reason, description }),
     })

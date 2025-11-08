@@ -67,8 +67,9 @@ describe('DiscoveryPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    // Suppress console errors during tests to reduce noise
+    // Suppress console errors and logs during tests to reduce noise
     jest.spyOn(console, 'error').mockImplementation(() => {})
+    jest.spyOn(console, 'log').mockImplementation(() => {})
     // By default, return only verified users to prevent unexpected filtering in tests
     const verifiedUsers = mockUsers.filter((user) => user.verified === true)
     mockFetchWithAuth.mockResolvedValue({
@@ -963,8 +964,13 @@ describe('DiscoveryPage', () => {
     beforeEach(() => {
       // Mock window.alert for report tests
       jest.spyOn(window, 'alert').mockImplementation(() => {})
-      // Mock global fetch for report API
-      global.fetch = jest.fn() as jest.Mock
+
+      // Set up the default users mock for component mounting
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+      } as Response)
     })
 
     afterEach(() => {
@@ -1118,6 +1124,9 @@ describe('DiscoveryPage', () => {
         expect(screen.getByText(/report user/i)).toBeInTheDocument()
       })
 
+      // Clear the mock calls from the initial user fetch
+      mockFetchWithAuth.mockClear()
+
       // Verify button is disabled when no reason is selected
       // This prevents invalid submissions - the primary validation mechanism
       const submitButton = screen.getByText('Submit Report') as HTMLButtonElement
@@ -1128,7 +1137,7 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       // Verify no API call was made (button prevents submission)
-      expect(global.fetch).not.toHaveBeenCalled()
+      expect(mockFetchWithAuth).not.toHaveBeenCalled()
 
       // The component has defensive code in handleSubmitReport that checks for empty reason
       // and shows a toast, but this can't be tested through normal UI interaction because
@@ -1137,10 +1146,17 @@ describe('DiscoveryPage', () => {
     })
 
     it('should submit report successfully', async () => {
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      })
+      // First call returns users, second call is the report submission
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        } as Response)
 
       render(<DiscoveryPage />)
 
@@ -1170,10 +1186,8 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/reports', {
+        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/reports', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({
             reportedId: '1',
             reason: 'Spam',
@@ -1193,10 +1207,17 @@ describe('DiscoveryPage', () => {
     })
 
     it('should submit report with null description when description is empty', async () => {
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      })
+      // First call returns users, second call is the report submission
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        } as Response)
 
       render(<DiscoveryPage />)
 
@@ -1220,10 +1241,8 @@ describe('DiscoveryPage', () => {
       fireEvent.click(submitButton)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/reports', {
+        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/reports', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({
             reportedId: '1',
             reason: 'Fake Profile',
@@ -1235,10 +1254,18 @@ describe('DiscoveryPage', () => {
 
     it('should handle report submission error', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: false, error: 'Failed to submit report' }),
-      })
+
+      // First call returns users, second call is the failed report submission
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: false, error: 'Failed to submit report' }),
+        } as Response)
 
       render(<DiscoveryPage />)
 
@@ -1270,7 +1297,15 @@ describe('DiscoveryPage', () => {
 
     it('should handle report submission network error', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
-      ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'))
+
+      // First call returns users, second call throws network error
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+        } as Response)
+        .mockRejectedValueOnce(new Error('Network error'))
 
       render(<DiscoveryPage />)
 
@@ -1345,6 +1380,14 @@ describe('DiscoveryPage', () => {
     })
 
     it('should show submitting state during report submission', async () => {
+      // First call returns users immediately
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+      } as Response)
+
+      // Second call (report submission) returns a delayed promise
       let resolveFetch: (
         value: Partial<Response> & { json: () => Promise<{ success: boolean }> }
       ) => void
@@ -1353,7 +1396,7 @@ describe('DiscoveryPage', () => {
       >((resolve) => {
         resolveFetch = resolve
       })
-      ;(global.fetch as jest.Mock).mockReturnValue(fetchPromise)
+      mockFetchWithAuth.mockReturnValueOnce(fetchPromise as unknown as Promise<Response>)
 
       render(<DiscoveryPage />)
 
@@ -1403,6 +1446,14 @@ describe('DiscoveryPage', () => {
     })
 
     it('should prevent closing modal during submission', async () => {
+      // First call returns users immediately
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+      } as Response)
+
+      // Second call (report submission) returns a delayed promise
       let resolveFetch: (
         value: Partial<Response> & { json: () => Promise<{ success: boolean }> }
       ) => void
@@ -1411,7 +1462,7 @@ describe('DiscoveryPage', () => {
       >((resolve) => {
         resolveFetch = resolve
       })
-      ;(global.fetch as jest.Mock).mockReturnValue(fetchPromise)
+      mockFetchWithAuth.mockReturnValueOnce(fetchPromise as unknown as Promise<Response>)
 
       render(<DiscoveryPage />)
 
@@ -1453,10 +1504,18 @@ describe('DiscoveryPage', () => {
 
     it('should reset form fields after successful submission', async () => {
       const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {})
-      ;(global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      })
+
+      // First call returns users, second call is the successful report submission
+      const verifiedUsers = mockUsers.filter((user) => user.verified === true)
+      mockFetchWithAuth
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, data: verifiedUsers, count: verifiedUsers.length }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        } as Response)
 
       render(<DiscoveryPage />)
 
