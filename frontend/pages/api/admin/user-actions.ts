@@ -9,8 +9,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const baseUrl = config.backendInternalUrl
 
-    // Get token from cookies
+    // Get token and CSRF token from cookies
     const token = req.cookies.token
+    const csrfToken = req.headers['x-csrf-token']
+    const sid = req.cookies.sid
 
     if (!token) {
       return res.status(401).json({ success: false, error: 'Unauthorized' })
@@ -40,13 +42,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         })
     }
 
+    // Build headers with CSRF token
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    // Forward CSRF token if present
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken as string
+    }
+
+    // Forward cookies (token and session cookie)
+    let cookieHeader = ''
+    if (token) cookieHeader += `token=${token}; `
+    if (sid) cookieHeader += `sid=${sid}; `
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader.trim()
+    }
+
     // Forward the request to the backend
     const response = await fetch(`${baseUrl}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: `token=${token}`,
-      },
+      headers,
     })
 
     const data = await response.json()

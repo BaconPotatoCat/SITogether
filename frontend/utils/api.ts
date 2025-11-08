@@ -17,12 +17,14 @@ const getCookie = (name: string): string | null => {
 // Ensure a CSRF token cookie is present; fetches /api/auth/csrf if missing
 export const ensureCsrfToken = async (): Promise<string | null> => {
   let token = getCookie('XSRF-TOKEN')
+  console.log('[ensureCsrfToken] Current XSRF-TOKEN cookie:', token)
 
   // If token already exists, return it (sid is HttpOnly so we can't check it, but browser auto-sends it)
   if (token) {
     return token
   }
 
+  console.log('[ensureCsrfToken] Fetching CSRF token from /api/auth/csrf')
   try {
     // Call our Next.js proxy route which forwards Set-Cookie from backend
     const res = await fetch('/api/auth/csrf', { method: 'GET', credentials: 'include' })
@@ -30,7 +32,10 @@ export const ensureCsrfToken = async (): Promise<string | null> => {
       console.warn('Failed to fetch CSRF token, status:', res.status)
       return null
     }
+    console.log('[ensureCsrfToken] CSRF fetch response status:', res.status)
+    console.log('[ensureCsrfToken] Response headers:', Object.fromEntries(res.headers.entries()))
     token = getCookie('XSRF-TOKEN')
+    console.log('[ensureCsrfToken] XSRF-TOKEN after fetch:', token)
     return token
   } catch (e) {
     console.warn('Failed to fetch CSRF token', e)
@@ -54,11 +59,15 @@ export const fetchWithAuth = async (
   // Attach CSRF token for mutating requests (lusca expects header 'x-csrf-token')
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     let csrf = getCookie('XSRF-TOKEN')
+    console.log('[fetchWithAuth] CSRF token from cookie:', csrf)
     if (!csrf) {
+      console.log('[fetchWithAuth] CSRF token not found, fetching new one...')
       csrf = await ensureCsrfToken()
+      console.log('[fetchWithAuth] CSRF token after fetch:', csrf)
     }
     if (csrf) {
       headers['x-csrf-token'] = csrf
+      console.log('[fetchWithAuth] Added CSRF token to headers for:', url)
     } else {
       console.warn('CSRF token unavailable for request:', url)
     }

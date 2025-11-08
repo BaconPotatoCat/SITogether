@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { config as appConfig } from './utils/config'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -39,10 +40,11 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Check admin status via frontend API route
+    // Check admin status via backend API
     try {
-      // Use relative path for the API route to avoid SSRF
-      const adminCheckUrl = `/api/auth/admin-check`
+      // Get backend URL from config
+      const backendUrl = appConfig.backendInternalUrl
+      const adminCheckUrl = `${backendUrl}/api/auth/admin-check`
 
       const response = await fetch(adminCheckUrl, {
         method: 'GET',

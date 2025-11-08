@@ -9,14 +9,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const backendUrl = `${config.backendInternalUrl}/api/conversations/${id}/messages`
     const token = req.cookies.token
+    const csrfToken = req.headers['x-csrf-token']
+    const sid = req.cookies.sid
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     }
-    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    // Forward CSRF token if present
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken as string
+    }
+
+    // Forward cookies (token and session cookie)
+    let cookieHeader = ''
+    if (token) cookieHeader += `token=${token}; `
+    if (sid) cookieHeader += `sid=${sid}; `
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader.trim()
+    }
 
     if (req.method === 'GET') {
-      const response = await fetch(backendUrl, { method: 'GET', headers, credentials: 'include' })
+      const response = await fetch(backendUrl, { method: 'GET', headers })
       const data = await response.json()
       return res.status(response.status).json(data)
     }
@@ -26,7 +40,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         method: 'POST',
         headers,
         body: JSON.stringify(req.body),
-        credentials: 'include',
       })
       const data = await response.json()
       return res.status(response.status).json(data)

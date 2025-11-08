@@ -104,6 +104,7 @@ app.use((req, res, next) => {
       sameSite: 'lax',
       secure: false, // Backend runs behind reverse proxy
       maxAge: 1000 * 60 * 60, // 1 hour
+      path: '/', // Ensure cookie is available for all paths
     });
   }
   next();
