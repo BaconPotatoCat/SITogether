@@ -45,7 +45,7 @@ export const ensureCsrfToken = async (): Promise<string | null> => {
 
 // Remove CR and LF characters for log safety
 function sanitizeForLog(str: string): string {
-  return typeof str === "string" ? str.replace(/[\r\n]/g, "") : str;
+  return typeof str === 'string' ? str.replace(/[\r\n]/g, '') : str
 }
 
 // Utility function to make authenticated API calls (client-side)
