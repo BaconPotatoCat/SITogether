@@ -5,6 +5,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query
   if (!id || typeof id !== 'string')
     return res.status(400).json({ success: false, error: 'Invalid id' })
+  // Restrict id to safe pattern (alphanumeric, underscore, hyphen)
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    return res.status(400).json({ success: false, error: 'Invalid id format' })
+  }
 
   try {
     const backendUrl = `${config.backendInternalUrl}/api/conversations/${id}/messages`
