@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
 const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
 const lusca = require('lusca');
@@ -50,6 +51,23 @@ app.use(
 );
 
 app.use(cookieParser());
+// Provide a session so lusca CSRF can store tokens; without this, lusca throws.
+app.use(
+  session({
+    name: 'sid',
+    // Use the application JWT secret directly; config.js already validates presence of JWT_SECRET.
+    secret: config.jwtSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: config.isProduction,
+      maxAge: 1000 * 60 * 60 * 2, // 2 hours
+    },
+  })
+);
+// Enable CSRF protection (required for cookie-based auth)
 app.use(lusca.csrf());
 app.use(lusca.xframe('SAMEORIGIN'));
 app.use(lusca.xssProtection(true));

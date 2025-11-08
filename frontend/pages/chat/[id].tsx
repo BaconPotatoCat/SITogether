@@ -194,7 +194,7 @@ export default function ConversationPage() {
             )}
 
             {/* Chat Header with Other User Info and Report Button */}
-            {!loading && other && messages.length > 0 && (
+            {other && messages.length > 0 && (
               <div
                 style={{
                   display: 'flex',

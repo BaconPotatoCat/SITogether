@@ -12,11 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Strict validation for report ID: allow only UUID or alphanumeric (adjust if needed)
     const safeIdPattern = /^[a-zA-Z0-9-]+$/
-    if (
-      !id ||
-      typeof id !== 'string' ||
-      !safeIdPattern.test(id)
-    ) {
+    if (!id || typeof id !== 'string' || !safeIdPattern.test(id)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid Report ID',
