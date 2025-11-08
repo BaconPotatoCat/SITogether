@@ -101,8 +101,8 @@ jobs:
           fi
           
           echo "🔍 Testing backend health..."
-          # Check backend health by executing curl inside the backend container
-          if ! docker-compose exec -T backend curl -f --max-time 10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
+          # Check backend health using wget inside the backend container
+          if ! docker-compose exec -T backend wget -q -O- --timeout=10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
             echo "❌ Backend health check failed!"
             echo "📋 Backend container logs:"
             docker-compose logs backend
