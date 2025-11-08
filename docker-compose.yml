@@ -63,7 +63,7 @@ services:
       sitogether-db:
         condition: service_healthy
     healthcheck:
-      # /health endpoint removed; use root path and consider any non-5xx response healthy
+      # /health endpoint removed; treat any non-5xx from root as healthy
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:5000', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\" || exit 1"]
       interval: 10s
       timeout: 5s
@@ -87,7 +87,8 @@ services:
     networks:
       - sitogether-backend-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      # Explicitly check the configured database; otherwise pg_isready defaults to DB name == username
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 10
