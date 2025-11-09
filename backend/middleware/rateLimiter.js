@@ -35,7 +35,7 @@ const RESEND_OTP_MAX_ATTEMPTS = 3;
 // Verification email resend configuration
 // Prevents abuse and email costs
 const RESEND_VERIFICATION_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const RESEND_VERIFICATION_MAX_ATTEMPTS = 3;
+const RESEND_VERIFICATION_MAX_ATTEMPTS = 5;
 
 // Sensitive data access configuration
 // Prevents scraping and data harvesting
