@@ -58,8 +58,6 @@ export async function middleware(request: NextRequest) {
       if (response.status === 403) {
         const url = request.nextUrl.clone()
         url.pathname = '/'
-        url.searchParams.set('error', '403')
-        url.searchParams.set('message', 'Access denied. Admin privileges required.')
         return NextResponse.redirect(url)
       }
 
@@ -80,6 +78,35 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
+    }
+  }
+
+  const userOnlyPaths = ['/', '/liked', '/premium', '/chat'] // adjust your user pages here
+
+  if (token && userOnlyPaths.some((p) => pathname.startsWith(p))) {
+    try {
+      const backendUrl = appConfig.backendInternalUrl
+      const adminCheckUrl = `${backendUrl}/api/auth/admin-check`
+
+      const response = await fetch(adminCheckUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `token=${token}`,
+        },
+      })
+
+      if (response.status === 200) {
+        // Admin trying to access user page → redirect to /admin
+        const url = request.nextUrl.clone()
+        url.pathname = '/admin'
+        // Add a query param to trigger toast on redirect
+        url.searchParams.set('toast', 'admin-redirect')
+        return NextResponse.redirect(url)
+      }
+    } catch (error) {
+      console.error('Admin redirect check error:', error)
+      // fallback: allow
     }
   }
 
