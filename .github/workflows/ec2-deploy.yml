@@ -31,6 +31,9 @@ jobs:
           echo "📥 Pulling latest changes..."
           git pull origin main
           
+          echo "🧹 Cleaning up unused Docker volumes..."
+          docker volume prune -f || true
+          
           echo "🛑 Stopping existing containers..."
           docker-compose down || true
 
@@ -117,7 +120,7 @@ jobs:
           
           echo "🔍 Testing backend health..."
           # Check backend health using wget inside the backend container
-          if ! docker-compose exec -T backend wget -q -O- --timeout=10 http://127.0.0.1:5000/health > /dev/null 2>&1; then
+          if ! docker-compose exec -T backend wget -q -O- --timeout=10 http://127.0.0.1:5000 > /dev/null 2>&1; then
             echo "❌ Backend health check failed!"
             echo "📋 Backend container logs:"
             docker-compose logs backend

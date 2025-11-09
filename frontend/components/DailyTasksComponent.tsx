@@ -14,6 +14,8 @@ interface UserPoints {
   dailyCheckinDate: string | null
   hasLikedToday: boolean
   dailyLikeClaimedDate: string | null
+  hasSentIntroToday: boolean
+  dailyIntroClaimedDate: string | null
 }
 
 interface DailyTasksComponentProps {
@@ -107,6 +109,18 @@ export default function DailyTasksComponent({
         canClaim: hasLikedToday && !alreadyClaimedToday, // Allow claiming if user liked today and not claimed
       }
     }
+    if (task.id === 'send-introduction') {
+      const hasSentIntroToday = userPoints?.hasSentIntroToday || false
+      const alreadyClaimedToday = userPoints?.dailyIntroClaimedDate
+        ? new Date(userPoints.dailyIntroClaimedDate).toDateString() === new Date().toDateString()
+        : false
+
+      return {
+        ...task,
+        completed: alreadyClaimedToday, // Show as completed when claimed today
+        canClaim: hasSentIntroToday && !alreadyClaimedToday, // Allow claiming if user sent intro today and not claimed
+      }
+    }
     // For now, other tasks are not completed (future implementation)
     return {
       ...task,
@@ -131,6 +145,9 @@ export default function DailyTasksComponent({
           break
         case 'like-person':
           endpoint = '/api/points/claim-daily-like'
+          break
+        case 'send-introduction':
+          endpoint = '/api/points/claim-daily-intro'
           break
         default:
           throw new Error(`Unknown task: ${taskId}`)

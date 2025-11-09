@@ -225,6 +225,11 @@ export default function Auth() {
           setIsLogin(true)
         }
       } else {
+        // Reset reCAPTCHA on any failure (token is consumed and cannot be reused)
+        // This prevents users from being stuck with a checked but invalid reCAPTCHA
+        setRecaptchaToken(null)
+        setRecaptchaKey((prev) => prev + 1) // Force reCAPTCHA widget to reset
+
         // Handle verification error with special message
         if (result.requiresVerification) {
           setUnverifiedEmail(result.email || formData.email)
@@ -236,6 +241,9 @@ export default function Auth() {
     } catch (error) {
       console.error('Auth error:', error)
       showToast('An error occurred. Please try again.', 'error')
+      // Reset reCAPTCHA on error (token may have been consumed)
+      setRecaptchaToken(null)
+      setRecaptchaKey((prev) => prev + 1)
     } finally {
       setIsLoading(false)
     }

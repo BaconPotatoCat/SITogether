@@ -223,6 +223,40 @@ describe('Home Page - Tutorial Feature', () => {
     })
   })
 
+  describe('Empty feed behavior', () => {
+    it('does not render Pass/Like/Report buttons when no profiles are available', async () => {
+      // Make API return an empty list
+      mockFetchWithAuth.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: [] }),
+      } as Response)
+
+      await act(async () => {
+        render(<Home />)
+      })
+
+      // Wait for loading to complete
+      await waitFor(() => {
+        expect(mockFetchWithAuth).toHaveBeenCalledWith('/api/users')
+      })
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Loading profiles/)).not.toBeInTheDocument()
+      })
+
+      // The "all caught up" text should be visible
+      expect(screen.getByText(/you're all caught up/i)).toBeInTheDocument()
+
+      // The action buttons should not be in the document
+      expect(screen.queryByRole('button', { name: /pass/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /like/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /report/i })).not.toBeInTheDocument()
+
+      // The swipe-actions container should not render
+      expect(document.querySelector('.swipe-actions')).toBeNull()
+    })
+  })
+
   describe('Tutorial Steps Configuration', () => {
     it('should render all tutorial steps when tutorial runs', async () => {
       render(<Home />)

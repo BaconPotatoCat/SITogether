@@ -35,12 +35,17 @@ const RESEND_OTP_MAX_ATTEMPTS = 3;
 // Verification email resend configuration
 // Prevents abuse and email costs
 const RESEND_VERIFICATION_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const RESEND_VERIFICATION_MAX_ATTEMPTS = 3;
+const RESEND_VERIFICATION_MAX_ATTEMPTS = 5;
 
 // Sensitive data access configuration
 // Prevents scraping and data harvesting
 const SENSITIVE_DATA_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const SENSITIVE_DATA_MAX_ATTEMPTS = 100;
+
+// Points claiming configuration
+// Prevents abuse of daily task claiming endpoints
+const POINTS_CLAIM_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const POINTS_CLAIM_MAX_ATTEMPTS = 3;
 
 // Helper function to format time window for error messages
 const formatTimeWindow = (windowMs) => {
@@ -150,6 +155,8 @@ const changePasswordLimiter = rateLimit({
  * Rate limiter for registration endpoint
  * Prevents fake account creation
  * Uses IP + email combination to avoid blocking legitimate users on shared networks
+ * Note: Password validation happens BEFORE this middleware, so password validation failures
+ * (e.g., breached passwords) don't count toward the rate limit
  */
 const registerLimiter = rateLimit({
   windowMs: REGISTER_WINDOW_MS,
@@ -239,6 +246,23 @@ const sensitiveDataLimiter = rateLimit({
   keyGenerator: keyGenerator,
 });
 
+/**
+ * Rate limiter for points claiming endpoints
+ * Prevents abuse of daily task claiming (like/like-daily-intro endpoints)
+ */
+const pointsClaimLimiter = rateLimit({
+  windowMs: POINTS_CLAIM_WINDOW_MS,
+  max: POINTS_CLAIM_MAX_ATTEMPTS,
+  message: {
+    success: false,
+    error: 'Too many claim attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
 module.exports = {
   loginLimiter,
   passwordResetLimiter,
@@ -248,4 +272,5 @@ module.exports = {
   resendOtpLimiter,
   resendVerificationLimiter,
   sensitiveDataLimiter,
+  pointsClaimLimiter,
 };
