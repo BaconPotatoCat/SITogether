@@ -176,13 +176,40 @@ export default function ConversationPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <main className="container" style={{ maxWidth: 720 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between', // pushes buttons to opposite ends
+            alignItems: 'center',
+            marginBottom: 12,
+          }}
+        >
         <button
           className="btn ghost"
           onClick={() => router.push('/chat')}
-          style={{ marginBottom: 12 }}
         >
           ← Back
         </button>
+        {!isLocked && (
+          <button
+            onClick={handleReportClick}
+            title="Report user"
+            disabled={isLocked}
+            className="btn"
+            style={{
+              backgroundColor: '#dc3545', // red
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: 500,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            🚩 Report
+          </button>
+        )}
+        </div>
         {loading ? (
           <p>Loading…</p>
         ) : (
@@ -190,6 +217,8 @@ export default function ConversationPage() {
             {isLocked && (
               <div className="lock-banner">🔒 Chat is locked until you both like each other.</div>
             )}
+
+            
 
             {/* Chat Header with Other User Info and Report Button */}
             {other && messages.length > 0 && (
@@ -242,22 +271,7 @@ export default function ConversationPage() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={handleReportClick}
-                  title="Report user"
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                  }}
-                >
-                  🚩 Report
-                </button>
+                
               </div>
             )}
 

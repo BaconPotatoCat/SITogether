@@ -459,6 +459,33 @@ describe('Conversation Page - Empty State', () => {
       const lockBanner = document.querySelector('.lock-banner')
       expect(lockBanner).not.toBeInTheDocument()
     })
+
+    it('should hide the report button when conversation is locked', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          messages: [],
+          isLocked: true,
+          participants: {
+            me: { id: 'user-1', name: 'Me', avatarUrl: null },
+            other: { id: 'user-2', name: 'Other User', avatarUrl: null },
+          },
+          currentUserId: 'user-1',
+        }),
+      } as Response)
+
+      render(<ConversationPage />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+      })
+
+      // Report button should not be visible at all
+      const reportButton = screen.queryByText('🚩 Report')
+      expect(reportButton).not.toBeInTheDocument()
+    })
+
   })
 
   describe('Empty Conversation Navigation', () => {
