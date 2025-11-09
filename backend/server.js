@@ -3606,14 +3606,14 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     res.json({
       success: true,
       isLocked: conversation.isLocked,
-      messages: decryptedMessages.map(msg => ({
+      messages: decryptedMessages.map((msg) => ({
         content: msg.content,
         createdAt: msg.createdAt,
         isMine: msg.senderId === userId,
-        isDeleted: !conversation.userAId || !conversation.userBId  // Add this flag
+        isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
       })),
       participants: { me, other: sanitizedOther },
-      reportedUserId: conversation.isLocked ? null : (other?.id || null),  // Add this for reporting (only sent once)
+      reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
     });
   } catch (error) {
     console.error('Get messages error:', error);
@@ -3689,8 +3689,8 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     const messageResponse = {
       content: decryptedContent,
       createdAt: message.createdAt,
-      isMine: true,  // Always true for newly sent messages
-      isDeleted: false  // New messages can't be from deleted users
+      isMine: true, // Always true for newly sent messages
+      isDeleted: false, // New messages can't be from deleted users
     };
 
     res.status(201).json({ success: true, message: messageResponse });

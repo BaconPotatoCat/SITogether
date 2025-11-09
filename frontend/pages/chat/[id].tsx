@@ -29,7 +29,7 @@ export default function ConversationPage() {
   const endRef = useRef<HTMLDivElement | null>(null)
   const [me, setMe] = useState<Participant | null>(null)
   const [other, setOther] = useState<Participant | null>(null)
-  const [reportedUserId, setReportedUserId] = useState<string | null>(null)  // Add this
+  const [reportedUserId, setReportedUserId] = useState<string | null>(null) // Add this
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportReason, setReportReason] = useState('')
   const [reportDescription, setReportDescription] = useState('')
@@ -118,7 +118,7 @@ export default function ConversationPage() {
       const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
         body: JSON.stringify({
-          reportedId: reportedUserId,  // Use stored ID instead of other.id
+          reportedId: reportedUserId, // Use stored ID instead of other.id
           reason: reportReason,
           description: reportDescription.trim() || null,
         }),
@@ -236,17 +236,23 @@ export default function ConversationPage() {
                     </div>
                   )}
                   <div>
-                    <h3 style={{ 
-                      margin: 0, 
-                      fontSize: '16px', 
-                      fontWeight: 600,
-                      color: 'var(--text-color, #333)',
-                    }}>{other.name}</h3>
-                    <p style={{ 
-                      margin: 0, 
-                      fontSize: '12px', 
-                      color: 'var(--muted-text, #666)',
-                    }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        color: 'var(--text-color, #333)',
+                      }}
+                    >
+                      {other.name}
+                    </h3>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '12px',
+                        color: 'var(--muted-text, #666)',
+                      }}
+                    >
                       Active conversation
                     </p>
                   </div>
@@ -255,14 +261,14 @@ export default function ConversationPage() {
             )}
 
             <div className="chat-thread">
-            {messages.map((m, index) => {
+              {messages.map((m, index) => {
                 // Use isMine from backend instead of senderId comparison
                 const isMine = m.isMine
                 const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
-                
+
                 // Handle deleted user case - backend should set isDeleted flag
                 const isDeletedUser = m.isDeleted || false
-                
+
                 const displayName = shouldBlur
                   ? 'Hidden User'
                   : isDeletedUser
@@ -270,7 +276,7 @@ export default function ConversationPage() {
                     : (isMine ? me?.name : other?.name) || 'User'
                 const displayAvatarUrl =
                   shouldBlur || isDeletedUser ? null : isMine ? me?.avatarUrl : other?.avatarUrl
-                
+
                 return (
                   <div key={index} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {displayAvatarUrl ? (
@@ -338,10 +344,10 @@ export default function ConversationPage() {
                 }}
                 placeholder={isLocked ? 'Chat is locked' : 'Type a message'}
                 disabled={isLocked}
-                style={{ 
-                  flex: 1, 
-                  padding: 10, 
-                  borderRadius: 6, 
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 6,
                   border: '1px solid var(--input-border, #ddd)',
                   backgroundColor: 'var(--input-bg, #fff)',
                   color: 'var(--input-text, #111827)',
@@ -390,32 +396,43 @@ export default function ConversationPage() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{ 
-                marginTop: 0, 
-                marginBottom: '20px',
-                color: 'var(--modal-title, #333)',
-              }}>Report User</h2>
-              <p style={{ 
-                marginBottom: '20px', 
-                color: 'var(--modal-text, #666)',
-              }}>
-                Reporting: <strong style={{ color: 'var(--modal-text, #666)' }}>{other.name}</strong>
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: '20px',
+                  color: 'var(--modal-title, #333)',
+                }}
+              >
+                Report User
+              </h2>
+              <p
+                style={{
+                  marginBottom: '20px',
+                  color: 'var(--modal-text, #666)',
+                }}
+              >
+                Reporting:{' '}
+                <strong style={{ color: 'var(--modal-text, #666)' }}>{other.name}</strong>
               </p>
-              <p style={{ 
-                marginBottom: '20px', 
-                color: 'var(--modal-text, #666)',
-              }}>
+              <p
+                style={{
+                  marginBottom: '20px',
+                  color: 'var(--modal-text, #666)',
+                }}
+              >
                 Please select a reason for reporting this user. All reports are reviewed by our
                 moderation team.
               </p>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: 500,
-                  color: 'var(--modal-label, #374151)',
-                }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: 500,
+                    color: 'var(--modal-label, #374151)',
+                  }}
+                >
                   Reason <span style={{ color: 'var(--danger-color, #dc3545)' }}>*</span>
                 </label>
                 <select
@@ -443,12 +460,14 @@ export default function ConversationPage() {
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: 500,
-                  color: 'var(--modal-label, #374151)',
-                }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '8px',
+                    fontWeight: 500,
+                    color: 'var(--modal-label, #374151)',
+                  }}
+                >
                   Additional Details (Optional)
                 </label>
                 <textarea
@@ -497,8 +516,8 @@ export default function ConversationPage() {
                   style={{
                     padding: '10px 20px',
                     backgroundColor:
-                      isSubmittingReport || !reportReason.trim() 
-                        ? 'var(--disabled-color, #6c757d)' 
+                      isSubmittingReport || !reportReason.trim()
+                        ? 'var(--disabled-color, #6c757d)'
                         : 'var(--danger-color, #dc3545)',
                     color: 'white',
                     border: 'none',

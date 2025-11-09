@@ -93,8 +93,9 @@ export default function Chat() {
                 )}
                 <div className="chat-body">
                   <div className="chat-head">
-                  <h3>
-                      {c.isDeleted ? 'Deleted User' : c.isLocked ? 'Hidden User' : c.otherUser.name} {c.isLocked && !c.isDeleted ? '🔒' : ''}
+                    <h3>
+                      {c.isDeleted ? 'Deleted User' : c.isLocked ? 'Hidden User' : c.otherUser.name}{' '}
+                      {c.isLocked && !c.isDeleted ? '🔒' : ''}
                     </h3>
                     <span className="time">
                       {c.lastMessage ? new Date(c.lastMessage.createdAt).toLocaleString() : ''}
