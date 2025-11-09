@@ -976,6 +976,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         interests: true,
         avatarUrl: true,
         verified: true,
+        banned: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -995,6 +996,14 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
+      });
+    }
+
+    // Check if account is banned
+    if (user.banned) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Account has been banned.',
       });
     }
 
@@ -1150,6 +1159,26 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
       where: { id: twoFactorToken.id },
     });
 
+    // Check if user is banned before completing login
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { banned: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    if (user.banned) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Account has been banned.',
+      });
+    }
+
     // Generate final JWT token
     const finalToken = jwt.sign({ userId: userId }, config.jwtSecret, { expiresIn: '1h' });
 
@@ -1219,6 +1248,7 @@ app.post('/api/auth/test-login', async (req, res) => {
         email: true,
         password: true,
         verified: true,
+        banned: true,
       },
     });
 
@@ -1236,6 +1266,14 @@ app.post('/api/auth/test-login', async (req, res) => {
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
+      });
+    }
+
+    // Check if account is banned
+    if (user.banned) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Account has been banned.',
       });
     }
 

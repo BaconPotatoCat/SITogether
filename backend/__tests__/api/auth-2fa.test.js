@@ -71,6 +71,7 @@ describe('2FA API Endpoints', () => {
             interests: true,
             avatarUrl: true,
             verified: true,
+            banned: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -90,6 +91,14 @@ describe('2FA API Endpoints', () => {
           return res.status(401).json({
             success: false,
             error: 'Invalid email or password',
+          });
+        }
+
+        // Check if account is banned
+        if (user.banned) {
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied. Account has been banned.',
           });
         }
 
@@ -238,6 +247,26 @@ describe('2FA API Endpoints', () => {
         await mockPrismaClient.token.delete({
           where: { id: twoFactorToken.id },
         });
+
+        // Check if user is banned before completing login
+        const user = await mockPrismaClient.user.findUnique({
+          where: { id: userId },
+          select: { banned: true },
+        });
+
+        if (!user) {
+          return res.status(401).json({
+            success: false,
+            error: 'User not found',
+          });
+        }
+
+        if (user.banned) {
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied. Account has been banned.',
+          });
+        }
 
         // Generate final JWT token
         const finalToken = jwt.sign({ userId: userId }, process.env.JWT_SECRET, {
@@ -604,8 +633,13 @@ describe('2FA API Endpoints', () => {
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       };
 
+      const mockUser = {
+        banned: false,
+      };
+
       mockPrismaClient.token.findFirst.mockResolvedValue(mockToken);
       mockPrismaClient.token.delete.mockResolvedValue(mockToken);
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockUser);
 
       const response = await request(app).post('/api/auth/verify-2fa').send({
         tempToken: tempToken,
@@ -630,10 +664,60 @@ describe('2FA API Endpoints', () => {
         where: { id: 'token-1' },
       });
 
+      // Verify user was checked for banned status
+      expect(mockPrismaClient.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: { banned: true },
+      });
+
       // Verify cookie was set
       const cookies = response.headers['set-cookie'];
       expect(cookies).toBeDefined();
       expect(cookies.some((cookie) => cookie.startsWith('token='))).toBe(true);
+    });
+
+    it('should return 403 if user is banned', async () => {
+      const tempToken = jwt.sign(
+        { userId: 'user-1', requiresTwoFactor: true },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+      );
+
+      const mockToken = {
+        id: 'token-1',
+        token: '123456',
+        type: 'TWO_FACTOR_AUTH',
+        userId: 'user-1',
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      };
+
+      const mockBannedUser = {
+        banned: true,
+      };
+
+      mockPrismaClient.token.findFirst.mockResolvedValue(mockToken);
+      mockPrismaClient.token.delete.mockResolvedValue(mockToken);
+      mockPrismaClient.user.findUnique.mockResolvedValue(mockBannedUser);
+
+      const response = await request(app).post('/api/auth/verify-2fa').send({
+        tempToken: tempToken,
+        code: '123456',
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('Access denied. Account has been banned.');
+
+      // Verify token was deleted before ban check
+      expect(mockPrismaClient.token.delete).toHaveBeenCalledWith({
+        where: { id: 'token-1' },
+      });
+
+      // Verify user was checked
+      expect(mockPrismaClient.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: { banned: true },
+      });
     });
 
     it('should return 400 if tempToken is missing', async () => {
