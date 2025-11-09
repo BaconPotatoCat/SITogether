@@ -410,8 +410,26 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       interests: encryptedInterests,
     };
 
-    // Only update avatarUrl if provided
+    // Only update avatarUrl if provided, and validate it
     if (avatarUrl !== undefined) {
+      // Allow data URLs for images
+      const isDataUrl = typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/');
+      // Allow remote image URLs (http/https) that do not point to own API and end with image extensions
+      const isRemoteImageUrl =
+        typeof avatarUrl === 'string' &&
+        /^https?:\/\//.test(avatarUrl) &&
+        // Disallow URLs pointing to own backend API or logout endpoints
+        !/\/api\//i.test(avatarUrl) &&
+        !/\/logout/i.test(avatarUrl) &&
+        // Only allow common image extensions
+        /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(avatarUrl.split('?')[0]);
+
+      if (!isDataUrl && !isRemoteImageUrl) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid avatar URL. Only image URLs or image data URLs are allowed.',
+        });
+      }
       updateData.avatarUrl = avatarUrl;
     }
 
