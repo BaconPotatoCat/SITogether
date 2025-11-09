@@ -85,4 +85,62 @@ const authenticateAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticateAdmin };
+const blockAdminAccess = async (req, res, next) => {
+  try {
+    // Ensure user is authenticated
+    if (!req.user || !req.user.userId) {
+      return handleDeny(req, res, 'Authentication required.', 401);
+    }
+
+    // Fetch user role
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { role: true },
+    });
+
+    if (!user) {
+      return handleDeny(req, res, 'User not found.', 401);
+    }
+
+    // Block admin users
+    if (user.role === 'Admin') {
+      // Detect browser navigation vs API call
+      const isBrowser = !req.xhr && req.accepts('html') && !req.accepts('json');
+
+      if (isBrowser) {
+        // Admin trying to access normal page → redirect
+        return res.redirect('/admin');
+      }
+
+      // Admin trying to access API → JSON error
+      return res.status(403).json({
+        success: false,
+        error: 'Admins cannot access normal user endpoints.',
+      });
+    }
+
+    // Allow normal users
+    next();
+  } catch (error) {
+    console.error('blockAdminAccess error:', error);
+    return handleDeny(req, res, 'Internal server error.', 500, '/');
+  }
+};
+
+/**
+ * Helper to handle deny for other cases (like unauthenticated users)
+ */
+function handleDeny(req, res, message, statusCode = 403, redirectPath = '/auth') {
+  const isBrowser = !req.xhr && req.accepts('html') && !req.accepts('json');
+
+  if (isBrowser) {
+    return res.redirect(redirectPath);
+  }
+
+  return res.status(statusCode).json({
+    success: false,
+    error: message,
+  });
+}
+
+module.exports = { authenticateAdmin, blockAdminAccess };

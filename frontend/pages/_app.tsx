@@ -38,24 +38,37 @@ function Navigation() {
             <Link href="/">SITogether</Link>
           </div>
           <div className="nav-links">
-            <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
-              Discover
-            </Link>
-            {isAuthenticated && (
-              <Link className={isActive('/liked') ? 'nav-link active' : 'nav-link'} href="/liked">
-                Liked
-              </Link>
-            )}
-            <Link className={isActive('/premium') ? 'nav-link active' : 'nav-link'} href="/premium">
-              Premium
-            </Link>
-            <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">
-              Chat
-            </Link>
-            {isAdmin && (
-              <Link className={isActive('/admin') ? 'nav-link active' : 'nav-link'} href="/admin">
-                Admin
-              </Link>
+            {isAdmin ? (
+              // Admin-only navigation
+              <>
+                <Link className={isActive('/admin') ? 'nav-link active' : 'nav-link'} href="/admin">
+                  Admin Dashboard
+                </Link>
+              </>
+            ) : (
+              // Normal user navigation
+              <>
+                <Link className={isActive('/') ? 'nav-link active' : 'nav-link'} href="/">
+                  Discover
+                </Link>
+                {isAuthenticated && (
+                  <Link
+                    className={isActive('/liked') ? 'nav-link active' : 'nav-link'}
+                    href="/liked"
+                  >
+                    Liked
+                  </Link>
+                )}
+                <Link
+                  className={isActive('/premium') ? 'nav-link active' : 'nav-link'}
+                  href="/premium"
+                >
+                  Premium
+                </Link>
+                <Link className={isActive('/chat') ? 'nav-link active' : 'nav-link'} href="/chat">
+                  Chat
+                </Link>
+              </>
             )}
             {isAuthenticated ? (
               <div className="profile-dropdown">
@@ -108,33 +121,29 @@ function Navigation() {
       </nav>
 
       <nav className={`nav-mobile ${isAdmin ? 'nav-mobile-admin' : ''}`}>
-        <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
-          Discover
-        </Link>
-        {isAuthenticated && (
-          <Link className={isActive('/liked') ? 'tab-link active' : 'tab-link'} href="/liked">
-            Liked
-          </Link>
-        )}
-        <Link className={isActive('/premium') ? 'tab-link active' : 'tab-link'} href="/premium">
-          Premium
-        </Link>
-        <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">
-          Chat
-        </Link>
-        {isAdmin && (
+        {isAdmin ? (
+          // Admin-only mobile nav
           <Link className={isActive('/admin') ? 'tab-link active' : 'tab-link'} href="/admin">
             Admin
           </Link>
-        )}
-        {isAuthenticated ? (
-          <Link className={isActive('/profile') ? 'tab-link active' : 'tab-link'} href="/profile">
-            Profile
-          </Link>
         ) : (
-          <Link className={isActive('/auth') ? 'tab-link active' : 'tab-link'} href="/auth">
-            Login
-          </Link>
+          // Normal user mobile nav
+          <>
+            <Link className={isActive('/') ? 'tab-link active' : 'tab-link'} href="/">
+              Discover
+            </Link>
+            {isAuthenticated && (
+              <Link className={isActive('/liked') ? 'tab-link active' : 'tab-link'} href="/liked">
+                Liked
+              </Link>
+            )}
+            <Link className={isActive('/premium') ? 'tab-link active' : 'tab-link'} href="/premium">
+              Premium
+            </Link>
+            <Link className={isActive('/chat') ? 'tab-link active' : 'tab-link'} href="/chat">
+              Chat
+            </Link>
+          </>
         )}
       </nav>
     </>

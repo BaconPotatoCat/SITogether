@@ -14,6 +14,7 @@ const lusca = require('lusca');
 const { authenticateToken } = require('./middleware/auth');
 const { sendVerificationEmail, sendTwoFactorEmail } = require('./lib/email');
 const { validatePassword, validatePasswordChange } = require('./utils/passwordValidation');
+const { authenticateAdmin, blockAdminAccess } = require('./middleware/admin');
 const {
   hashEmail,
   prepareEmailForStorage,
@@ -206,82 +207,87 @@ app.get('/api', (req, res) => {
 });
 
 // Users API route (protected)
-app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) => {
-  try {
-    const currentUserId = req.user.userId;
+app.get(
+  '/api/users',
+  sensitiveDataLimiter,
+  authenticateToken,
+  blockAdminAccess,
+  async (req, res) => {
+    try {
+      const currentUserId = req.user.userId;
 
-    // Get IDs of users that the current user has already liked
-    const likedUserIds = await prisma.userLikes.findMany({
-      where: {
-        likerId: currentUserId,
-      },
-      select: {
-        likedId: true,
-      },
-    });
-
-    // Get IDs of users that the current user has already passed
-    const passedUserIds = await prisma.userPasses.findMany({
-      where: {
-        passerId: currentUserId,
-      },
-      select: {
-        passedId: true,
-      },
-    });
-
-    // Removed debug query of all users to reduce load and avoid unused variable
-
-    const excludedIds = likedUserIds.map((like) => like.likedId);
-    // Also exclude passed users
-    excludedIds.push(...passedUserIds.map((pass) => pass.passedId));
-    // Also exclude the current user from their own discovery
-    excludedIds.push(currentUserId);
-
-    const users = await prisma.user.findMany({
-      where: {
-        verified: true,
-        role: {
-          not: 'Admin', // Exclude admin accounts from discovery
+      // Get IDs of users that the current user has already liked
+      const likedUserIds = await prisma.userLikes.findMany({
+        where: {
+          likerId: currentUserId,
         },
-        id: {
-          notIn: excludedIds,
+        select: {
+          likedId: true,
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        age: true,
-        gender: true,
-        course: true,
-        bio: true,
-        interests: true,
-        avatarUrl: true,
-        verified: true,
-        createdAt: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+      });
 
-    // Decrypt all user fields for response
-    const decryptedUsers = await decryptUsersFields(users);
+      // Get IDs of users that the current user has already passed
+      const passedUserIds = await prisma.userPasses.findMany({
+        where: {
+          passerId: currentUserId,
+        },
+        select: {
+          passedId: true,
+        },
+      });
 
-    res.json({
-      success: true,
-      data: decryptedUsers,
-      count: decryptedUsers.length,
-    });
-  } catch (error) {
-    console.error('Prisma query error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch users from database',
-      message: error.message,
-    });
+      // Exclude liked and passed users from discovery
+      const excludedIds = likedUserIds.map((like) => like.likedId);
+      // Also exclude passed users
+      excludedIds.push(...passedUserIds.map((pass) => pass.passedId));
+      // Also exclude the current user from their own discovery
+      excludedIds.push(currentUserId);
+
+      const users = await prisma.user.findMany({
+        where: {
+          verified: true,
+          role: {
+            not: 'Admin', // Exclude admin accounts from discovery
+          },
+          id: {
+            notIn: excludedIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          age: true,
+          gender: true,
+          course: true,
+          bio: true,
+          interests: true,
+          avatarUrl: true,
+          verified: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      // Decrypt all user fields for response
+      const decryptedUsers = await decryptUsersFields(users);
+
+      res.json({
+        success: true,
+        data: decryptedUsers,
+        count: decryptedUsers.length,
+      });
+    } catch (error) {
+      console.error('Prisma query error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch users from database',
+        message: error.message,
+      });
+    }
   }
-});
+);
 
 // Get user by ID
 // Get user by ID (Protected - requires authentication)
@@ -357,7 +363,7 @@ app.get('/api/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Update user by ID (Protected - requires authentication and authorization)
-app.put('/api/users/:id', authenticateToken, async (req, res) => {
+app.put('/api/users/:id', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, age, course, bio, interests, avatarUrl } = req.body;
@@ -473,7 +479,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete user by ID (Protected - requires authentication and authorization)
-app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+app.delete('/api/users/:id', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const { id } = req.params;
     let decryptedEmail;
@@ -1840,8 +1846,6 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
 // ADMIN ROUTES
 // ============================================
 
-const { authenticateAdmin } = require('./middleware/admin');
-
 // Admin check endpoint (returns 403 if not admin)
 app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (req, res) => {
   res.json({
@@ -2382,7 +2386,7 @@ app.put('/api/admin/reports/:id', reportLimiter, authenticateAdmin, async (req, 
 // ============================================
 
 // Get user points
-app.get('/api/points', authenticateToken, async (req, res) => {
+app.get('/api/points', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -2475,6 +2479,7 @@ app.post(
   '/api/points/claim-daily-like',
   pointsClaimLimiter,
   authenticateToken,
+  blockAdminAccess,
   async (req, res) => {
     try {
       const userId = req.user.userId;
@@ -2586,92 +2591,98 @@ app.post(
 );
 
 // Claim daily check-in points
-app.post('/api/points/claim-daily', pointsClaimLimiter, authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
+app.post(
+  '/api/points/claim-daily',
+  pointsClaimLimiter,
+  authenticateToken,
+  blockAdminAccess,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
 
-    // Check if user already claimed today
-    const userPoints = await prisma.userPoints.findUnique({
-      where: { userId },
-    });
-
-    if (!userPoints) {
-      return res.status(404).json({
-        success: false,
-        error: 'User points not found',
+      // Check if user already claimed today
+      const userPoints = await prisma.userPoints.findUnique({
+        where: { userId },
       });
-    }
 
-    // Check if user has reached 1000 points (premium threshold)
-    if (userPoints.totalPoints >= 1000) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
-      });
-    }
-
-    // Check if already claimed today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (userPoints.dailyCheckinDate) {
-      const lastClaimDate = new Date(userPoints.dailyCheckinDate);
-      lastClaimDate.setHours(0, 0, 0, 0);
-
-      if (lastClaimDate.getTime() === today.getTime()) {
-        return res.status(400).json({
+      if (!userPoints) {
+        return res.status(404).json({
           success: false,
-          error: 'Daily check-in already claimed today',
+          error: 'User points not found',
         });
       }
+
+      // Check if user has reached 1000 points (premium threshold)
+      if (userPoints.totalPoints >= 1000) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
+        });
+      }
+
+      // Check if already claimed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (userPoints.dailyCheckinDate) {
+        const lastClaimDate = new Date(userPoints.dailyCheckinDate);
+        lastClaimDate.setHours(0, 0, 0, 0);
+
+        if (lastClaimDate.getTime() === today.getTime()) {
+          return res.status(400).json({
+            success: false,
+            error: 'Daily check-in already claimed today',
+          });
+        }
+      }
+
+      // Update points and mark as claimed
+      const updatedPoints = await prisma.userPoints.update({
+        where: { userId },
+        data: {
+          totalPoints: userPoints.totalPoints + 50,
+          dailyCheckinDate: new Date(),
+        },
+        select: {
+          totalPoints: true,
+          dailyCheckinDate: true,
+          dailyLikeClaimedDate: true,
+        },
+      });
+
+      // Add computed field for response
+      const mostRecentLikeAfter = await prisma.userLikes.findFirst({
+        where: { likerId: userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+
+      // 'today' is already declared above in this function
+      const hasLikedTodayAfter =
+        mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+
+      const pointsWithComputed = {
+        ...updatedPoints,
+        hasLikedToday: hasLikedTodayAfter,
+      };
+
+      res.json({
+        success: true,
+        message: 'Daily check-in claimed successfully',
+        points: pointsWithComputed,
+        pointsEarned: 50,
+      });
+    } catch (error) {
+      console.error('Claim daily points error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to claim daily points',
+        message: error.message,
+      });
     }
-
-    // Update points and mark as claimed
-    const updatedPoints = await prisma.userPoints.update({
-      where: { userId },
-      data: {
-        totalPoints: userPoints.totalPoints + 50,
-        dailyCheckinDate: new Date(),
-      },
-      select: {
-        totalPoints: true,
-        dailyCheckinDate: true,
-        dailyLikeClaimedDate: true,
-      },
-    });
-
-    // Add computed field for response
-    const mostRecentLikeAfter = await prisma.userLikes.findFirst({
-      where: { likerId: userId },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-
-    // 'today' is already declared above in this function
-    const hasLikedTodayAfter =
-      mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
-
-    const pointsWithComputed = {
-      ...updatedPoints,
-      hasLikedToday: hasLikedTodayAfter,
-    };
-
-    res.json({
-      success: true,
-      message: 'Daily check-in claimed successfully',
-      points: pointsWithComputed,
-      pointsEarned: 50,
-    });
-  } catch (error) {
-    console.error('Claim daily points error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to claim daily points',
-      message: error.message,
-    });
   }
-});
+);
 
 // Mark that user has sent an introduction today
 app.post('/api/points/mark-intro-sent', pointsClaimLimiter, authenticateToken, async (req, res) => {
@@ -2829,7 +2840,7 @@ app.post(
 );
 
 // Unlock premium
-app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
+app.post('/api/points/unlock-premium', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -2917,7 +2928,7 @@ app.post('/api/points/unlock-premium', authenticateToken, async (req, res) => {
 });
 
 // Check premium status
-app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
+app.get('/api/points/premium-status', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -2971,7 +2982,7 @@ app.get('/api/points/premium-status', authenticateToken, async (req, res) => {
 // Likes API routes (protected)
 
 // Get all liked profiles (regardless of intro status)
-app.get('/api/likes', authenticateToken, async (req, res) => {
+app.get('/api/likes', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
@@ -3078,7 +3089,7 @@ app.get('/api/likes', authenticateToken, async (req, res) => {
 
 // Get liked profiles that don't have intro messages yet
 // Must be defined before parameterized routes like /api/likes/:userId
-app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
+app.get('/api/likes/pending-intro', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
 
@@ -3176,7 +3187,7 @@ app.get('/api/likes/pending-intro', authenticateToken, async (req, res) => {
 });
 
 // Like a user
-app.post('/api/likes', authenticateToken, async (req, res) => {
+app.post('/api/likes', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
     const { likedId, introMessage } = req.body;
@@ -3336,7 +3347,7 @@ app.post('/api/likes', authenticateToken, async (req, res) => {
 });
 
 // Check if user is liked
-app.get('/api/likes/check/:userId', authenticateToken, async (req, res) => {
+app.get('/api/likes/check/:userId', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
     const { userId: likedId } = req.params;
@@ -3365,7 +3376,7 @@ app.get('/api/likes/check/:userId', authenticateToken, async (req, res) => {
 });
 
 // Unlike a user
-app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
+app.delete('/api/likes/:userId', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
     const { userId: likedId } = req.params;
@@ -3410,7 +3421,7 @@ app.delete('/api/likes/:userId', authenticateToken, async (req, res) => {
 });
 
 // Send introduction message to an existing like
-app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
+app.post('/api/likes/:userId/intro', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const likerId = req.user.userId;
     const { userId: likedId } = req.params;
@@ -3531,7 +3542,7 @@ app.post('/api/likes/:userId/intro', authenticateToken, async (req, res) => {
 
 // Conversations API
 // List conversations for current user
-app.get('/api/conversations', authenticateToken, async (req, res) => {
+app.get('/api/conversations', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -3636,182 +3647,195 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
 });
 
 // Get messages in a conversation
-app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { id } = req.params;
+app.get(
+  '/api/conversations/:id/messages',
+  authenticateToken,
+  blockAdminAccess,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { id } = req.params;
 
-    const conversation = await prisma.conversation.findUnique({ where: { id } });
-    if (!conversation)
-      return res.status(404).json({ success: false, error: 'Conversation not found' });
+      const conversation = await prisma.conversation.findUnique({ where: { id } });
+      if (!conversation)
+        return res.status(404).json({ success: false, error: 'Conversation not found' });
 
-    // Handle null user IDs (when a user has been deleted)
-    if (
-      (conversation.userAId !== userId && conversation.userBId !== userId) ||
-      (!conversation.userAId && !conversation.userBId)
-    ) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
+      // Handle null user IDs (when a user has been deleted)
+      if (
+        (conversation.userAId !== userId && conversation.userBId !== userId) ||
+        (!conversation.userAId && !conversation.userBId)
+      ) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
 
-    const messages = await prisma.message.findMany({
-      where: { conversationId: id },
-      orderBy: { createdAt: 'asc' },
-    });
+      const messages = await prisma.message.findMany({
+        where: { conversationId: id },
+        orderBy: { createdAt: 'asc' },
+      });
 
-    // Decrypt message content (application-level decryption)
-    const decryptedMessages = await Promise.all(
-      messages.map(async (msg) => {
-        try {
-          // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
-          if (config.encryptionKey) {
-            const decryptedContent = await decryptField(msg.content);
-            return {
-              ...msg,
-              content: decryptedContent,
-            };
-          } else {
-            // No encryption key configured, return as-is
+      // Decrypt message content (application-level decryption)
+      const decryptedMessages = await Promise.all(
+        messages.map(async (msg) => {
+          try {
+            // Try to decrypt - if it fails, assume it's not encrypted (backward compatibility)
+            if (config.encryptionKey) {
+              const decryptedContent = await decryptField(msg.content);
+              return {
+                ...msg,
+                content: decryptedContent,
+              };
+            } else {
+              // No encryption key configured, return as-is
+              return msg;
+            }
+          } catch (error) {
+            // If decryption fails, assume message is not encrypted (legacy data)
+            console.warn(
+              `Failed to decrypt message ${msg.id}, assuming unencrypted:`,
+              error.message
+            );
             return msg;
           }
-        } catch (error) {
-          // If decryption fails, assume message is not encrypted (legacy data)
-          console.warn(`Failed to decrypt message ${msg.id}, assuming unencrypted:`, error.message);
-          return msg;
-        }
-      })
-    );
+        })
+      );
 
-    // Include lightweight participant details to render avatars in chat UI
-    // Handle null user IDs when a user has been deleted
-    const [userA, userB] = await Promise.all([
-      conversation.userAId
-        ? prisma.user.findUnique({
-            where: { id: conversation.userAId },
-            select: { id: true, name: true, avatarUrl: true },
-          })
-        : Promise.resolve(null),
-      conversation.userBId
-        ? prisma.user.findUnique({
-            where: { id: conversation.userBId },
-            select: { id: true, name: true, avatarUrl: true },
-          })
-        : Promise.resolve(null),
-    ]);
-    const me = userA && userA.id === userId ? userA : userB;
-    // Hide other user's name, avatar, and ID when conversation is locked (before match) or when user is deleted
-    const other = userA && userA.id === userId ? userB : userA;
-    const sanitizedOther =
-      other && conversation.isLocked
-        ? {
-            name: 'Hidden User',
-            avatarUrl: null,
-          }
-        : other || {
-            name: 'Deleted User',
-            avatarUrl: null,
-          };
+      // Include lightweight participant details to render avatars in chat UI
+      // Handle null user IDs when a user has been deleted
+      const [userA, userB] = await Promise.all([
+        conversation.userAId
+          ? prisma.user.findUnique({
+              where: { id: conversation.userAId },
+              select: { id: true, name: true, avatarUrl: true },
+            })
+          : Promise.resolve(null),
+        conversation.userBId
+          ? prisma.user.findUnique({
+              where: { id: conversation.userBId },
+              select: { id: true, name: true, avatarUrl: true },
+            })
+          : Promise.resolve(null),
+      ]);
+      const me = userA && userA.id === userId ? userA : userB;
+      // Hide other user's name, avatar, and ID when conversation is locked (before match) or when user is deleted
+      const other = userA && userA.id === userId ? userB : userA;
+      const sanitizedOther =
+        other && conversation.isLocked
+          ? {
+              name: 'Hidden User',
+              avatarUrl: null,
+            }
+          : other || {
+              name: 'Deleted User',
+              avatarUrl: null,
+            };
 
-    res.json({
-      success: true,
-      isLocked: conversation.isLocked,
-      messages: decryptedMessages.map((msg) => ({
-        content: msg.content,
-        createdAt: msg.createdAt,
-        isMine: msg.senderId === userId,
-        isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
-      })),
-      participants: { me, other: sanitizedOther },
-      reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
-    });
-  } catch (error) {
-    console.error('Get messages error:', error);
-    res
-      .status(500)
-      .json({ success: false, error: 'Failed to get messages', message: error.message });
+      res.json({
+        success: true,
+        isLocked: conversation.isLocked,
+        messages: decryptedMessages.map((msg) => ({
+          content: msg.content,
+          createdAt: msg.createdAt,
+          isMine: msg.senderId === userId,
+          isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
+        })),
+        participants: { me, other: sanitizedOther },
+        reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
+      });
+    } catch (error) {
+      console.error('Get messages error:', error);
+      res
+        .status(500)
+        .json({ success: false, error: 'Failed to get messages', message: error.message });
+    }
   }
-});
+);
 
 // Send a message in a conversation (blocked if locked)
-app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { id } = req.params;
-    const { content } = req.body;
+app.post(
+  '/api/conversations/:id/messages',
+  authenticateToken,
+  blockAdminAccess,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { id } = req.params;
+      const { content } = req.body;
 
-    // Validate conversation ID format
-    const {
-      validateConversationId,
-      validateAndSanitizeMessage,
-    } = require('./utils/messageValidation');
-    if (!validateConversationId(id)) {
-      return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
+      // Validate conversation ID format
+      const {
+        validateConversationId,
+        validateAndSanitizeMessage,
+      } = require('./utils/messageValidation');
+      if (!validateConversationId(id)) {
+        return res.status(400).json({ success: false, error: 'Invalid conversation ID format' });
+      }
+
+      // Validate and sanitize message content
+      const validation = validateAndSanitizeMessage(content);
+      if (!validation.isValid) {
+        return res.status(400).json({ success: false, error: validation.error });
+      }
+
+      const conversation = await prisma.conversation.findUnique({ where: { id } });
+      if (!conversation)
+        return res.status(404).json({ success: false, error: 'Conversation not found' });
+      // Handle null user IDs (when a user has been deleted)
+      if (
+        (conversation.userAId !== userId && conversation.userBId !== userId) ||
+        (!conversation.userAId && !conversation.userBId)
+      ) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
+      // Prevent sending messages if the other user has been deleted
+      if (!conversation.userAId || !conversation.userBId) {
+        return res
+          .status(410)
+          .json({ success: false, error: 'Cannot send message: other user has been deleted' });
+      }
+      if (conversation.isLocked) {
+        return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
+      }
+
+      // Encrypt message content before storing (application-level encryption)
+      if (!config.encryptionKey) {
+        console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
+        return res.status(500).json({ success: false, error: 'Encryption key not configured' });
+      }
+
+      const encryptedContent = await encryptField(validation.sanitized);
+
+      const message = await prisma.message.create({
+        data: {
+          conversationId: id,
+          senderId: userId,
+          content: encryptedContent, // Store encrypted content
+        },
+      });
+
+      // touch conversation updatedAt
+      await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+
+      // Return message with decrypted content for client (no sensitive IDs)
+      const decryptedContent = await decryptField(message.content);
+      const messageResponse = {
+        content: decryptedContent,
+        createdAt: message.createdAt,
+        isMine: true, // Always true for newly sent messages
+        isDeleted: false, // New messages can't be from deleted users
+      };
+
+      res.status(201).json({ success: true, message: messageResponse });
+    } catch (error) {
+      console.error('Send message error:', error);
+      res
+        .status(500)
+        .json({ success: false, error: 'Failed to send message', message: error.message });
     }
-
-    // Validate and sanitize message content
-    const validation = validateAndSanitizeMessage(content);
-    if (!validation.isValid) {
-      return res.status(400).json({ success: false, error: validation.error });
-    }
-
-    const conversation = await prisma.conversation.findUnique({ where: { id } });
-    if (!conversation)
-      return res.status(404).json({ success: false, error: 'Conversation not found' });
-    // Handle null user IDs (when a user has been deleted)
-    if (
-      (conversation.userAId !== userId && conversation.userBId !== userId) ||
-      (!conversation.userAId && !conversation.userBId)
-    ) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
-    }
-    // Prevent sending messages if the other user has been deleted
-    if (!conversation.userAId || !conversation.userBId) {
-      return res
-        .status(410)
-        .json({ success: false, error: 'Cannot send message: other user has been deleted' });
-    }
-    if (conversation.isLocked) {
-      return res.status(423).json({ success: false, error: 'Chat is locked until you match' });
-    }
-
-    // Encrypt message content before storing (application-level encryption)
-    if (!config.encryptionKey) {
-      console.error('ENCRYPTION_KEY is not set. Message will not be encrypted.');
-      return res.status(500).json({ success: false, error: 'Encryption key not configured' });
-    }
-
-    const encryptedContent = await encryptField(validation.sanitized);
-
-    const message = await prisma.message.create({
-      data: {
-        conversationId: id,
-        senderId: userId,
-        content: encryptedContent, // Store encrypted content
-      },
-    });
-
-    // touch conversation updatedAt
-    await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
-
-    // Return message with decrypted content for client (no sensitive IDs)
-    const decryptedContent = await decryptField(message.content);
-    const messageResponse = {
-      content: decryptedContent,
-      createdAt: message.createdAt,
-      isMine: true, // Always true for newly sent messages
-      isDeleted: false, // New messages can't be from deleted users
-    };
-
-    res.status(201).json({ success: true, message: messageResponse });
-  } catch (error) {
-    console.error('Send message error:', error);
-    res
-      .status(500)
-      .json({ success: false, error: 'Failed to send message', message: error.message });
   }
-});
+);
 
 // Unpass a user
-app.delete('/api/passes/:userId', authenticateToken, async (req, res) => {
+app.delete('/api/passes/:userId', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const passerId = req.user.userId;
     const { userId: passedId } = req.params;
@@ -3856,7 +3880,7 @@ app.delete('/api/passes/:userId', authenticateToken, async (req, res) => {
 });
 
 // Pass a user
-app.post('/api/passes', authenticateToken, async (req, res) => {
+app.post('/api/passes', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const passerId = req.user.userId;
     const { passedId } = req.body;
