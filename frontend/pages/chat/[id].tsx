@@ -184,31 +184,28 @@ export default function ConversationPage() {
             marginBottom: 12,
           }}
         >
-        <button
-          className="btn ghost"
-          onClick={() => router.push('/chat')}
-        >
-          ← Back
-        </button>
-        {!isLocked && (
-          <button
-            onClick={handleReportClick}
-            title="Report user"
-            disabled={isLocked}
-            className="btn"
-            style={{
-              backgroundColor: '#dc3545', // red
-              color: 'white',
-              cursor: 'pointer',
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            🚩 Report
+          <button className="btn ghost" onClick={() => router.push('/chat')}>
+            ← Back
           </button>
-        )}
+          {!isLocked && (
+            <button
+              onClick={handleReportClick}
+              title="Report user"
+              disabled={isLocked}
+              className="btn"
+              style={{
+                backgroundColor: '#dc3545', // red
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              🚩 Report
+            </button>
+          )}
         </div>
         {loading ? (
           <p>Loading…</p>
@@ -217,8 +214,6 @@ export default function ConversationPage() {
             {isLocked && (
               <div className="lock-banner">🔒 Chat is locked until you both like each other.</div>
             )}
-
-            
 
             {/* Chat Header with Other User Info and Report Button */}
             {other && messages.length > 0 && (
@@ -271,7 +266,6 @@ export default function ConversationPage() {
                     </p>
                   </div>
                 </div>
-                
               </div>
             )}
 

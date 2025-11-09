@@ -485,7 +485,6 @@ describe('Conversation Page - Empty State', () => {
       const reportButton = screen.queryByText('🚩 Report')
       expect(reportButton).not.toBeInTheDocument()
     })
-
   })
 
   describe('Empty Conversation Navigation', () => {
