@@ -150,6 +150,8 @@ const changePasswordLimiter = rateLimit({
  * Rate limiter for registration endpoint
  * Prevents fake account creation
  * Uses IP + email combination to avoid blocking legitimate users on shared networks
+ * Note: Password validation happens BEFORE this middleware, so password validation failures
+ * (e.g., breached passwords) don't count toward the rate limit
  */
 const registerLimiter = rateLimit({
   windowMs: REGISTER_WINDOW_MS,
