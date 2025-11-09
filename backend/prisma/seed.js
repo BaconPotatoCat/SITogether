@@ -1,3 +1,5 @@
+// Bridge console.* to file logger in non-test environments
+require('../lib/logging-bridge');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { prepareEmailForStorage, encryptField } = require('../utils/fieldEncryption');

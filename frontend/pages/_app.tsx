@@ -8,6 +8,12 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { ensureCsrfToken } from '../utils/api'
 import '../styles/globals.css'
 
+// Initialize logging bridge for server-side operations (API routes and SSR)
+if (typeof window === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../lib/logging-bridge')
+}
+
 function Navigation() {
   const router = useRouter()
   const { session, status, signOut } = useSession()

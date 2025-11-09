@@ -1,3 +1,5 @@
+// Bridge console.* to file logger in non-test environments
+require('./lib/logging-bridge');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
