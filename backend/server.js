@@ -2236,6 +2236,8 @@ app.get('/api/points', authenticateToken, async (req, res) => {
         totalPoints: true,
         dailyCheckinDate: true,
         dailyLikeClaimedDate: true,
+        hasSentIntroToday: true,
+        dailyIntroClaimedDate: true,
       },
     });
 
@@ -2253,6 +2255,8 @@ app.get('/api/points', authenticateToken, async (req, res) => {
             totalPoints: true,
             dailyCheckinDate: true,
             dailyLikeClaimedDate: true,
+            hasSentIntroToday: true,
+            dailyIntroClaimedDate: true,
           },
         });
         console.log(`âœ“ Created UserPoints record for user ${userId}`);
@@ -2272,16 +2276,27 @@ app.get('/api/points', authenticateToken, async (req, res) => {
       select: { createdAt: true },
     });
 
+    // Check if user has sent an introduction today
+    const mostRecentMessage = await prisma.message.findFirst({
+      where: { senderId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const hasLikedToday =
       mostRecentLike && new Date(mostRecentLike.createdAt).getTime() >= today.getTime();
 
-    // Add computed field to response
+    const hasSentIntroToday =
+      mostRecentMessage && new Date(mostRecentMessage.createdAt).getTime() >= today.getTime();
+
+    // Add computed fields to response
     const pointsWithComputed = {
       ...userPoints,
       hasLikedToday,
+      hasSentIntroToday,
     };
 
     res.json({
@@ -2491,6 +2506,156 @@ app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to claim daily points',
+      message: error.message,
+    });
+  }
+});
+
+// Mark that user has sent an introduction today
+app.post('/api/points/mark-intro-sent', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Update user points to mark intro as sent today
+    const updatedPoints = await prisma.userPoints.update({
+      where: { userId },
+      data: {
+        hasSentIntroToday: true,
+      },
+      select: {
+        totalPoints: true,
+        dailyCheckinDate: true,
+        dailyLikeClaimedDate: true,
+        hasSentIntroToday: true,
+        dailyIntroClaimedDate: true,
+      },
+    });
+
+    // Add computed field for response
+    const mostRecentLike = await prisma.userLikes.findFirst({
+      where: { likerId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const hasLikedToday =
+      mostRecentLike && new Date(mostRecentLike.createdAt).getTime() >= today.getTime();
+
+    const pointsWithComputed = {
+      ...updatedPoints,
+      hasLikedToday,
+    };
+
+    res.json({
+      success: true,
+      message: 'Introduction tracking updated successfully',
+      points: pointsWithComputed,
+    });
+  } catch (error) {
+    console.error('Mark intro sent error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to mark introduction as sent',
+      message: error.message,
+    });
+  }
+});
+
+// Claim daily introduction points
+app.post('/api/points/claim-daily-intro', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Get current user points
+    const userPoints = await prisma.userPoints.findUnique({
+      where: { userId },
+    });
+
+    if (!userPoints) {
+      return res.status(404).json({
+        success: false,
+        error: 'User points not found',
+      });
+    }
+
+    // Check if user has reached 1000 points (premium threshold)
+    if (userPoints.totalPoints >= 1000) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
+      });
+    }
+
+    // Check if user has sent an introduction today
+    if (!userPoints.hasSentIntroToday) {
+      return res.status(400).json({
+        success: false,
+        error: 'Daily introduction task not completed yet',
+      });
+    }
+
+    // Check if already claimed today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (userPoints.dailyIntroClaimedDate) {
+      const claimedDate = new Date(userPoints.dailyIntroClaimedDate);
+      claimedDate.setHours(0, 0, 0, 0);
+
+      if (claimedDate.getTime() === today.getTime()) {
+        return res.status(400).json({
+          success: false,
+          error: 'Daily introduction points already claimed today',
+        });
+      }
+    }
+
+    // Award points for daily introduction task
+    const updatedPoints = await prisma.userPoints.update({
+      where: { userId },
+      data: {
+        totalPoints: userPoints.totalPoints + 25,
+        dailyIntroClaimedDate: new Date(),
+      },
+      select: {
+        totalPoints: true,
+        dailyCheckinDate: true,
+        dailyLikeClaimedDate: true,
+        hasSentIntroToday: true,
+        dailyIntroClaimedDate: true,
+      },
+    });
+
+    // Add computed field for response
+    const mostRecentLike = await prisma.userLikes.findFirst({
+      where: { likerId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    const hasLikedToday =
+      mostRecentLike && new Date(mostRecentLike.createdAt).getTime() >= today.getTime();
+
+    const pointsWithComputed = {
+      ...updatedPoints,
+      hasLikedToday,
+    };
+
+    res.json({
+      success: true,
+      message: 'Daily introduction points claimed successfully',
+      points: pointsWithComputed,
+      pointsEarned: 25,
+    });
+  } catch (error) {
+    console.error('Claim daily intro points error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to claim daily introduction points',
       message: error.message,
     });
   }

@@ -143,6 +143,17 @@ export default function LikedProfiles() {
       const result = await response.json()
 
       if (result.success) {
+        // Update user's daily intro tracking
+        try {
+          await fetchWithAuth('/api/points/mark-intro-sent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        } catch (pointsError) {
+          console.warn('Failed to update intro tracking:', pointsError)
+          // Don't fail the intro submission if points tracking fails
+        }
+
         // Refresh the list to update hasIntro flags
         const refreshResponse = await fetchWithAuth('/api/likes/all')
         if (refreshResponse.ok) {

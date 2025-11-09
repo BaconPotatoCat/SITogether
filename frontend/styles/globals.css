@@ -2459,6 +2459,23 @@ html.dark .filter-modal-popup {
   animation: slideUp 0.3s ease;
 }
 
+html.dark .modal-content {
+  background: #1f2937;
+  color: #f9fafb;
+}
+
+html.dark .modal-header {
+  border-bottom-color: #374151;
+}
+
+html.dark .modal-header h2 {
+  color: #f9fafb;
+}
+
+html.dark .modal-description {
+  color: #d1d5db;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(20px);
