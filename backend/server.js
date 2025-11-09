@@ -1,3 +1,5 @@
+// Bridge console.* to file logger in non-test environments
+require('./lib/logging-bridge');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -228,31 +230,13 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
       },
     });
 
-    // Get all users for debugging
-    const allUsers = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        verified: true,
-      },
-    });
-
-    console.log(`Total users in database: ${allUsers.length}`);
-    console.log(`Verified users: ${allUsers.filter((u) => u.verified).length}`);
-    console.log(`Unverified users: ${allUsers.filter((u) => !u.verified).length}`);
-
-    console.log(
-      `User ${currentUserId} has liked ${likedUserIds.length} users and passed ${passedUserIds.length} users`
-    );
+    // Removed debug query of all users to reduce load and avoid unused variable
 
     const excludedIds = likedUserIds.map((like) => like.likedId);
     // Also exclude passed users
     excludedIds.push(...passedUserIds.map((pass) => pass.passedId));
     // Also exclude the current user from their own discovery
     excludedIds.push(currentUserId);
-
-    console.log(`Excluded user IDs:`, excludedIds);
-    console.log(`Excluding ${excludedIds.length} total users from discovery`);
 
     const users = await prisma.user.findMany({
       where: {
@@ -492,6 +476,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
 app.delete('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    let decryptedEmail;
 
     // Authorization check: Users can only delete their own account
     if (req.user.userId !== id) {
@@ -504,7 +489,7 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
     // Verify user exists
     const user = await prisma.user.findUnique({
       where: { id: id },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -513,6 +498,9 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
         error: 'User not found',
       });
     }
+
+    // Decrypt email for logging before deleting the user
+    decryptedEmail = await decryptField(user.email);
 
     // Before deleting the user, find and delete conversations where both users are deleted
     // (i.e., conversations where this user is involved AND the other user ID is already null)
@@ -556,6 +544,7 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
       sameSite: 'lax',
     });
 
+    console.log(`User account deleted: email=${decryptedEmail}`);
     res.json({
       success: true,
       message: 'Account deleted successfully',
@@ -775,6 +764,7 @@ app.post('/api/auth/register', validatePasswordMiddleware, registerLimiter, asyn
     try {
       await sendVerificationEmail(email, name, verificationToken);
 
+      console.log(`User registered successfully: ${email}`);
       res.status(201).json({
         success: true,
         message: 'User registered successfully. Please check your email to verify your account.',
@@ -784,6 +774,7 @@ app.post('/api/auth/register', validatePasswordMiddleware, registerLimiter, asyn
       console.error('Failed to send verification email:', emailError);
 
       // User is created but email failed - still return success but with a warning
+      console.warn(`User registered but verification email failed: ${email}`);
       res.status(201).json({
         success: true,
         message:
@@ -1025,6 +1016,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     });
 
     if (!user) {
+      console.warn(`Failed login attempt for non-existent user: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
@@ -1035,6 +1027,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
+      console.warn(`Failed login attempt with invalid password for user: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
@@ -1043,6 +1036,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     // Check if account is banned
     if (user.banned) {
+      console.warn(`Banned user attempted to login: ${email}`);
       return res.status(403).json({
         success: false,
         error: 'Access denied. Account has been banned.',
@@ -1101,6 +1095,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         req.session.pendingAuth = true;
       }
 
+      console.log(`2FA code sent for user: ${decryptedEmail}`);
       res.json({
         success: true,
         message: 'Please check your email for the verification code',
@@ -1238,6 +1233,7 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
 
+    console.log(`User successfully logged in after 2FA verification: userId=${userId}`);
     res.json({
       success: true,
       message: 'Login successful',
@@ -1468,6 +1464,8 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
 
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
+  const userId = req.user?.userId || 'unknown';
+
   // Clear auth token (must match original cookie options)
   res.clearCookie('token', {
     httpOnly: true,
@@ -1497,6 +1495,7 @@ app.post('/api/auth/logout', (req, res) => {
     sameSite: 'lax',
   });
 
+  console.log(`User logged out: userId=${userId}`);
   res.json({
     success: true,
     message: 'Logged out successfully',
@@ -1704,6 +1703,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
     try {
       await sendPasswordResetEmail(decryptedEmail, user.name, resetToken);
 
+      console.log(`Password reset link sent to user: ${decryptedEmail}`);
       res.json({
         success: true,
         message: 'Password reset link has been sent to your email.',
@@ -1721,6 +1721,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
         console.error('Failed to cleanup token after email error:', cleanupError);
       }
 
+      console.warn(`Failed to send password reset email to: ${decryptedEmail}`);
       res.status(500).json({
         success: false,
         error: 'Failed to send password reset email. Please try again later.',
@@ -1819,6 +1820,8 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       }),
     ]);
 
+    const decryptedEmail = await decryptField(user.email);
+    console.log(`Password successfully reset for user: ${decryptedEmail}`);
     res.json({
       success: true,
       message: 'Password has been reset successfully.',
@@ -2001,6 +2004,8 @@ app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async
       },
     });
 
+    const sanitizedId = String(id).replace(/[\r\n]/g, '');
+    console.log(`Unbanned user: ${sanitizedId}`);
     res.json({
       success: true,
       message: 'User unbanned successfully',
@@ -2411,7 +2416,7 @@ app.get('/api/points', authenticateToken, async (req, res) => {
             dailyIntroClaimedDate: true,
           },
         });
-        console.log(`âœ“ Created UserPoints record for user ${userId}`);
+        console.log(`Created UserPoints record for user ${userId}`);
       } catch (createError) {
         console.error(`Failed to create UserPoints for user ${userId}:`, createError);
         return res.status(500).json({

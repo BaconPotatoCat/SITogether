@@ -18,6 +18,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
+      - ${LOG_DIR}:/app/logs
     command: >
       sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then npm run build && npm start; else npm run dev; fi"
     networks:
@@ -54,6 +55,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - ${LOG_DIR}:/app/logs
     command: >
       sh -c "if [ \"$$NODE_ENV\" = \"production\" ]; then npm start; else npm run dev; fi"
     networks:
