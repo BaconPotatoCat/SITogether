@@ -2520,7 +2520,7 @@ app.post('/api/points/claim-daily', pointsClaimLimiter, authenticateToken, async
 });
 
 // Mark that user has sent an introduction today
-app.post('/api/points/mark-intro-sent', authenticateToken, async (req, res) => {
+app.post('/api/points/mark-intro-sent', pointsClaimLimiter, authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
 
