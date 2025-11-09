@@ -27,11 +27,9 @@ export default function IntroMessageModal({
             {required ? 'Send an introduction' : 'Add an intro message (optional)'}
           </h3>
         </div>
-        
-        <p className="modal-description">
-          Say hi and share why you want to connect.
-        </p>
-        
+
+        <p className="modal-description">Say hi and share why you want to connect.</p>
+
         <div className="modal-form">
           <div className="edit-form">
             <div className="form-group">
@@ -50,7 +48,7 @@ export default function IntroMessageModal({
               />
             </div>
           </div>
-          
+
           <div className="modal-actions">
             <button className="btn secondary" onClick={onCancel}>
               Cancel
