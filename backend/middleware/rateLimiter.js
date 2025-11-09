@@ -42,6 +42,11 @@ const RESEND_VERIFICATION_MAX_ATTEMPTS = 3;
 const SENSITIVE_DATA_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const SENSITIVE_DATA_MAX_ATTEMPTS = 100;
 
+// Points claiming configuration
+// Prevents abuse of daily task claiming endpoints
+const POINTS_CLAIM_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const POINTS_CLAIM_MAX_ATTEMPTS = 3;
+
 // Helper function to format time window for error messages
 const formatTimeWindow = (windowMs) => {
   const minutes = Math.floor(windowMs / (60 * 1000));
@@ -239,6 +244,23 @@ const sensitiveDataLimiter = rateLimit({
   keyGenerator: keyGenerator,
 });
 
+/**
+ * Rate limiter for points claiming endpoints
+ * Prevents abuse of daily task claiming (like/like-daily-intro endpoints)
+ */
+const pointsClaimLimiter = rateLimit({
+  windowMs: POINTS_CLAIM_WINDOW_MS,
+  max: POINTS_CLAIM_MAX_ATTEMPTS,
+  message: {
+    success: false,
+    error: 'Too many claim attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
 module.exports = {
   loginLimiter,
   passwordResetLimiter,
@@ -248,4 +270,5 @@ module.exports = {
   resendOtpLimiter,
   resendVerificationLimiter,
   sensitiveDataLimiter,
+  pointsClaimLimiter,
 };

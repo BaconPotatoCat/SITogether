@@ -32,6 +32,7 @@ const {
   resendOtpLimiter,
   resendVerificationLimiter,
   sensitiveDataLimiter,
+  pointsClaimLimiter,
 } = require('./middleware/rateLimiter');
 const app = express();
 const PORT = config.port;
@@ -178,9 +179,11 @@ app.get('/api', (req, res) => {
       },
       points: {
         getPoints: 'GET /api/points (protected)',
-        claimDaily: 'POST /api/points/claim-daily (protected)',
-        claimDailyLike: 'POST /api/points/claim-daily-like (protected)',
-        unlockPremium: 'POST /api/points/unlock-premium (protected)',
+        claimDaily: 'POST /api/points/claim-daily (protected + rate limited)',
+        claimDailyLike: 'POST /api/points/claim-daily-like (protected + rate limited)',
+        claimDailyIntro: 'POST /api/points/claim-daily-intro (protected + rate limited)',
+        markIntroSent: 'POST /api/points/mark-intro-sent (protected + rate limited)',
+        unlockPremium: 'POST /api/points/unlock-premium (protected + strict rate limited)',
         premiumStatus: 'GET /api/points/premium-status (protected)',
       },
       likes: {
@@ -2314,7 +2317,7 @@ app.get('/api/points', authenticateToken, async (req, res) => {
 });
 
 // Claim daily like points
-app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => {
+app.post('/api/points/claim-daily-like', pointsClaimLimiter, authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -2424,7 +2427,7 @@ app.post('/api/points/claim-daily-like', authenticateToken, async (req, res) => 
 });
 
 // Claim daily check-in points
-app.post('/api/points/claim-daily', authenticateToken, async (req, res) => {
+app.post('/api/points/claim-daily', pointsClaimLimiter, authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -2565,7 +2568,7 @@ app.post('/api/points/mark-intro-sent', authenticateToken, async (req, res) => {
 });
 
 // Claim daily introduction points
-app.post('/api/points/claim-daily-intro', authenticateToken, async (req, res) => {
+app.post('/api/points/claim-daily-intro', pointsClaimLimiter, authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
