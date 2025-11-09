@@ -69,6 +69,12 @@ const config = {
   // Encryption
   encryptionKey: process.env.ENCRYPTION_KEY,
 
+  // Admin account (for seeding)
+  admin: {
+    email: process.env.ADMIN_EMAIL,
+    password: process.env.ADMIN_PASSWORD,
+  },
+
   // Validation helpers
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',

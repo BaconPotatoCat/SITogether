@@ -149,6 +149,10 @@ function MyComponent() {
 The application includes a seed script that populates the database with sample user data for development and testing purposes.
 
 **What the seed script does:**
+- **Creates an initial admin account** using the credentials from your `.env` file:
+  - Email: Set via `ADMIN_EMAIL` (e.g., `admin@example.com`)
+  - Password: Set via `ADMIN_PASSWORD`
+  - The admin account has full administrative privileges
 - Creates 6 sample user profiles with realistic data
 - Generates profiles with names, ages, genders, courses, bios, and interests
 - Sets default password `wasd12` for all seeded users (hashed with bcrypt)
@@ -162,7 +166,22 @@ The application includes a seed script that populates the database with sample u
 docker-compose exec backend npm run db:seed
 ```
 
-**Note:** 
+**Setting up your admin account:**
+
+1. Add admin credentials to your `.env` file:
+   ```bash
+   ADMIN_EMAIL=admin@example.com
+   ADMIN_PASSWORD=your-secure-admin-password-here
+   ```
+   
+   **Note:** Use a real, accessible email address for `ADMIN_EMAIL` as it's required for 2FA authentication.
+
+2. Run the seed script to create the admin account
+
+3. Login with your admin credentials at the `/auth` page
+
+**Important Notes:** 
+- ⚠️ **Change the default admin password in production!**
 - The seed script will skip if users already exist in the database
 - To re-seed, you'll need to clear existing data first
 - Only verified users will appear in the swipe interface
