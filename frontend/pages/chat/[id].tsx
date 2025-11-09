@@ -7,14 +7,13 @@ import ToastContainer from '../../components/ToastContainer'
 import { useToast } from '../../hooks/useToast'
 
 interface Message {
-  id: string
-  senderId: string | null
   content: string
   createdAt: string
+  isMine: boolean
+  isDeleted: boolean
 }
 
 interface Participant {
-  id?: string
   name: string
   avatarUrl: string | null
 }
@@ -30,7 +29,7 @@ export default function ConversationPage() {
   const endRef = useRef<HTMLDivElement | null>(null)
   const [me, setMe] = useState<Participant | null>(null)
   const [other, setOther] = useState<Participant | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [reportedUserId, setReportedUserId] = useState<string | null>(null)  // Add this
   const [showReportModal, setShowReportModal] = useState(false)
   const [reportReason, setReportReason] = useState('')
   const [reportDescription, setReportDescription] = useState('')
@@ -51,7 +50,8 @@ export default function ConversationPage() {
             setMe(data.participants.me)
             setOther(data.participants.other)
           }
-          if (data.currentUserId) setCurrentUserId(data.currentUserId)
+          // Add this to store reported user ID securely:
+          if (data.reportedUserId) setReportedUserId(data.reportedUserId)
         }
       } finally {
         setLoading(false)
@@ -60,30 +60,6 @@ export default function ConversationPage() {
     }
     load()
   }, [id])
-
-  // Enrich avatars from profile API if missing (only if conversation is unlocked)
-  useEffect(() => {
-    if (isLocked) return // Don't enrich when locked to preserve privacy
-    const enrich = async () => {
-      try {
-        if (other && !other.avatarUrl && other.id) {
-          const res = await fetch(`/api/users/${other.id}`)
-          const data = await res.json()
-          if (data?.success && data?.user?.avatarUrl) {
-            setOther({ ...other, avatarUrl: data.user.avatarUrl })
-          }
-        }
-        if (me && !me.avatarUrl) {
-          const res = await fetch(`/api/users/${me.id}`)
-          const data = await res.json()
-          if (data?.success && data?.user?.avatarUrl) {
-            setMe({ ...me, avatarUrl: data.user.avatarUrl })
-          }
-        }
-      } catch {}
-    }
-    enrich()
-  }, [me, other, isLocked])
 
   const onSend = async (e: FormEvent) => {
     e.preventDefault()
@@ -142,7 +118,7 @@ export default function ConversationPage() {
       const response = await fetchWithAuth('/api/reports', {
         method: 'POST',
         body: JSON.stringify({
-          reportedId: other.id,
+          reportedId: reportedUserId,  // Use stored ID instead of other.id
           reason: reportReason,
           description: reportDescription.trim() || null,
         }),
@@ -194,7 +170,7 @@ export default function ConversationPage() {
               disabled={isLocked}
               className="btn"
               style={{
-                backgroundColor: '#dc3545', // red
+                backgroundColor: 'var(--danger-color, #dc3545)', // red
                 color: 'white',
                 cursor: 'pointer',
                 fontWeight: 500,
@@ -223,10 +199,10 @@ export default function ConversationPage() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   padding: '12px 16px',
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: 'var(--bg-color, #f8f9fa)',
                   borderRadius: '8px',
                   marginBottom: '16px',
-                  border: '1px solid #e9ecef',
+                  border: '1px solid var(--border-color, #e9ecef)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -247,21 +223,30 @@ export default function ConversationPage() {
                         width: '40px',
                         height: '40px',
                         borderRadius: '50%',
-                        backgroundColor: '#ddd',
+                        backgroundColor: 'var(--placeholder-bg, #ddd)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 700,
                         fontSize: '16px',
-                        color: '#666',
+                        color: 'var(--placeholder-text, #666)',
                       }}
                     >
                       {(other.name || 'U').charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{other.name}</h3>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#666' }}>
+                    <h3 style={{ 
+                      margin: 0, 
+                      fontSize: '16px', 
+                      fontWeight: 600,
+                      color: 'var(--text-color, #333)',
+                    }}>{other.name}</h3>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: '12px', 
+                      color: 'var(--muted-text, #666)',
+                    }}>
                       Active conversation
                     </p>
                   </div>
@@ -270,13 +255,14 @@ export default function ConversationPage() {
             )}
 
             <div className="chat-thread">
-              {messages.map((m) => {
-                // Handle null senderId (deleted user)
-                const isMine = currentUserId && m.senderId === currentUserId
-                const isDeletedUser = !m.senderId
+            {messages.map((m, index) => {
+                // Use isMine from backend instead of senderId comparison
+                const isMine = m.isMine
                 const shouldBlur = isLocked && !isMine // Only blur the other user's info when locked
-                // Always use "Hidden User" when locked to prevent any name leakage
-                // Use "Deleted User" when senderId is null
+                
+                // Handle deleted user case - backend should set isDeleted flag
+                const isDeletedUser = m.isDeleted || false
+                
                 const displayName = shouldBlur
                   ? 'Hidden User'
                   : isDeletedUser
@@ -284,8 +270,9 @@ export default function ConversationPage() {
                     : (isMine ? me?.name : other?.name) || 'User'
                 const displayAvatarUrl =
                   shouldBlur || isDeletedUser ? null : isMine ? me?.avatarUrl : other?.avatarUrl
+                
                 return (
-                  <div key={m.id} className={`chat-row ${isMine ? 'mine' : ''}`}>
+                  <div key={index} className={`chat-row ${isMine ? 'mine' : ''}`}>
                     {displayAvatarUrl ? (
                       <img
                         src={displayAvatarUrl}
@@ -351,7 +338,14 @@ export default function ConversationPage() {
                 }}
                 placeholder={isLocked ? 'Chat is locked' : 'Type a message'}
                 disabled={isLocked}
-                style={{ flex: 1, padding: 10, borderRadius: 6, border: '1px solid #ddd' }}
+                style={{ 
+                  flex: 1, 
+                  padding: 10, 
+                  borderRadius: 6, 
+                  border: '1px solid var(--input-border, #ddd)',
+                  backgroundColor: 'var(--input-bg, #fff)',
+                  color: 'var(--input-text, #111827)',
+                }}
                 maxLength={5000}
               />
               <button className="btn" type="submit" disabled={isLocked || sending || !text.trim()}>
@@ -384,28 +378,45 @@ export default function ConversationPage() {
           >
             <div
               style={{
-                backgroundColor: 'white',
+                backgroundColor: 'var(--modal-bg, white)',
                 borderRadius: '8px',
                 padding: '24px',
                 maxWidth: '500px',
                 width: '90%',
                 maxHeight: '90vh',
                 overflow: 'auto',
+                border: '1px solid var(--modal-border, transparent)',
+                boxShadow: 'var(--modal-shadow, 0 10px 40px rgba(0, 0, 0, 0.2))',
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Report User</h2>
-              <p style={{ marginBottom: '20px', color: '#666' }}>
-                Reporting: <strong>{other.name}</strong>
+              <h2 style={{ 
+                marginTop: 0, 
+                marginBottom: '20px',
+                color: 'var(--modal-title, #333)',
+              }}>Report User</h2>
+              <p style={{ 
+                marginBottom: '20px', 
+                color: 'var(--modal-text, #666)',
+              }}>
+                Reporting: <strong style={{ color: 'var(--modal-text, #666)' }}>{other.name}</strong>
               </p>
-              <p style={{ marginBottom: '20px', color: '#666' }}>
+              <p style={{ 
+                marginBottom: '20px', 
+                color: 'var(--modal-text, #666)',
+              }}>
                 Please select a reason for reporting this user. All reports are reviewed by our
                 moderation team.
               </p>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-                  Reason <span style={{ color: '#dc3545' }}>*</span>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontWeight: 500,
+                  color: 'var(--modal-label, #374151)',
+                }}>
+                  Reason <span style={{ color: 'var(--danger-color, #dc3545)' }}>*</span>
                 </label>
                 <select
                   value={reportReason}
@@ -415,8 +426,10 @@ export default function ConversationPage() {
                     width: '100%',
                     padding: '10px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: '1px solid var(--input-border, #ddd)',
                     fontSize: '14px',
+                    backgroundColor: 'var(--input-bg, #fff)',
+                    color: 'var(--input-text, #111827)',
                   }}
                 >
                   <option value="">Select a reason...</option>
@@ -430,7 +443,12 @@ export default function ConversationPage() {
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  fontWeight: 500,
+                  color: 'var(--modal-label, #374151)',
+                }}>
                   Additional Details (Optional)
                 </label>
                 <textarea
@@ -443,10 +461,12 @@ export default function ConversationPage() {
                     width: '100%',
                     padding: '10px',
                     borderRadius: '6px',
-                    border: '1px solid #ddd',
+                    border: '1px solid var(--input-border, #ddd)',
                     fontSize: '14px',
                     fontFamily: 'inherit',
                     resize: 'vertical',
+                    backgroundColor: 'var(--input-bg, #fff)',
+                    color: 'var(--input-text, #111827)',
                   }}
                 />
               </div>
@@ -461,7 +481,7 @@ export default function ConversationPage() {
                   disabled={isSubmittingReport}
                   style={{
                     padding: '10px 20px',
-                    backgroundColor: '#6c757d',
+                    backgroundColor: 'var(--secondary-color, #6c757d)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
@@ -477,7 +497,9 @@ export default function ConversationPage() {
                   style={{
                     padding: '10px 20px',
                     backgroundColor:
-                      isSubmittingReport || !reportReason.trim() ? '#6c757d' : '#dc3545',
+                      isSubmittingReport || !reportReason.trim() 
+                        ? 'var(--disabled-color, #6c757d)' 
+                        : 'var(--danger-color, #dc3545)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
