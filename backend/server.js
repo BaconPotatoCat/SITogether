@@ -1,3 +1,5 @@
+// Bridge console.* to file logger in non-test environments
+require('./lib/logging-bridge');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -7,7 +9,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
-const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
 const lusca = require('lusca');
 const { authenticateToken } = require('./middleware/auth');
@@ -34,6 +35,11 @@ const {
   resendVerificationLimiter,
   sensitiveDataLimiter,
   pointsClaimLimiter,
+  adminCheckLimiter,
+  adminRateLimiter,
+  adminBanLimiter,
+  reportLimiter,
+  adminCreateLimiter,
 } = require('./middleware/rateLimiter');
 const app = express();
 const PORT = config.port;
@@ -229,32 +235,13 @@ app.get(
           passedId: true,
         },
       });
-
-      // Get all users for debugging
-      const allUsers = await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          verified: true,
-        },
-      });
-
-      console.log(`Total users in database: ${allUsers.length}`);
-      console.log(`Verified users: ${allUsers.filter((u) => u.verified).length}`);
-      console.log(`Unverified users: ${allUsers.filter((u) => !u.verified).length}`);
-
-      console.log(
-        `User ${currentUserId} has liked ${likedUserIds.length} users and passed ${passedUserIds.length} users`
-      );
-
+      
+      // Exclude liked and passed users from discovery
       const excludedIds = likedUserIds.map((like) => like.likedId);
       // Also exclude passed users
       excludedIds.push(...passedUserIds.map((pass) => pass.passedId));
       // Also exclude the current user from their own discovery
       excludedIds.push(currentUserId);
-
-      console.log(`Excluded user IDs:`, excludedIds);
-      console.log(`Excluding ${excludedIds.length} total users from discovery`);
 
       const users = await prisma.user.findMany({
         where: {
@@ -303,9 +290,12 @@ app.get(
 );
 
 // Get user by ID
-app.get('/api/users/:id', async (req, res) => {
+// Get user by ID (Protected - requires authentication)
+// Users can only see their own email address
+app.get('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const requestingUserId = req.user.userId;
 
     const user = await prisma.user.findUnique({
       where: {
@@ -324,6 +314,7 @@ app.get('/api/users/:id', async (req, res) => {
         verified: true,
         createdAt: true,
         updatedAt: true,
+        role: true,
       },
     });
 
@@ -335,23 +326,28 @@ app.get('/api/users/:id', async (req, res) => {
     }
 
     // Hide admin accounts from normal users (return 404)
-    // Check role internally without exposing it
-    const userWithRole = await prisma.user.findUnique({
-      where: { id: id },
-      select: { role: true },
-    });
-
-    if (userWithRole && userWithRole.role === 'Admin') {
+    if (user.role === 'Admin') {
       return res.status(404).json({
         success: false,
         error: 'User not found',
       });
     }
 
-    // Decrypt all fields for response
+    // Decrypt all fields
     const decryptedEmail = await decryptField(user.email);
     const decryptedUser = await decryptUserFields(user);
-    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
+    // If requesting user's own profile, include email
+    // Otherwise, exclude email for privacy (UBAC)
+    let userResponse;
+    if (requestingUserId === id) {
+      userResponse = { ...decryptedUser, email: decryptedEmail };
+    } else {
+      // Exclude sensitive information (email and role) when viewing other users
+      // eslint-disable-next-line no-unused-vars
+      const { email, role, ...publicUserData } = { ...decryptedUser };
+      userResponse = publicUserData;
+    }
 
     res.json({
       success: true,
@@ -417,8 +413,26 @@ app.put('/api/users/:id', authenticateToken, blockAdminAccess, async (req, res) 
       interests: encryptedInterests,
     };
 
-    // Only update avatarUrl if provided
+    // Only update avatarUrl if provided, and validate it
     if (avatarUrl !== undefined) {
+      // Allow data URLs for images
+      const isDataUrl = typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/');
+      // Allow remote image URLs (http/https) that do not point to own API and end with image extensions
+      const isRemoteImageUrl =
+        typeof avatarUrl === 'string' &&
+        /^https?:\/\//.test(avatarUrl) &&
+        // Disallow URLs pointing to own backend API or logout endpoints
+        !/\/api\//i.test(avatarUrl) &&
+        !/\/logout/i.test(avatarUrl) &&
+        // Only allow common image extensions
+        /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(avatarUrl.split('?')[0]);
+
+      if (!isDataUrl && !isRemoteImageUrl) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid avatar URL. Only image URLs or image data URLs are allowed.',
+        });
+      }
       updateData.avatarUrl = avatarUrl;
     }
 
@@ -468,6 +482,7 @@ app.put('/api/users/:id', authenticateToken, blockAdminAccess, async (req, res) 
 app.delete('/api/users/:id', authenticateToken, blockAdminAccess, async (req, res) => {
   try {
     const { id } = req.params;
+    let decryptedEmail;
 
     // Authorization check: Users can only delete their own account
     if (req.user.userId !== id) {
@@ -480,7 +495,7 @@ app.delete('/api/users/:id', authenticateToken, blockAdminAccess, async (req, re
     // Verify user exists
     const user = await prisma.user.findUnique({
       where: { id: id },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -489,6 +504,9 @@ app.delete('/api/users/:id', authenticateToken, blockAdminAccess, async (req, re
         error: 'User not found',
       });
     }
+
+    // Decrypt email for logging before deleting the user
+    decryptedEmail = await decryptField(user.email);
 
     // Before deleting the user, find and delete conversations where both users are deleted
     // (i.e., conversations where this user is involved AND the other user ID is already null)
@@ -532,6 +550,7 @@ app.delete('/api/users/:id', authenticateToken, blockAdminAccess, async (req, re
       sameSite: 'lax',
     });
 
+    console.log(`User account deleted: email=${decryptedEmail}`);
     res.json({
       success: true,
       message: 'Account deleted successfully',
@@ -751,6 +770,7 @@ app.post('/api/auth/register', validatePasswordMiddleware, registerLimiter, asyn
     try {
       await sendVerificationEmail(email, name, verificationToken);
 
+      console.log(`User registered successfully: ${email}`);
       res.status(201).json({
         success: true,
         message: 'User registered successfully. Please check your email to verify your account.',
@@ -760,6 +780,7 @@ app.post('/api/auth/register', validatePasswordMiddleware, registerLimiter, asyn
       console.error('Failed to send verification email:', emailError);
 
       // User is created but email failed - still return success but with a warning
+      console.warn(`User registered but verification email failed: ${email}`);
       res.status(201).json({
         success: true,
         message:
@@ -1001,6 +1022,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     });
 
     if (!user) {
+      console.warn(`Failed login attempt for non-existent user: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
@@ -1011,6 +1033,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
+      console.warn(`Failed login attempt with invalid password for user: ${email}`);
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password',
@@ -1019,6 +1042,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
     // Check if account is banned
     if (user.banned) {
+      console.warn(`Banned user attempted to login: ${email}`);
       return res.status(403).json({
         success: false,
         error: 'Access denied. Account has been banned.',
@@ -1077,6 +1101,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         req.session.pendingAuth = true;
       }
 
+      console.log(`2FA code sent for user: ${decryptedEmail}`);
       res.json({
         success: true,
         message: 'Please check your email for the verification code',
@@ -1214,6 +1239,7 @@ app.post('/api/auth/verify-2fa', otpLimiter, async (req, res) => {
       maxAge: 60 * 60 * 1000, // 1 hour in milliseconds
     });
 
+    console.log(`User successfully logged in after 2FA verification: userId=${userId}`);
     res.json({
       success: true,
       message: 'Login successful',
@@ -1444,6 +1470,8 @@ app.post('/api/auth/resend-2fa', resendOtpLimiter, async (req, res) => {
 
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
+  const userId = req.user?.userId || 'unknown';
+
   // Clear auth token (must match original cookie options)
   res.clearCookie('token', {
     httpOnly: true,
@@ -1473,6 +1501,7 @@ app.post('/api/auth/logout', (req, res) => {
     sameSite: 'lax',
   });
 
+  console.log(`User logged out: userId=${userId}`);
   res.json({
     success: true,
     message: 'Logged out successfully',
@@ -1680,6 +1709,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
     try {
       await sendPasswordResetEmail(decryptedEmail, user.name, resetToken);
 
+      console.log(`Password reset link sent to user: ${decryptedEmail}`);
       res.json({
         success: true,
         message: 'Password reset link has been sent to your email.',
@@ -1697,6 +1727,7 @@ app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => 
         console.error('Failed to cleanup token after email error:', cleanupError);
       }
 
+      console.warn(`Failed to send password reset email to: ${decryptedEmail}`);
       res.status(500).json({
         success: false,
         error: 'Failed to send password reset email. Please try again later.',
@@ -1795,6 +1826,8 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
       }),
     ]);
 
+    const decryptedEmail = await decryptField(user.email);
+    console.log(`Password successfully reset for user: ${decryptedEmail}`);
     res.json({
       success: true,
       message: 'Password has been reset successfully.',
@@ -1814,14 +1847,6 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
 // ============================================
 
 // Admin check endpoint (returns 403 if not admin)
-const adminCheckLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // max 100 requests per windowMs
-  message: {
-    success: false,
-    error: 'Too many admin check requests, please try again later.',
-  },
-});
 app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (req, res) => {
   res.json({
     success: true,
@@ -1830,12 +1855,6 @@ app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (re
 });
 
 // Get all users (Admin only)
-const adminRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each admin to 20 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -1887,15 +1906,6 @@ app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res
 });
 
 // Ban user (Admin only)
-// Rate limiter for admin-ban actions - max 10 requests per minute per IP
-const adminBanLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  message: {
-    success: false,
-    error: 'Too many admin ban/unban requests from this IP, please try again later.',
-  },
-});
 app.post('/api/admin/users/:id/ban', adminBanLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1998,6 +2008,8 @@ app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async
       },
     });
 
+    const sanitizedId = String(id).replace(/[\r\n]/g, '');
+    console.log(`Unbanned user: ${sanitizedId}`);
     res.json({
       success: true,
       message: 'User unbanned successfully',
@@ -2013,16 +2025,111 @@ app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async
   }
 });
 
-// Create a report (Authenticated users)
-const reportLimiter = rateLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour window
-  max: 5, // limit each IP/user to 5 requests per windowMs
-  message: {
-    success: false,
-    error: 'Too many reports created from this IP, please try again later.',
-  },
-});
+// Create admin user (Admin only)
+app.post(
+  '/api/admin/users/create-admin',
+  adminCreateLimiter,
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const { email, password } = req.body;
 
+      // Validate required fields
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email and password are required',
+        });
+      }
+
+      // Validate password according to NIST 2025 guidelines
+      const passwordValidation = await validatePassword(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join('; '),
+        });
+      }
+
+      // Prepare email for storage (encrypt and hash)
+      const { emailHash, encryptedEmail } = await prepareEmailForStorage(email);
+
+      // Check if user already exists by emailHash
+      const existingUser = await prisma.user.findUnique({
+        where: { emailHash },
+      });
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'User with this email already exists',
+        });
+      }
+
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Create admin user with minimal required fields
+      const adminUser = await prisma.user.create({
+        data: {
+          email: encryptedEmail,
+          emailHash: emailHash,
+          password: hashedPassword,
+          name: 'Administrator',
+          age: await encryptField(25, (value) => value.toString()),
+          gender: await encryptField('Other'),
+          role: 'Admin',
+          course: await encryptField('Admin'),
+          bio: await encryptField('System Administrator'),
+          interests: await encryptField([], (value) => {
+            if (!Array.isArray(value) || value.length === 0) return null;
+            return JSON.stringify(value);
+          }),
+          avatarUrl: null,
+          verified: true,
+          banned: false,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          verified: true,
+          createdAt: true,
+        },
+      });
+
+      // Create UserPoints record for the new admin user
+      await prisma.userPoints.create({
+        data: {
+          userId: adminUser.id,
+          totalPoints: 0,
+        },
+      });
+
+      // Decrypt email for response
+      const decryptedEmail = await decryptField(adminUser.email);
+      const adminResponse = { ...adminUser, email: decryptedEmail };
+
+      console.log(`Admin user created: ${decryptedEmail}`);
+      res.status(201).json({
+        success: true,
+        message: 'Admin user created successfully',
+        data: adminResponse,
+      });
+    } catch (error) {
+      console.error('Create admin user error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create admin user',
+        message: error.message,
+      });
+    }
+  }
+);
+
+// Create a report (Authenticated users)
 app.post('/api/reports', reportLimiter, authenticateToken, async (req, res) => {
   try {
     const reporterId = req.user.userId;
@@ -2313,7 +2420,7 @@ app.get('/api/points', authenticateToken, blockAdminAccess, async (req, res) => 
             dailyIntroClaimedDate: true,
           },
         });
-        console.log(`âœ“ Created UserPoints record for user ${userId}`);
+        console.log(`Created UserPoints record for user ${userId}`);
       } catch (createError) {
         console.error(`Failed to create UserPoints for user ${userId}:`, createError);
         return res.status(500).json({
@@ -3460,7 +3567,7 @@ app.get('/api/conversations', authenticateToken, blockAdminAccess, async (req, r
         const otherUser = otherUserId
           ? await prisma.user.findUnique({
               where: { id: otherUserId },
-              select: { id: true, name: true, avatarUrl: true },
+              select: { name: true, avatarUrl: true },
             })
           : null;
 
@@ -3483,8 +3590,8 @@ app.get('/api/conversations', authenticateToken, blockAdminAccess, async (req, r
           try {
             const decryptedContent = await decryptField(lastMessage.content);
             lastMessage = {
-              ...lastMessage,
               content: decryptedContent,
+              createdAt: lastMessage.createdAt,
             };
           } catch (error) {
             // If decryption fails, assume message is not encrypted (legacy data)
@@ -3492,10 +3599,21 @@ app.get('/api/conversations', authenticateToken, blockAdminAccess, async (req, r
               `Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`,
               error.message
             );
+            lastMessage = {
+              content: lastMessage.content,
+              createdAt: lastMessage.createdAt,
+            };
           }
+        } else if (lastMessage) {
+          // No encryption needed, but still limit fields
+          lastMessage = {
+            content: lastMessage.content,
+            createdAt: lastMessage.createdAt,
+          };
         }
 
         // Hide name, avatar, and ID when conversation is locked (before match) or when user is deleted
+        const isDeleted = !otherUser;
         const sanitizedOtherUser =
           otherUser && c.isLocked
             ? {
@@ -3503,12 +3621,13 @@ app.get('/api/conversations', authenticateToken, blockAdminAccess, async (req, r
                 avatarUrl: null,
               }
             : otherUser || {
-                name: 'Deleted User',
+                name: '', // Empty name for deleted users - frontend handles display
                 avatarUrl: null,
               };
         return {
           id: c.id,
           isLocked: c.isLocked,
+          isDeleted,
           lastMessage,
           otherUser: sanitizedOtherUser,
         };
@@ -3610,21 +3729,25 @@ app.get(
               avatarUrl: null,
             };
 
-      res.json({
-        success: true,
-        isLocked: conversation.isLocked,
-        messages: decryptedMessages,
-        participants: { me, other: sanitizedOther },
-        currentUserId: userId,
-      });
-    } catch (error) {
-      console.error('Get messages error:', error);
-      res
-        .status(500)
-        .json({ success: false, error: 'Failed to get messages', message: error.message });
-    }
+    res.json({
+      success: true,
+      isLocked: conversation.isLocked,
+      messages: decryptedMessages.map((msg) => ({
+        content: msg.content,
+        createdAt: msg.createdAt,
+        isMine: msg.senderId === userId,
+        isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
+      })),
+      participants: { me, other: sanitizedOther },
+      reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
+    });
+  } catch (error) {
+    console.error('Get messages error:', error);
+    res
+      .status(500)
+      .json({ success: false, error: 'Failed to get messages', message: error.message });
   }
-);
+});
 
 // Send a message in a conversation (blocked if locked)
 app.post(
@@ -3691,11 +3814,13 @@ app.post(
       // touch conversation updatedAt
       await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
-      // Return message with decrypted content for client
+      // Return message with decrypted content for client (no sensitive IDs)
       const decryptedContent = await decryptField(message.content);
       const messageResponse = {
-        ...message,
-        content: decryptedContent, // Return decrypted content to client
+        content: decryptedContent,
+        createdAt: message.createdAt,
+        isMine: true, // Always true for newly sent messages
+        isDeleted: false, // New messages can't be from deleted users
       };
 
       res.status(201).json({ success: true, message: messageResponse });

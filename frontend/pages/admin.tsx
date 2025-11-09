@@ -5,6 +5,8 @@ import { useSession } from '../contexts/AuthContext'
 import { fetchWithAuth } from '../utils/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ConfirmModal from '../components/ConfirmModal'
+import ToastContainer from '../components/ToastContainer'
+import { useToast } from '../hooks/useToast'
 
 interface User {
   id: string
@@ -46,11 +48,11 @@ type Tab = 'users' | 'reports'
 export default function AdminPanel() {
   const { session, status } = useSession()
   const router = useRouter()
+  const { toasts, showToast, removeToast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>('users')
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<User[]>([])
   const [reports, setReports] = useState<Report[]>([])
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'banned' | 'active'>('all')
@@ -67,6 +69,29 @@ export default function AdminPanel() {
     message: '',
     onConfirm: () => {},
   })
+  const [createAdminModal, setCreateAdminModal] = useState(false)
+  const [newAdminEmail, setNewAdminEmail] = useState('')
+  const [newAdminPassword, setNewAdminPassword] = useState('')
+  const [creatingAdmin, setCreatingAdmin] = useState(false)
+
+  // Validation helper functions
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  const isValidPassword = (password: string): boolean => {
+    return password.length >= 8
+  }
+
+  const isFormValid = (): boolean => {
+    return (
+      newAdminEmail.trim() !== '' &&
+      isValidEmail(newAdminEmail) &&
+      newAdminPassword.trim() !== '' &&
+      isValidPassword(newAdminPassword)
+    )
+  }
 
   // Redirect if not authenticated (admin check is handled by middleware)
   useEffect(() => {
@@ -96,11 +121,11 @@ export default function AdminPanel() {
       if (result.success) {
         setUsers(Array.isArray(result.data) ? result.data : [])
       } else {
-        showMessage('error', result.error || 'Failed to fetch users')
+        showToast(result.error || 'Failed to fetch users', 'error')
         setUsers([]) // Ensure users is always an array
       }
     } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Failed to fetch users')
+      showToast(error instanceof Error ? error.message : 'Failed to fetch users', 'error')
       setUsers([]) // Ensure users is always an array on error
     } finally {
       setLoading(false)
@@ -118,11 +143,11 @@ export default function AdminPanel() {
       if (result.success) {
         setReports(Array.isArray(result.data) ? result.data : [])
       } else {
-        showMessage('error', result.error || 'Failed to fetch reports')
+        showToast(result.error || 'Failed to fetch reports', 'error')
         setReports([]) // Ensure reports is always an array
       }
     } catch (error) {
-      showMessage('error', error instanceof Error ? error.message : 'Failed to fetch reports')
+      showToast(error instanceof Error ? error.message : 'Failed to fetch reports', 'error')
       setReports([]) // Ensure reports is always an array on error
     } finally {
       setLoading(false)
@@ -178,7 +203,7 @@ export default function AdminPanel() {
           const result = await response.json()
 
           if (result.success) {
-            showMessage('success', result.message)
+            showToast(result.message, 'success')
             fetchUsers()
             // Refresh reports if we're on the reports tab
             if (activeTab === 'reports') {
@@ -191,10 +216,10 @@ export default function AdminPanel() {
               }
             }
           } else {
-            showMessage('error', result.error || 'Action failed')
+            showToast(result.error || 'Action failed', 'error')
           }
         } catch (error) {
-          showMessage('error', error instanceof Error ? error.message : 'Action failed')
+          showToast(error instanceof Error ? error.message : 'Action failed', 'error')
         } finally {
           setActionLoading(null)
         }
@@ -225,7 +250,7 @@ export default function AdminPanel() {
           const result = await response.json()
 
           if (result.success) {
-            showMessage('success', result.message)
+            showToast(result.message, 'success')
             // Refresh reports to show updated statuses
             // If filtering by 'Pending', switch to 'all' to see the resolved reports
             if (reportFilterStatus === 'Pending') {
@@ -235,10 +260,10 @@ export default function AdminPanel() {
               fetchReports()
             }
           } else {
-            showMessage('error', result.error || 'Action failed')
+            showToast(result.error || 'Action failed', 'error')
           }
         } catch (error) {
-          showMessage('error', error instanceof Error ? error.message : 'Action failed')
+          showToast(error instanceof Error ? error.message : 'Action failed', 'error')
         } finally {
           setActionLoading(null)
         }
@@ -265,7 +290,7 @@ export default function AdminPanel() {
           const result = await response.json()
 
           if (result.success) {
-            showMessage('success', result.message)
+            showToast(result.message, 'success')
             // If filtering by 'Pending', switch to 'all' to see the resolved report
             if (reportFilterStatus === 'Pending') {
               setReportFilterStatus('all')
@@ -274,12 +299,12 @@ export default function AdminPanel() {
               fetchReports()
             }
           } else {
-            showMessage('error', result.error || 'Failed to mark report as invalid')
+            showToast(result.error || 'Failed to mark report as invalid', 'error')
           }
         } catch (error) {
-          showMessage(
-            'error',
-            error instanceof Error ? error.message : 'Failed to mark report as invalid'
+          showToast(
+            error instanceof Error ? error.message : 'Failed to mark report as invalid',
+            'error'
           )
         } finally {
           setActionLoading(null)
@@ -288,9 +313,47 @@ export default function AdminPanel() {
     })
   }
 
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text })
-    setTimeout(() => setMessage(null), 5000)
+  const handleCreateAdmin = async () => {
+    if (!newAdminEmail || !newAdminPassword) {
+      showToast('Email and password are required', 'error')
+      return
+    }
+
+    try {
+      setCreatingAdmin(true)
+      const response = await fetchWithAuth('/api/admin/users/create-admin', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: newAdminEmail,
+          password: newAdminPassword,
+        }),
+      })
+
+      // Try to parse the response as JSON
+      let result
+      try {
+        result = await response.json()
+      } catch {
+        // If JSON parsing fails, it means the server returned HTML or invalid JSON
+        throw new Error(
+          'Server error: Unable to process the request. Please check if the backend is running.'
+        )
+      }
+
+      if (result.success) {
+        showToast('Admin account created successfully', 'success')
+        setCreateAdminModal(false)
+        setNewAdminEmail('')
+        setNewAdminPassword('')
+        fetchUsers() // Refresh the user list
+      } else {
+        showToast(result.error || 'Failed to create admin account', 'error')
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to create admin account', 'error')
+    } finally {
+      setCreatingAdmin(false)
+    }
   }
 
   const filteredUsers = (Array.isArray(users) ? users : []).filter((user) => {
@@ -339,21 +402,6 @@ export default function AdminPanel() {
             <p style={{ color: '#6b7280', margin: 0 }}>Manage users and review reported accounts</p>
           </div>
 
-          {message && (
-            <div
-              style={{
-                padding: '1rem',
-                borderRadius: '8px',
-                marginBottom: '1.5rem',
-                backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-                border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-                color: message.type === 'success' ? '#155724' : '#721c24',
-              }}
-            >
-              {message.text}
-            </div>
-          )}
-
           {/* Tabs */}
           <div
             style={{
@@ -401,11 +449,11 @@ export default function AdminPanel() {
           {/* Users Tab */}
           {activeTab === 'users' && (
             <div>
-              {/* Search and Filter */}
+              {/* Search, Filter, and Create Admin Button */}
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr auto',
+                  gridTemplateColumns: '1fr auto auto',
                   gap: '1rem',
                   marginBottom: '1.5rem',
                 }}
@@ -427,6 +475,16 @@ export default function AdminPanel() {
                   <option value="active">Active Users</option>
                   <option value="banned">Banned Users</option>
                 </select>
+                <button
+                  onClick={() => setCreateAdminModal(true)}
+                  className="btn btn-primary"
+                  style={{
+                    whiteSpace: 'nowrap',
+                    padding: '0.75rem 1.5rem',
+                  }}
+                >
+                  Create Admin
+                </button>
               </div>
 
               {loading ? (
@@ -845,6 +903,130 @@ export default function AdminPanel() {
         onCancel={() => setConfirmModal({ isOpen: false, message: '', onConfirm: () => {} })}
         type={confirmModal.type}
       />
+
+      {/* Create Admin Modal */}
+      {createAdminModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setCreateAdminModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '500px',
+              width: '90%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>
+              Create Admin Account
+            </h2>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+                Email Address
+              </label>
+              <input
+                type="email"
+                className="input"
+                placeholder="admin@example.com"
+                value={newAdminEmail}
+                onChange={(e) => setNewAdminEmail(e.target.value)}
+                disabled={creatingAdmin}
+                style={{
+                  width: '100%',
+                  borderColor:
+                    newAdminEmail && !isValidEmail(newAdminEmail) ? '#ef4444' : undefined,
+                }}
+              />
+              {newAdminEmail && !isValidEmail(newAdminEmail) && (
+                <p style={{ fontSize: '0.875rem', color: '#ef4444', marginTop: '0.25rem' }}>
+                  Please enter a valid email address
+                </p>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+                Password
+              </label>
+              <input
+                type="password"
+                className="input"
+                placeholder="Enter a secure password"
+                value={newAdminPassword}
+                onChange={(e) => setNewAdminPassword(e.target.value)}
+                disabled={creatingAdmin}
+                style={{
+                  width: '100%',
+                  borderColor:
+                    newAdminPassword && !isValidPassword(newAdminPassword) ? '#ef4444' : undefined,
+                }}
+              />
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color:
+                    newAdminPassword && !isValidPassword(newAdminPassword) ? '#ef4444' : '#6b7280',
+                  marginTop: '0.5rem',
+                }}
+              >
+                Password must be at least 8 characters long
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setCreateAdminModal(false)
+                  setNewAdminEmail('')
+                  setNewAdminPassword('')
+                }}
+                disabled={creatingAdmin}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#fff',
+                  color: '#374151',
+                  cursor: creatingAdmin ? 'not-allowed' : 'pointer',
+                  opacity: creatingAdmin ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateAdmin}
+                disabled={creatingAdmin || !isFormValid()}
+                className="btn btn-primary"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  opacity: creatingAdmin || !isFormValid() ? 0.5 : 1,
+                  cursor: creatingAdmin || !isFormValid() ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {creatingAdmin ? 'Creating...' : 'Create Admin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   )
 }

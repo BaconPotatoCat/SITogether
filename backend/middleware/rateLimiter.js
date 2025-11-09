@@ -1,5 +1,7 @@
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
+// Centralized config (avoid direct process.env access)
+const config = require('../lib/config');
 
 // ============================================================================
 // Rate Limiting Configuration
@@ -107,6 +109,18 @@ const loginLimiter = rateLimit({
     // The endpoint will verify the token
     return !!req.body?.recaptchaToken;
   },
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    // Suppress noisy console output in test environment
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for login endpoint from IP: ${ip}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many login attempts. Please complete the reCAPTCHA verification to continue.`,
+      requiresRecaptcha: true,
+    });
+  },
 });
 
 /**
@@ -124,6 +138,16 @@ const passwordResetLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   keyGenerator: keyGenerator,
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for password reset endpoint from IP: ${ip}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many password reset requests. Please try again after ${formatTimeWindow(PASSWORD_RESET_WINDOW_MS)}.`,
+    });
+  },
 });
 
 /**
@@ -148,6 +172,17 @@ const changePasswordLimiter = rateLimit({
     // If reCAPTCHA token is provided, skip rate limiting
     // The endpoint will verify the token
     return !!req.body?.recaptchaToken;
+  },
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for change password endpoint from IP: ${ip}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many password change attempts. Please complete the reCAPTCHA verification to continue.`,
+      requiresRecaptcha: true,
+    });
   },
 });
 
@@ -176,6 +211,17 @@ const registerLimiter = rateLimit({
     // This prevents one user from blocking others on the same network
     return `${ip}:${email.toLowerCase()}`;
   },
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    const email = req.body?.email || 'unknown';
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for registration from IP: ${ip}, email: ${email}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many registration attempts for this email. Please try again after ${formatTimeWindow(REGISTER_WINDOW_MS)}.`,
+    });
+  },
 });
 
 /**
@@ -193,6 +239,16 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   keyGenerator: keyGenerator,
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for OTP verification from IP: ${ip}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many verification attempts. Please try again after ${formatTimeWindow(OTP_WINDOW_MS)}.`,
+    });
+  },
 });
 
 /**
@@ -210,6 +266,16 @@ const resendOtpLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   keyGenerator: keyGenerator,
+  handler: (req, res) => {
+    const ip = req.ip || 'unknown';
+    if (!config.isTest) {
+      console.warn(`Rate limit exceeded for resend OTP from IP: ${ip}`);
+    }
+    res.status(429).json({
+      success: false,
+      error: `Too many resend requests. Please try again after ${formatTimeWindow(RESEND_OTP_WINDOW_MS)}.`,
+    });
+  },
 });
 
 /**
@@ -263,6 +329,87 @@ const pointsClaimLimiter = rateLimit({
   keyGenerator: keyGenerator,
 });
 
+/**
+ * Rate limiter for admin check endpoint
+ * Prevents abuse of admin verification endpoint
+ */
+const adminCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // max 100 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many admin check requests, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
+/**
+ * Rate limiter for admin user management endpoints
+ * Prevents abuse of admin user listing and management
+ */
+const adminRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each admin to 20 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
+/**
+ * Rate limiter for admin ban/unban actions
+ * Prevents abuse of ban/unban functionality
+ */
+const adminBanLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  message: {
+    success: false,
+    error: 'Too many admin ban/unban requests from this IP, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
+/**
+ * Rate limiter for report creation endpoint
+ * Prevents report spam and abuse
+ */
+const reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 5, // limit each IP/user to 5 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many reports created from this IP, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
+/**
+ * Rate limiter for creating admin accounts
+ * Prevents abuse of admin account creation
+ */
+const adminCreateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 5, // limit each admin to 5 admin creation requests per hour
+  message: {
+    success: false,
+    error: 'Too many admin account creation attempts. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  keyGenerator: keyGenerator,
+});
+
 module.exports = {
   loginLimiter,
   passwordResetLimiter,
@@ -273,4 +420,9 @@ module.exports = {
   resendVerificationLimiter,
   sensitiveDataLimiter,
   pointsClaimLimiter,
+  adminCheckLimiter,
+  adminRateLimiter,
+  adminBanLimiter,
+  reportLimiter,
+  adminCreateLimiter,
 };
