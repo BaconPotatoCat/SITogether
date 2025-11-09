@@ -2484,92 +2484,98 @@ app.post(
 );
 
 // Claim daily check-in points
-app.post('/api/points/claim-daily', pointsClaimLimiter, authenticateToken, blockAdminAccess, async (req, res) => {
-  try {
-    const userId = req.user.userId;
+app.post(
+  '/api/points/claim-daily',
+  pointsClaimLimiter,
+  authenticateToken,
+  blockAdminAccess,
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
 
-    // Check if user already claimed today
-    const userPoints = await prisma.userPoints.findUnique({
-      where: { userId },
-    });
-
-    if (!userPoints) {
-      return res.status(404).json({
-        success: false,
-        error: 'User points not found',
+      // Check if user already claimed today
+      const userPoints = await prisma.userPoints.findUnique({
+        where: { userId },
       });
-    }
 
-    // Check if user has reached 1000 points (premium threshold)
-    if (userPoints.totalPoints >= 1000) {
-      return res.status(400).json({
-        success: false,
-        error:
-          'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
-      });
-    }
-
-    // Check if already claimed today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (userPoints.dailyCheckinDate) {
-      const lastClaimDate = new Date(userPoints.dailyCheckinDate);
-      lastClaimDate.setHours(0, 0, 0, 0);
-
-      if (lastClaimDate.getTime() === today.getTime()) {
-        return res.status(400).json({
+      if (!userPoints) {
+        return res.status(404).json({
           success: false,
-          error: 'Daily check-in already claimed today',
+          error: 'User points not found',
         });
       }
+
+      // Check if user has reached 1000 points (premium threshold)
+      if (userPoints.totalPoints >= 1000) {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Cannot claim points - you have reached the premium threshold. Unlock premium to continue earning points.',
+        });
+      }
+
+      // Check if already claimed today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (userPoints.dailyCheckinDate) {
+        const lastClaimDate = new Date(userPoints.dailyCheckinDate);
+        lastClaimDate.setHours(0, 0, 0, 0);
+
+        if (lastClaimDate.getTime() === today.getTime()) {
+          return res.status(400).json({
+            success: false,
+            error: 'Daily check-in already claimed today',
+          });
+        }
+      }
+
+      // Update points and mark as claimed
+      const updatedPoints = await prisma.userPoints.update({
+        where: { userId },
+        data: {
+          totalPoints: userPoints.totalPoints + 50,
+          dailyCheckinDate: new Date(),
+        },
+        select: {
+          totalPoints: true,
+          dailyCheckinDate: true,
+          dailyLikeClaimedDate: true,
+        },
+      });
+
+      // Add computed field for response
+      const mostRecentLikeAfter = await prisma.userLikes.findFirst({
+        where: { likerId: userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+
+      // 'today' is already declared above in this function
+      const hasLikedTodayAfter =
+        mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
+
+      const pointsWithComputed = {
+        ...updatedPoints,
+        hasLikedToday: hasLikedTodayAfter,
+      };
+
+      res.json({
+        success: true,
+        message: 'Daily check-in claimed successfully',
+        points: pointsWithComputed,
+        pointsEarned: 50,
+      });
+    } catch (error) {
+      console.error('Claim daily points error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to claim daily points',
+        message: error.message,
+      });
     }
-
-    // Update points and mark as claimed
-    const updatedPoints = await prisma.userPoints.update({
-      where: { userId },
-      data: {
-        totalPoints: userPoints.totalPoints + 50,
-        dailyCheckinDate: new Date(),
-      },
-      select: {
-        totalPoints: true,
-        dailyCheckinDate: true,
-        dailyLikeClaimedDate: true,
-      },
-    });
-
-    // Add computed field for response
-    const mostRecentLikeAfter = await prisma.userLikes.findFirst({
-      where: { likerId: userId },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-
-    // 'today' is already declared above in this function
-    const hasLikedTodayAfter =
-      mostRecentLikeAfter && new Date(mostRecentLikeAfter.createdAt).getTime() >= today.getTime();
-
-    const pointsWithComputed = {
-      ...updatedPoints,
-      hasLikedToday: hasLikedTodayAfter,
-    };
-
-    res.json({
-      success: true,
-      message: 'Daily check-in claimed successfully',
-      points: pointsWithComputed,
-      pointsEarned: 50,
-    });
-  } catch (error) {
-    console.error('Claim daily points error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to claim daily points',
-      message: error.message,
-    });
   }
-});
+);
 
 // Mark that user has sent an introduction today
 app.post('/api/points/mark-intro-sent', pointsClaimLimiter, authenticateToken, async (req, res) => {
