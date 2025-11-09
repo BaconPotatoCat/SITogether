@@ -1,14 +1,57 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const { prepareEmailForStorage, encryptField } = require('../utils/fieldEncryption');
+const config = require('../lib/config');
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Hash a common password for all seeded users
+  // Create initial admin account
+  const adminEmail = config.admin.email;
+  const adminPassword = config.admin.password;
+
   const saltRounds = 10;
+  const adminHashedPassword = await bcrypt.hash(adminPassword, saltRounds);
+
+  console.log(`👤 Creating admin account: ${adminEmail}`);
+
+  const { emailHash: adminEmailHash, encryptedEmail: adminEncryptedEmail } =
+    await prepareEmailForStorage(adminEmail);
+
+  const adminUser = await prisma.user.create({
+    data: {
+      email: adminEncryptedEmail,
+      emailHash: adminEmailHash,
+      password: adminHashedPassword,
+      name: 'Administrator',
+      age: await encryptField(25, (value) => value.toString()),
+      gender: await encryptField('Other'),
+      course: await encryptField('Admin'),
+      bio: await encryptField('System Administrator'),
+      interests: await encryptField([], (value) => {
+        if (!Array.isArray(value) || value.length === 0) return null;
+        return JSON.stringify(value);
+      }),
+      avatarUrl: null,
+      verified: true,
+      isAdmin: true,
+    },
+  });
+
+  // Create points entry for admin
+  await prisma.userPoints.create({
+    data: {
+      userId: adminUser.id,
+      totalPoints: 0,
+    },
+  });
+
+  console.log(`✅ Created admin account with email: ${adminEmail}`);
+  console.log('⚠️  Please change the admin password in production!');
+
+  // Hash a common password for all seeded users
   const hashedPassword = await bcrypt.hash('catsixseven', saltRounds);
   console.log('🔐 Generated hashed password for seeded users');
 
