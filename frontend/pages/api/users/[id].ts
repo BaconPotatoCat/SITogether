@@ -35,12 +35,9 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     if (req.method === 'GET') {
-      // Call backend API to get user by ID
-      const response = await fetch(`${backendUrl}/api/users/${id}`, {
+      // Call backend API to get user by ID (with authentication)
+      const response = await fetchWithAuthSSR(req, `${backendUrl}/api/users/${id}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       })
 
       if (!response.ok) {
@@ -48,6 +45,13 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
           return res.status(404).json({
             success: false,
             error: 'User not found',
+          })
+        }
+
+        if (response.status === 401) {
+          return res.status(401).json({
+            success: false,
+            error: 'Authentication required',
           })
         }
 
