@@ -12,6 +12,13 @@ async function main() {
   const adminEmail = config.admin.email;
   const adminPassword = config.admin.password;
 
+  // Validate admin credentials
+  if (!adminEmail || !adminPassword) {
+    console.error('❌ Admin credentials are required for seeding');
+    console.error('Please set ADMIN_EMAIL and ADMIN_PASSWORD in your .env file');
+    throw new Error('Admin credentials missing');
+  }
+
   const saltRounds = 10;
   const adminHashedPassword = await bcrypt.hash(adminPassword, saltRounds);
 
@@ -36,7 +43,7 @@ async function main() {
       }),
       avatarUrl: null,
       verified: true,
-      isAdmin: true,
+      role: 'Admin',
     },
   });
 
@@ -175,14 +182,17 @@ async function main() {
   console.log('🔑 All seeded users have password: "catsixseven"');
   console.log('✅ All seeded users are verified');
 
-  // Get all created users to create points entries
-  const allUsers = await prisma.user.findMany({
+  // Get newly created users (exclude admin who already has points) to create points entries
+  const newUsers = await prisma.user.findMany({
+    where: {
+      role: 'User', // Only get non-admin users
+    },
     select: { id: true },
   });
 
-  // Create points entries for each user
+  // Create points entries for each new user
   const pointsEntries = await Promise.all(
-    allUsers.map((user) =>
+    newUsers.map((user) =>
       prisma.userPoints.create({
         data: {
           userId: user.id,
