@@ -587,41 +587,43 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="swipe-actions">
-                <button className="btn ghost" onClick={onPass} data-tutorial="pass-button">
-                  Pass
-                </button>
-                <button className="btn primary" onClick={onLike} data-tutorial="like-button">
-                  Like
-                </button>
-                <button
-                  className="btn"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.preventDefault()
-                    if (topCard) {
-                      handleReportClick(topCard.id)
-                    }
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  title="Report user"
-                  type="button"
-                  style={{
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#c82333'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#dc3545'
-                  }}
-                >
-                  🚩 Report
-                </button>
-              </div>
+              {deck.length > 0 && (
+                <div className="swipe-actions">
+                  <button className="btn ghost" onClick={onPass} data-tutorial="pass-button">
+                    Pass
+                  </button>
+                  <button className="btn primary" onClick={onLike} data-tutorial="like-button">
+                    Like
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      if (topCard) {
+                        handleReportClick(topCard.id)
+                      }
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    title="Report user"
+                    type="button"
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#c82333'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#dc3545'
+                    }}
+                  >
+                    🚩 Report
+                  </button>
+                </div>
+              )}
             </>
           )}
         </section>
