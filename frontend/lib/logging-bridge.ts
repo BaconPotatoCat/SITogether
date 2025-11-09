@@ -14,6 +14,7 @@ const isTest = config.isTest
 // Edge Runtime doesn't have process.version
 const isEdgeRuntime = isServer && typeof process === 'undefined'
 
+// Convert any argument to a string representation (safe JSON if possible)
 function stringifyArg(arg: unknown): string {
   if (arg instanceof Error) return arg.stack || arg.message || String(arg)
   if (typeof arg === 'object') {
@@ -24,6 +25,29 @@ function stringifyArg(arg: unknown): string {
     }
   }
   return String(arg)
+}
+
+// Sanitize a log string to prevent log injection / terminal escape abuse
+// - Strip CR/LF to keep each log entry single-line in files
+// - Remove other ASCII control characters (0x00-0x1F except TAB) and DEL (0x7F)
+// - Collapse excessive whitespace
+function sanitizeLogString(str: string): string {
+  let out = ''
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    const code = ch.charCodeAt(0)
+    if (ch === '\n' || ch === '\r') {
+      if (out.length === 0 || out[out.length - 1] !== ' ') out += ' '
+      continue
+    }
+    if ((code >= 0 && code <= 31 && code !== 9) || code === 127) continue
+    out += ch
+  }
+  return out.replace(/ {2,}/g, ' ').trim()
+}
+
+function buildSanitizedMessage(args: unknown[]): string {
+  return sanitizeLogString(args.map(stringifyArg).join(' '))
 }
 
 // Only patch console in Node.js runtime (not Edge runtime)
@@ -40,30 +64,33 @@ if (!isTest && isServer && !isEdgeRuntime) {
   ;(global as any).__originalConsole = original
 
   console.log = (...args: unknown[]) => {
+    const message = buildSanitizedMessage(args)
     try {
-      logger.info(args.map(stringifyArg).join(' '))
+      logger.info(message)
     } catch {
       // Ignore logger failures to prevent breaking the application
     }
-    original.log(...args)
+    original.log(message)
   }
 
   console.warn = (...args: unknown[]) => {
+    const message = buildSanitizedMessage(args)
     try {
-      logger.warn(args.map(stringifyArg).join(' '))
+      logger.warn(message)
     } catch {
       // Ignore logger failures to prevent breaking the application
     }
-    original.warn(...args)
+    original.warn(message)
   }
 
   console.error = (...args: unknown[]) => {
+    const message = buildSanitizedMessage(args)
     try {
-      logger.error(args.map(stringifyArg).join(' '))
+      logger.error(message)
     } catch {
       // Ignore logger failures to prevent breaking the application
     }
-    original.error(...args)
+    original.error(message)
   }
 }
 
