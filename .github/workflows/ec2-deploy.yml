@@ -31,6 +31,9 @@ jobs:
           echo "📥 Pulling latest changes..."
           git pull origin main
           
+          echo "🧹 Cleaning up unused Docker volumes..."
+          docker volume prune -f || true
+          
           echo "🛑 Stopping existing containers..."
           docker-compose down || true
 
