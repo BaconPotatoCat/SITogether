@@ -296,9 +296,12 @@ app.get('/api/users', sensitiveDataLimiter, authenticateToken, async (req, res) 
 });
 
 // Get user by ID
-app.get('/api/users/:id', async (req, res) => {
+// Get user by ID (Protected - requires authentication)
+// Users can only see their own email address
+app.get('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const requestingUserId = req.user.userId;
 
     const user = await prisma.user.findUnique({
       where: {
@@ -317,6 +320,7 @@ app.get('/api/users/:id', async (req, res) => {
         verified: true,
         createdAt: true,
         updatedAt: true,
+        role: true,
       },
     });
 
@@ -328,23 +332,28 @@ app.get('/api/users/:id', async (req, res) => {
     }
 
     // Hide admin accounts from normal users (return 404)
-    // Check role internally without exposing it
-    const userWithRole = await prisma.user.findUnique({
-      where: { id: id },
-      select: { role: true },
-    });
-
-    if (userWithRole && userWithRole.role === 'Admin') {
+    if (user.role === 'Admin') {
       return res.status(404).json({
         success: false,
         error: 'User not found',
       });
     }
 
-    // Decrypt all fields for response
+    // Decrypt all fields
     const decryptedEmail = await decryptField(user.email);
     const decryptedUser = await decryptUserFields(user);
-    const userResponse = { ...decryptedUser, email: decryptedEmail };
+
+    // If requesting user's own profile, include email
+    // Otherwise, exclude email for privacy (UBAC)
+    let userResponse;
+    if (requestingUserId === id) {
+      userResponse = { ...decryptedUser, email: decryptedEmail };
+    } else {
+      // Exclude sensitive information (email and role) when viewing other users
+      // eslint-disable-next-line no-unused-vars
+      const { email, role, ...publicUserData } = { ...decryptedUser };
+      userResponse = publicUserData;
+    }
 
     res.json({
       success: true,
