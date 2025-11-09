@@ -101,9 +101,29 @@ describe('Rate Limiting Tests', () => {
       res.json({ success: true, message: 'Login endpoint' });
     });
 
-    app.post('/api/auth/register', registerLimiter, async (req, res) => {
-      res.json({ success: true, message: 'Register endpoint' });
-    });
+    // Password validation middleware - matches the real implementation
+    const validatePasswordMiddleware = async (req, res, next) => {
+      if (req.body && req.body.password) {
+        const { validatePassword } = require('../../utils/passwordValidation');
+        const passwordValidation = await validatePassword(req.body.password);
+        if (!passwordValidation.isValid) {
+          return res.status(400).json({
+            success: false,
+            error: passwordValidation.errors.join('; '),
+          });
+        }
+      }
+      next();
+    };
+
+    app.post(
+      '/api/auth/register',
+      validatePasswordMiddleware,
+      registerLimiter,
+      async (req, res) => {
+        res.json({ success: true, message: 'Register endpoint' });
+      }
+    );
 
     app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
       res.json({ success: true, message: 'Forgot password endpoint' });
@@ -183,6 +203,52 @@ describe('Rate Limiting Tests', () => {
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
       }
+    });
+
+    it('should NOT count password validation failures toward rate limit', async () => {
+      // Mock password validation to fail for breached passwords
+      const { validatePassword } = require('../../utils/passwordValidation');
+
+      const sameEmail = 'test-password-validation@example.com';
+
+      // Make 10 attempts with invalid passwords (e.g., breached passwords)
+      // These should NOT count toward rate limit
+      validatePassword.mockResolvedValue({
+        isValid: false,
+        errors: ['Password has been found in a data breach. Please choose a different password.'],
+      });
+
+      for (let i = 0; i < 10; i++) {
+        const response = await request(app)
+          .post('/api/auth/register')
+          .send({
+            email: sameEmail,
+            password: `breached-password-${i}`,
+            name: 'Test User',
+            age: 25,
+            gender: 'Male',
+          });
+
+        // Should return 400 for validation error, not 429 for rate limit
+        expect(response.status).toBe(400);
+        expect(response.body.success).toBe(false);
+        expect(response.body.error).toContain('data breach');
+      }
+
+      // After 10 password validation failures, the 11th request with a valid password
+      // should still work (since password validation failures don't count)
+      validatePassword.mockResolvedValue({ isValid: true, errors: [] });
+
+      const validResponse = await request(app).post('/api/auth/register').send({
+        email: sameEmail,
+        password: 'valid-strong-password-123!',
+        name: 'Test User',
+        age: 25,
+        gender: 'Male',
+      });
+
+      expect(validResponse.status).toBe(200);
+      expect(validResponse.body.success).toBe(true);
     });
 
     it('should block requests exceeding the limit (6th request with same email)', async () => {

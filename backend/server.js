@@ -590,7 +590,22 @@ async function verifyRecaptcha(token) {
 }
 
 // Register endpoint
-app.post('/api/auth/register', registerLimiter, async (req, res) => {
+// Password validation middleware - runs BEFORE rate limiting to avoid counting password validation failures
+const validatePasswordMiddleware = async (req, res, next) => {
+  // Only validate password for registration requests
+  if (req.body && req.body.password) {
+    const passwordValidation = await validatePassword(req.body.password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors.join('; '),
+      });
+    }
+  }
+  next();
+};
+
+app.post('/api/auth/register', validatePasswordMiddleware, registerLimiter, async (req, res) => {
   try {
     const { email, password, name, age, gender, course, recaptchaToken } = req.body;
 
@@ -629,14 +644,7 @@ app.post('/api/auth/register', registerLimiter, async (req, res) => {
       });
     }
 
-    // Validate password according to NIST 2025 guidelines
-    const passwordValidation = await validatePassword(password);
-    if (!passwordValidation.isValid) {
-      return res.status(400).json({
-        success: false,
-        error: passwordValidation.errors.join('; '),
-      });
-    }
+    // Password validation already done in middleware before rate limiter
 
     // Validate SIT student email format
     // TODO: Uncomment to enforce SIT email validation
