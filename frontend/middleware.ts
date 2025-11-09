@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const userOnlyPaths = ['/', '/liked', '/premium', '/chat'] // adjust your user pages here
+  const userOnlyPaths = ['/', '/liked', '/premium', '/chat']
 
   if (token && userOnlyPaths.some((p) => pathname.startsWith(p))) {
     try {
@@ -100,8 +100,6 @@ export async function middleware(request: NextRequest) {
         // Admin trying to access user page → redirect to /admin
         const url = request.nextUrl.clone()
         url.pathname = '/admin'
-        // Add a query param to trigger toast on redirect
-        url.searchParams.set('toast', 'admin-redirect')
         return NextResponse.redirect(url)
       }
     } catch (error) {

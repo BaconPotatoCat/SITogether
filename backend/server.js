@@ -235,7 +235,7 @@ app.get(
           passedId: true,
         },
       });
-      
+
       // Exclude liked and passed users from discovery
       const excludedIds = likedUserIds.map((like) => like.likedId);
       // Also exclude passed users
@@ -3729,25 +3729,26 @@ app.get(
               avatarUrl: null,
             };
 
-    res.json({
-      success: true,
-      isLocked: conversation.isLocked,
-      messages: decryptedMessages.map((msg) => ({
-        content: msg.content,
-        createdAt: msg.createdAt,
-        isMine: msg.senderId === userId,
-        isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
-      })),
-      participants: { me, other: sanitizedOther },
-      reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
-    });
-  } catch (error) {
-    console.error('Get messages error:', error);
-    res
-      .status(500)
-      .json({ success: false, error: 'Failed to get messages', message: error.message });
+      res.json({
+        success: true,
+        isLocked: conversation.isLocked,
+        messages: decryptedMessages.map((msg) => ({
+          content: msg.content,
+          createdAt: msg.createdAt,
+          isMine: msg.senderId === userId,
+          isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
+        })),
+        participants: { me, other: sanitizedOther },
+        reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
+      });
+    } catch (error) {
+      console.error('Get messages error:', error);
+      res
+        .status(500)
+        .json({ success: false, error: 'Failed to get messages', message: error.message });
+    }
   }
-});
+);
 
 // Send a message in a conversation (blocked if locked)
 app.post(
