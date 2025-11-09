@@ -7,7 +7,6 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
-const rateLimiter = require('express-rate-limit');
 const prisma = require('./lib/prisma');
 const lusca = require('lusca');
 const { authenticateToken } = require('./middleware/auth');
@@ -33,6 +32,11 @@ const {
   resendVerificationLimiter,
   sensitiveDataLimiter,
   pointsClaimLimiter,
+  adminCheckLimiter,
+  adminRateLimiter,
+  adminBanLimiter,
+  reportLimiter,
+  adminCreateLimiter,
 } = require('./middleware/rateLimiter');
 const app = express();
 const PORT = config.port;
@@ -1809,14 +1813,6 @@ app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
 const { authenticateAdmin } = require('./middleware/admin');
 
 // Admin check endpoint (returns 403 if not admin)
-const adminCheckLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // max 100 requests per windowMs
-  message: {
-    success: false,
-    error: 'Too many admin check requests, please try again later.',
-  },
-});
 app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (req, res) => {
   res.json({
     success: true,
@@ -1825,12 +1821,6 @@ app.get('/api/auth/admin-check', adminCheckLimiter, authenticateAdmin, async (re
 });
 
 // Get all users (Admin only)
-const adminRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each admin to 20 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
@@ -1882,15 +1872,6 @@ app.get('/api/admin/users', adminRateLimiter, authenticateAdmin, async (req, res
 });
 
 // Ban user (Admin only)
-// Rate limiter for admin-ban actions - max 10 requests per minute per IP
-const adminBanLimiter = rateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
-  message: {
-    success: false,
-    error: 'Too many admin ban/unban requests from this IP, please try again later.',
-  },
-});
 app.post('/api/admin/users/:id/ban', adminBanLimiter, authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2008,16 +1989,111 @@ app.post('/api/admin/users/:id/unban', adminBanLimiter, authenticateAdmin, async
   }
 });
 
-// Create a report (Authenticated users)
-const reportLimiter = rateLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour window
-  max: 5, // limit each IP/user to 5 requests per windowMs
-  message: {
-    success: false,
-    error: 'Too many reports created from this IP, please try again later.',
-  },
-});
+// Create admin user (Admin only)
+app.post(
+  '/api/admin/users/create-admin',
+  adminCreateLimiter,
+  authenticateAdmin,
+  async (req, res) => {
+    try {
+      const { email, password } = req.body;
 
+      // Validate required fields
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email and password are required',
+        });
+      }
+
+      // Validate password according to NIST 2025 guidelines
+      const passwordValidation = await validatePassword(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: passwordValidation.errors.join('; '),
+        });
+      }
+
+      // Prepare email for storage (encrypt and hash)
+      const { emailHash, encryptedEmail } = await prepareEmailForStorage(email);
+
+      // Check if user already exists by emailHash
+      const existingUser = await prisma.user.findUnique({
+        where: { emailHash },
+      });
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'User with this email already exists',
+        });
+      }
+
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Create admin user with minimal required fields
+      const adminUser = await prisma.user.create({
+        data: {
+          email: encryptedEmail,
+          emailHash: emailHash,
+          password: hashedPassword,
+          name: 'Administrator',
+          age: await encryptField(25, (value) => value.toString()),
+          gender: await encryptField('Other'),
+          role: 'Admin',
+          course: await encryptField('Admin'),
+          bio: await encryptField('System Administrator'),
+          interests: await encryptField([], (value) => {
+            if (!Array.isArray(value) || value.length === 0) return null;
+            return JSON.stringify(value);
+          }),
+          avatarUrl: null,
+          verified: true,
+          banned: false,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          verified: true,
+          createdAt: true,
+        },
+      });
+
+      // Create UserPoints record for the new admin user
+      await prisma.userPoints.create({
+        data: {
+          userId: adminUser.id,
+          totalPoints: 0,
+        },
+      });
+
+      // Decrypt email for response
+      const decryptedEmail = await decryptField(adminUser.email);
+      const adminResponse = { ...adminUser, email: decryptedEmail };
+
+      console.log(`Admin user created: ${decryptedEmail}`);
+      res.status(201).json({
+        success: true,
+        message: 'Admin user created successfully',
+        data: adminResponse,
+      });
+    } catch (error) {
+      console.error('Create admin user error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create admin user',
+        message: error.message,
+      });
+    }
+  }
+);
+
+// Create a report (Authenticated users)
 app.post('/api/reports', reportLimiter, authenticateToken, async (req, res) => {
   try {
     const reporterId = req.user.userId;
