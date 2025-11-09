@@ -48,6 +48,8 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       TRUST_PROXY: ${TRUST_PROXY}
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     # No ports exposed - only accessible by other containers in the same networks
     volumes:
       - ./backend:/app
