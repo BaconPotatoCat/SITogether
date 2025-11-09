@@ -3551,7 +3551,7 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
         const otherUser = otherUserId
           ? await prisma.user.findUnique({
               where: { id: otherUserId },
-              select: { id: true, name: true, avatarUrl: true },
+              select: { name: true, avatarUrl: true },
             })
           : null;
 
@@ -3574,8 +3574,8 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
           try {
             const decryptedContent = await decryptField(lastMessage.content);
             lastMessage = {
-              ...lastMessage,
               content: decryptedContent,
+              createdAt: lastMessage.createdAt,
             };
           } catch (error) {
             // If decryption fails, assume message is not encrypted (legacy data)
@@ -3583,10 +3583,21 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
               `Failed to decrypt lastMessage ${lastMessage.id}, assuming unencrypted:`,
               error.message
             );
+            lastMessage = {
+              content: lastMessage.content,
+              createdAt: lastMessage.createdAt,
+            };
           }
+        } else if (lastMessage) {
+          // No encryption needed, but still limit fields
+          lastMessage = {
+            content: lastMessage.content,
+            createdAt: lastMessage.createdAt,
+          };
         }
 
         // Hide name, avatar, and ID when conversation is locked (before match) or when user is deleted
+        const isDeleted = !otherUser;
         const sanitizedOtherUser =
           otherUser && c.isLocked
             ? {
@@ -3594,12 +3605,13 @@ app.get('/api/conversations', authenticateToken, async (req, res) => {
                 avatarUrl: null,
               }
             : otherUser || {
-                name: 'Deleted User',
+                name: '', // Empty name for deleted users - frontend handles display
                 avatarUrl: null,
               };
         return {
           id: c.id,
           isLocked: c.isLocked,
+          isDeleted,
           lastMessage,
           otherUser: sanitizedOtherUser,
         };
@@ -3697,9 +3709,14 @@ app.get('/api/conversations/:id/messages', authenticateToken, async (req, res) =
     res.json({
       success: true,
       isLocked: conversation.isLocked,
-      messages: decryptedMessages,
+      messages: decryptedMessages.map((msg) => ({
+        content: msg.content,
+        createdAt: msg.createdAt,
+        isMine: msg.senderId === userId,
+        isDeleted: !conversation.userAId || !conversation.userBId, // Add this flag
+      })),
       participants: { me, other: sanitizedOther },
-      currentUserId: userId,
+      reportedUserId: conversation.isLocked ? null : other?.id || null, // Add this for reporting (only sent once)
     });
   } catch (error) {
     console.error('Get messages error:', error);
@@ -3770,11 +3787,13 @@ app.post('/api/conversations/:id/messages', authenticateToken, async (req, res) 
     // touch conversation updatedAt
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
 
-    // Return message with decrypted content for client
+    // Return message with decrypted content for client (no sensitive IDs)
     const decryptedContent = await decryptField(message.content);
     const messageResponse = {
-      ...message,
-      content: decryptedContent, // Return decrypted content to client
+      content: decryptedContent,
+      createdAt: message.createdAt,
+      isMine: true, // Always true for newly sent messages
+      isDeleted: false, // New messages can't be from deleted users
     };
 
     res.status(201).json({ success: true, message: messageResponse });

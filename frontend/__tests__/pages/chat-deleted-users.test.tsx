@@ -131,12 +131,16 @@ describe('Chat Pages - Deleted Users', () => {
           senderId: null, // Deleted user
           content: 'This message was sent by a deleted user',
           createdAt: '2024-01-01T00:00:00.000Z',
+          isMine: false, // Backend sets this based on senderId === userId
+          isDeleted: true,
         },
         {
           id: 'msg-2',
           senderId: 'user-1',
           content: 'This is my message',
           createdAt: '2024-01-01T00:01:00.000Z',
+          isMine: true, // Backend sets this based on senderId === userId
+          isDeleted: false,
         },
       ]
 
@@ -178,6 +182,8 @@ describe('Chat Pages - Deleted Users', () => {
           senderId: null,
           content: 'Message from deleted user',
           createdAt: '2024-01-01T00:00:00.000Z',
+          isMine: false,
+          isDeleted: true,
         },
       ]
 
@@ -219,12 +225,16 @@ describe('Chat Pages - Deleted Users', () => {
           senderId: null, // Deleted user - should not be marked as "mine"
           content: 'Message from deleted user',
           createdAt: '2024-01-01T00:00:00.000Z',
+          isMine: false, // Backend sets this based on senderId === userId
+          isDeleted: true,
         },
         {
           id: 'msg-2',
           senderId: 'user-1', // Current user - should be marked as "mine"
           content: 'My message',
           createdAt: '2024-01-01T00:01:00.000Z',
+          isMine: true, // Backend sets this based on senderId === userId
+          isDeleted: false,
         },
       ]
 
