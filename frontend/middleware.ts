@@ -83,7 +83,18 @@ export async function middleware(request: NextRequest) {
 
   const userOnlyPaths = ['/', '/liked', '/premium', '/chat']
 
-  if (token && userOnlyPaths.some((p) => pathname.startsWith(p))) {
+  // Allow admins to:
+  // 1. View user profiles for investigation (/profile/[uuid])
+  // 2. Access their own profile page (/profile) to change password or delete account
+  const isViewingUserProfile = pathname.match(/^\/profile\/[a-f0-9-]{36}$/i)
+  const isOwnProfilePage = pathname === '/profile'
+
+  if (
+    token &&
+    userOnlyPaths.some((p) => pathname.startsWith(p)) &&
+    !isViewingUserProfile &&
+    !isOwnProfilePage
+  ) {
     try {
       const backendUrl = appConfig.backendInternalUrl
       const adminCheckUrl = `${backendUrl}/api/auth/admin-check`

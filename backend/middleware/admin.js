@@ -102,8 +102,21 @@ const blockAdminAccess = async (req, res, next) => {
       return handleDeny(req, res, 'User not found.', 401);
     }
 
-    // Block admin users
+    // Block admin users from normal user endpoints
     if (user.role === 'Admin') {
+      // Allow admins to modify their own profile (/api/users/:id where :id is their own ID)
+      // This enables password changes and account deletion
+      const isUserIdEndpoint = req.path.match(/^\/api\/users\/[a-f0-9-]{36}$/i);
+      const isModifyingOwnProfile =
+        (req.method === 'PUT' || req.method === 'DELETE') &&
+        isUserIdEndpoint &&
+        req.params.id === req.user.userId;
+
+      if (isModifyingOwnProfile) {
+        // Allow admins to update/delete their own account
+        return next();
+      }
+
       // Detect browser navigation vs API call
       const isBrowser = !req.xhr && req.accepts('html') && !req.accepts('json');
 
