@@ -292,10 +292,19 @@ app.get(
 // Get user by ID
 // Get user by ID (Protected - requires authentication)
 // Users can only see their own email address
+// Admins can view any user profile (for moderation/investigation purposes)
 app.get('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.user.userId;
+
+    // Check if requesting user is an admin
+    const requestingUser = await prisma.user.findUnique({
+      where: { id: requestingUserId },
+      select: { role: true },
+    });
+
+    const isAdmin = requestingUser?.role === 'Admin';
 
     const user = await prisma.user.findUnique({
       where: {
@@ -326,7 +335,8 @@ app.get('/api/users/:id', authenticateToken, async (req, res) => {
     }
 
     // Hide admin accounts from normal users (return 404)
-    if (user.role === 'Admin') {
+    // But allow admins to view other profiles
+    if (user.role === 'Admin' && !isAdmin) {
       return res.status(404).json({
         success: false,
         error: 'User not found',
@@ -338,12 +348,17 @@ app.get('/api/users/:id', authenticateToken, async (req, res) => {
     const decryptedUser = await decryptUserFields(user);
 
     // If requesting user's own profile, include email
+    // If admin viewing a user profile (for investigation), include email and role
     // Otherwise, exclude email for privacy (UBAC)
     let userResponse;
     if (requestingUserId === id) {
+      // Own profile: include email
+      userResponse = { ...decryptedUser, email: decryptedEmail };
+    } else if (isAdmin) {
+      // Admin viewing user for investigation: include email and role for moderation
       userResponse = { ...decryptedUser, email: decryptedEmail };
     } else {
-      // Exclude sensitive information (email and role) when viewing other users
+      // Normal user viewing another user: exclude sensitive information
       // eslint-disable-next-line no-unused-vars
       const { email, role, ...publicUserData } = { ...decryptedUser };
       userResponse = publicUserData;
