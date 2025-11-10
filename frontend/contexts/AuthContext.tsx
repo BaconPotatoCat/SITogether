@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/router'
+import { config } from '../utils/config'
 
 interface User {
   id: string
@@ -49,11 +50,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const router = useRouter()
 
   // Fetch session from API
+  // frontend/contexts/AuthContext.tsx
   const fetchSession = async () => {
+    const isDevelopment = config.nodeEnv === 'development'
+
     try {
+      const controller = new AbortController()
+      const timeoutMs = isDevelopment ? 3000 : 8000 // Shorter timeout in dev
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
       const response = await fetch('/api/auth/session', {
         credentials: 'include',
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (response.ok) {
         const data = await response.json()
@@ -68,8 +79,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setSession(null)
         setStatus('unauthenticated')
       }
-    } catch (error) {
-      console.error('Failed to fetch session:', error)
+    } catch (error: unknown) {
+      console.error('Session fetch error:', error)
+
+      // In development, be more aggressive about failing
+      if (isDevelopment && error instanceof Error && error.name === 'TypeError') {
+        console.warn('Network error in development - forcing unauthenticated')
+      }
+
       setSession(null)
       setStatus('unauthenticated')
     }
