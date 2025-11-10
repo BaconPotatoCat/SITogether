@@ -154,9 +154,6 @@ Copy the example environment files and configure them:
 ```bash
 # Root directory
 cp env.example .env
-
-# Frontend
-cp frontend/env.example frontend/.env
 ```
 
 **Important:** Make sure to set a secure `JWT_SECRET` in your `.env` file for authentication to work properly.
